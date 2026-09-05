@@ -77,6 +77,8 @@ requirements.txt   the function's Python dependencies (pyproject minus uvicorn)
 
 1. Push the repo to GitHub and import it at https://vercel.com/new. Leave **Root Directory** at the
    repository root — `vercel.json` points the build at `frontend/` and the function at `api/`.
+   Set **Framework Preset** to *Other*; `"framework": null` in `vercel.json` already forces this, and
+   the next section explains why it matters.
 2. Add the environment variables under *Project Settings → Environment Variables*. The names are
    exactly the ones in the configuration table above; `backend/.env` is never uploaded.
    `LASTFM_API_KEY` and `MUSICBRAINZ_USER_AGENT` are the ones worth setting first.
@@ -92,6 +94,22 @@ Two variables behave differently in production:
   origin. Set it only if something else needs cross-origin access to the API.
 
 Set `TUNEGRAPH_MOCK=1` to put a deployment on fixture data with no keys at all.
+
+### Why the framework preset must stay "Other"
+
+Vercel auto-detects a Python framework whenever a root-level `requirements.txt`, `pyproject.toml` or
+`Pipfile` names FastAPI, and the preset it picks *takes precedence over the `api/` directory*: the
+detected app is handed every request and the files under `api/` stop becoming functions at all. With
+no importable app at one of the entrypoint paths Vercel looks for, every route — including the static
+frontend — returns `FUNCTION_INVOCATION_FAILED`.
+
+`"framework": null` in `vercel.json` selects *Other* and turns that detection off, which is what
+restores the intended split: `frontend/dist` served from the CDN at `/`, and `api/index.py` handling
+`/api/*` through the rewrite. If a deployment ever answers 500 on every path, including `/assets/...`,
+this is the setting to check first.
+
+Python functions bundle every project file reachable at build time, so `backend/app` ships without any
+`includeFiles` entry; `excludeFiles` trims the parts the function never needs.
 
 ### What changes on serverless
 

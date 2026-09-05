@@ -1,11 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
   "installCommand": "npm --prefix frontend ci",
   "buildCommand": "npm --prefix frontend run build",
   "outputDirectory": "frontend/dist",
   "functions": {
     "api/index.py": {
-      "includeFiles": "backend/app/**",
+      "excludeFiles": "{frontend/**,backend/tests/**,backend/.venv/**,outputs/**,**/__pycache__/**}",
       "maxDuration": 30
     }
   },
