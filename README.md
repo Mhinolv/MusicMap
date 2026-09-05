@@ -63,6 +63,48 @@ YouTube links. Without Spotify credentials, the Spotify link falls back to a sea
 (`url-rels`) is used first whenever an artist has an MBID, so real Spotify/Apple links often appear with no
 extra keys at all.
 
+## Deploy to Vercel
+
+One Vercel project serves both halves of the app: the Vite build as static files, and the FastAPI
+app as a Python serverless function mounted at `/api/*`. The frontend already calls relative
+`/api/...` paths, so nothing in `frontend/src` changes between local dev and production.
+
+```
+vercel.json        build + output config, the /api/* rewrite, function settings
+api/index.py       ASGI entrypoint; puts backend/ on sys.path and re-exports app.main:app
+requirements.txt   the function's Python dependencies (pyproject minus uvicorn)
+```
+
+1. Push the repo to GitHub and import it at https://vercel.com/new. Leave **Root Directory** at the
+   repository root — `vercel.json` points the build at `frontend/` and the function at `api/`.
+2. Add the environment variables under *Project Settings → Environment Variables*. The names are
+   exactly the ones in the configuration table above; `backend/.env` is never uploaded.
+   `LASTFM_API_KEY` and `MUSICBRAINZ_USER_AGENT` are the ones worth setting first.
+3. Deploy, then check `https://<your-app>.vercel.app/api/health` — it reports which providers are on.
+
+The CLI equivalent is `npm i -g vercel`, then `vercel` for a preview and `vercel --prod` to promote.
+
+Two variables behave differently in production:
+
+- `APPLE_MUSIC_PRIVATE_KEY_PATH` cannot work — there is no `.p8` on disk. Paste the key contents into
+  `APPLE_MUSIC_PRIVATE_KEY` instead, with newlines written as literal `\n`.
+- `CORS_ORIGINS` no longer matters for the app itself, since the browser calls the API on its own
+  origin. Set it only if something else needs cross-origin access to the API.
+
+Set `TUNEGRAPH_MOCK=1` to put a deployment on fixture data with no keys at all.
+
+### What changes on serverless
+
+- **The cache is per-instance and short-lived.** `cache/cache.py` holds entries in memory, so every
+  cold start begins empty and concurrent instances do not share work. The app is correct either way,
+  it just makes more provider calls than local dev does. Point the cache at Redis (Vercel KV, Upstash)
+  if that becomes a problem.
+- **The MusicBrainz throttle is per-instance too.** `services/musicbrainz.py` spaces requests one
+  second apart within a single process; several instances running at once can exceed MusicBrainz's
+  limit and get throttled back, which surfaces as a `429`/`503` from `/release-date`.
+- **Startup and shutdown hooks may not run.** Nothing depends on them: the HTTP client is created
+  lazily on first use, and the lifespan handler only logs and closes the client.
+
 ## API
 
 ```

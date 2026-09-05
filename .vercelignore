@@ -1,0 +1,12 @@
+# Keep the upload small: nothing here is needed to build or serve the app.
+backend/.venv
+backend/tests
+backend/.pytest_cache
+backend/*.egg-info
+backend/.env
+frontend/node_modules
+frontend/dist
+outputs
+dev.sh
+TuneGraph.command
+Product_MVP.md
