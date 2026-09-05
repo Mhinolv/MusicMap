@@ -143,15 +143,22 @@ export default function App() {
       ) : (
         <>
           <header className="topbar">
-            <button className="brand" onClick={() => window.location.reload()} title="Start over">
-              TuneGraph
+            <button className="brand" onClick={() => window.location.reload()} title="Start over" aria-label="TuneGraph: start over">
+              <svg className="brand__mark" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true">
+                <circle cx="16" cy="16" r="14" fill="#151a2c" />
+                <path d="M9 11l4 3M23 20l-4-2" stroke="#6b7286" strokeWidth="1.5" />
+                <circle cx="16" cy="16" r="6" fill="#f0b35b" />
+                <circle cx="7" cy="9" r="3" fill="#4f7cff" />
+                <circle cx="25" cy="22" r="3" fill="#4f7cff" />
+              </svg>
+              <span className="brand__name">TuneGraph</span>
             </button>
             <SearchBar {...searchProps} compact />
             <div className="topbar__stats" aria-live="polite">
               {g.nodes.length} {rootKind === 'track' ? 'songs' : 'artists'} · {g.edges.length} links
             </div>
           </header>
-          <div className="stage">
+          <div className={`stage ${selected ? 'has-panel' : ''}`}>
             {/* DOM order: the panel comes before the graph so keyboard Tab reaches
                 its controls (close, expand, tracks, links) before the graph's
                 per-node tab stops. Visual position is set by CSS, not DOM order. */}
@@ -188,9 +195,12 @@ export default function App() {
               onJump={jumpTo}
               onCollapse={(id) => prune(id, 'collapse')}
             />
-            <div className="stage__help">
+            <div className="stage__help stage__help--pointer">
               Click a node to inspect · double-click to expand · Delete removes a branch · scroll or use +/− to zoom
             </div>
+            {g.graph.journey.length < 2 && (
+              <div className="stage__help stage__help--touch">Tap to inspect · hold to expand · pinch to zoom</div>
+            )}
           </div>
         </>
       )}

@@ -54,6 +54,9 @@ const CROSS_LINK_STRENGTH = 0.08
 const CLUSTER_PULL = 0.12
 const SPAWN_DISTANCE = 90
 const SPAWN_FAN = Math.PI * 0.9 // total arc new children are spread across
+// Touch: holding a finger on a node this long expands it (the double-click equivalent).
+const LONG_PRESS_MS = 450
+const LONG_PRESS_SLOP = 12
 
 function baseRadius(d: SimNode): number {
   const r = NODE_MIN_R + Math.sqrt(d.degree) * 4.5
@@ -80,6 +83,21 @@ function labelPlacement(d: SimNode, map: Map<string, SimNode>) {
   }
   const off = r + 8
   return { x: c * off, y: sn * off, anchor: c > 0 ? 'start' : 'end', baseline: 'central' }
+}
+
+/** Eat the synthetic click a browser fires after a touch, for a short window. */
+function swallowNextClick() {
+  const eat = (e: Event) => {
+    e.stopPropagation()
+    e.preventDefault()
+    stop()
+  }
+  const stop = () => {
+    window.clearTimeout(timer)
+    document.removeEventListener('click', eat, true)
+  }
+  document.addEventListener('click', eat, true)
+  const timer = window.setTimeout(stop, 500)
 }
 
 function endId(e: string | number | SimNode): string {
@@ -122,6 +140,8 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null)
   const callbacksRef = useRef({ onSelect, onExpand })
   callbacksRef.current = { onSelect, onExpand }
+  // One long-press can be pending at a time; a second finger or any movement cancels it.
+  const pressRef = useRef<{ timer: number; x: number; y: number; fired: boolean } | null>(null)
 
   const tiers = useMemo(() => computeTiers(focusId, nodes, edges), [focusId, nodes, edges])
 
@@ -174,6 +194,8 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
       const t = event.target as Element
       if (t === svgRef.current || t.classList.contains('backdrop')) callbacksRef.current.onSelect(undefined)
     })
+    // Long-pressing a node on a touch screen must not open the browser's context menu.
+    svg.on('contextmenu', (event) => event.preventDefault())
     zoomRef.current = zoom
 
     // Pulls each leaf toward the hub that discovered it, so clusters stay compact.
@@ -245,6 +267,28 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
     return () => {
       sim.stop()
     }
+  }, [])
+
+  // ---- keep the view centred as the stage resizes ---------------------------------
+  // On phones the graph area shrinks when the bottom sheet opens and grows back when
+  // it closes; on any device the browser chrome can come and go. Shift the zoom
+  // transform by half the size delta so whatever was in the middle stays there.
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg || typeof ResizeObserver === 'undefined') return
+    let last = svg.getBoundingClientRect()
+    const ro = new ResizeObserver(() => {
+      const zoom = zoomRef.current
+      const next = svg.getBoundingClientRect()
+      const dx = (next.width - last.width) / 2
+      const dy = (next.height - last.height) / 2
+      last = next
+      if (!zoom || next.width === 0 || next.height === 0 || (dx === 0 && dy === 0)) return
+      const k = d3.zoomTransform(svg).k
+      d3.select(svg).call(zoom.translateBy, dx / k, dy / k)
+    })
+    ro.observe(svg)
+    return () => ro.disconnect()
   }, [])
 
   // ---- new search: clear positions and re-centre --------------------------------
@@ -399,6 +443,39 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
                 callbacksRef.current.onSelect(d.id)
                 if (event.key === 'Enter' && event.shiftKey && !d.expanded) callbacksRef.current.onExpand(d.id)
               }
+            })
+          // Touch: press and hold to expand. Registered before the drag behaviour so it
+          // still sees touchstart (d3-drag stops propagation to later listeners).
+          const cancelPress = () => {
+            if (pressRef.current) window.clearTimeout(pressRef.current.timer)
+            pressRef.current = null
+          }
+          g.on('touchstart.press', (event: TouchEvent, d) => {
+            cancelPress()
+            if (event.touches.length !== 1) return
+            const t = event.touches[0]
+            const timer = window.setTimeout(() => {
+              if (pressRef.current) pressRef.current.fired = true
+              callbacksRef.current.onSelect(d.id)
+              if (!d.expanded && !d.loading) callbacksRef.current.onExpand(d.id)
+              navigator.vibrate?.(12)
+            }, LONG_PRESS_MS)
+            pressRef.current = { timer, x: t.clientX, y: t.clientY, fired: false }
+          })
+            .on('touchmove.press', (event: TouchEvent) => {
+              const p = pressRef.current
+              if (!p || p.fired) return
+              const t = event.touches[0]
+              if (Math.hypot(t.clientX - p.x, t.clientY - p.y) > LONG_PRESS_SLOP) cancelPress()
+            })
+            .on('touchend.press touchcancel.press', (event: TouchEvent) => {
+              // Once the press has fired, the panel may already have slid in under the
+              // finger; the browser's follow-up click must not land on whatever is there.
+              if (pressRef.current?.fired) {
+                event.preventDefault()
+                swallowNextClick()
+              }
+              cancelPress()
             })
           return g
         },

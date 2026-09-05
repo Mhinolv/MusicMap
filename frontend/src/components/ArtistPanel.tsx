@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, ApiError } from '../api'
 import type { Artist, ArtistNode, ArtistRef, PreviewResult, PruneMode, Track, TrackDetails } from '../types'
 
@@ -16,6 +16,66 @@ type Props = {
 }
 
 type Details = { artist?: Artist; tracks?: Track[]; error?: string }
+
+/** Bottom-sheet state on small screens: half-height "peek" or nearly full-screen. */
+type Sheet = { expanded: boolean; setExpanded: (v: boolean) => void }
+type ShellProps = { label: string; sheet: Sheet; onClose: () => void; children: ReactNode }
+
+const SWIPE_PX = 36
+
+/**
+ * The panel chrome. On wide screens it is a floating side panel; on phones the
+ * CSS turns it into a bottom sheet and the grab handle takes over: tap to toggle
+ * between half and full height, swipe up to expand, swipe down to shrink or close.
+ */
+function PanelShell({ label, sheet, onClose, children }: ShellProps) {
+  const startY = useRef<number | null>(null)
+  const swiped = useRef(false)
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    startY.current = e.touches[0]?.clientY ?? null
+    swiped.current = false
+  }
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const y0 = startY.current
+    startY.current = null
+    if (y0 == null) return
+    const dy = (e.changedTouches[0]?.clientY ?? y0) - y0
+    if (dy < -SWIPE_PX) {
+      swiped.current = true
+      sheet.setExpanded(true)
+    } else if (dy > SWIPE_PX) {
+      swiped.current = true
+      if (sheet.expanded) sheet.setExpanded(false)
+      else onClose()
+    }
+  }
+  const onClick = () => {
+    // A swipe that also produced a click should not undo itself.
+    if (swiped.current) {
+      swiped.current = false
+      return
+    }
+    sheet.setExpanded(!sheet.expanded)
+  }
+
+  return (
+    <aside className={`panel ${sheet.expanded ? 'is-expanded' : ''}`} aria-label={label}>
+      <button
+        type="button"
+        className="panel__handle"
+        onClick={onClick}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={() => (startY.current = null)}
+        aria-label={sheet.expanded ? 'Shrink panel' : 'Expand panel'}
+      >
+        <span aria-hidden="true" />
+      </button>
+      <div className="panel__body">{children}</div>
+    </aside>
+  )
+}
 
 function fmt(n?: number | null): string {
   if (n == null) return ''
@@ -102,7 +162,7 @@ function fmtDate(d?: string | null): string {
 }
 
 /** Panel for a song node: album, release date, duration, tags, description, preview. */
-function TrackPanel({ node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist }: Omit<Props, 'onTags'>) {
+function TrackPanel({ node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist, sheet }: Omit<Props, 'onTags'> & { sheet: Sheet }) {
   const [details, setDetails] = useState<TrackDetails | null>(null)
   // undefined = still looking it up, null = unknown.
   const [releaseDate, setReleaseDate] = useState<string | null | undefined>(undefined)
@@ -173,7 +233,7 @@ function TrackPanel({ node, isRoot, impact, onExpand, onPrune, onClose, onOpenAr
   const art = details?.album?.image_url ?? preview?.artwork_url
 
   return (
-    <aside className="panel" aria-label={`${node.name} details`}>
+    <PanelShell label={`${node.name} details`} sheet={sheet} onClose={onClose}>
       <header className="panel__header">
         <div>
           <div className="panel__kicker">Song</div>
@@ -314,16 +374,18 @@ function TrackPanel({ node, isRoot, impact, onExpand, onPrune, onClose, onOpenAr
         </div>
       </section>
       <audio ref={audioRef} onEnded={() => setState('idle')} onError={() => setState('idle')} preload="none" />
-    </aside>
+    </PanelShell>
   )
 }
 
 export function ArtistPanel(props: Props) {
-  if (props.node.kind === 'track') return <TrackPanel key={props.node.id} {...props} />
-  return <ArtistDetails {...props} />
+  const [expanded, setExpanded] = useState(false)
+  const sheet: Sheet = { expanded, setExpanded }
+  if (props.node.kind === 'track') return <TrackPanel key={props.node.id} {...props} sheet={sheet} />
+  return <ArtistDetails {...props} sheet={sheet} />
 }
 
-function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTags }: Omit<Props, 'onOpenArtist'>) {
+function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTags, sheet }: Omit<Props, 'onOpenArtist'> & { sheet: Sheet }) {
   const [details, setDetails] = useState<Details>({})
   const [loading, setLoading] = useState(true)
   const [playing, setPlaying] = useState<{ track: string; preview: PreviewResult } | null>(null)
@@ -398,7 +460,7 @@ function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTag
   const q = encodeURIComponent(name)
 
   return (
-    <aside className="panel" aria-label={`${name} details`}>
+    <PanelShell label={`${name} details`} sheet={sheet} onClose={onClose}>
       <header className="panel__header">
         <div>
           <h2 className="panel__title">{name}</h2>
@@ -501,6 +563,6 @@ function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTag
         </>
       )}
       <audio ref={audioRef} onEnded={() => setPlaying(null)} onError={() => setPlaying(null)} preload="none" />
-    </aside>
+    </PanelShell>
   )
 }
