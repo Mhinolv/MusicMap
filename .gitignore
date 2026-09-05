@@ -1,0 +1,18 @@
+# secrets
+.env
+backend/.env
+*.p8
+
+# python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# node
+frontend/node_modules/
+frontend/dist/
+
+# misc
+.DS_Store
+*.egg-info/
