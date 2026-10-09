@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     spotify_client_id: str = Field(default="", alias="SPOTIFY_CLIENT_ID")
     spotify_client_secret: str = Field(default="", alias="SPOTIFY_CLIENT_SECRET")
 
+    # --- JevLab (personal taste estimates) ------------------------------------
+    jev_api_key: str = Field(default="", alias="JEV_API_KEY")
+    jev_base_url: str = Field(default="https://jevlab.onrender.com", alias="JEV_BASE_URL")
+
     # --- App -------------------------------------------------------------------
     cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
     # Serve canned fixture data instead of calling providers. Handy before keys exist.
@@ -78,6 +82,10 @@ class Settings(BaseSettings):
     @property
     def spotify_enabled(self) -> bool:
         return bool(self.spotify_client_id and self.spotify_client_secret)
+
+    @property
+    def jev_enabled(self) -> bool:
+        return bool(self.jev_api_key)
 
     @property
     def cors_origin_list(self) -> list[str]:

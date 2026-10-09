@@ -9,6 +9,8 @@ from fastapi.responses import JSONResponse
 
 from app.api.routes.artists import router as artists_router
 from app.api.routes.tracks import router as tracks_router
+from app.api.routes.taste import router as taste_router
+from app.api.routes.spotify_auth import router as spotify_auth_router
 from app.cache.cache import cache
 from app.config import get_settings
 from app.services.errors import ProviderError, RateLimited
@@ -24,10 +26,11 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 async def lifespan(app: FastAPI):
     s = get_settings()
     log.info(
-        "providers: lastfm=%s apple_music=%s spotify=%s mock=%s",
+        "providers: lastfm=%s apple_music=%s spotify=%s jev=%s mock=%s",
         "on" if s.lastfm_enabled else "OFF (set LASTFM_API_KEY)",
         "on" if s.apple_music_enabled else "off",
         "on" if s.spotify_enabled else "off",
+        "on" if s.jev_enabled else "off",
         s.mock_providers,
     )
     if not s.lastfm_enabled and not s.mock_providers:
@@ -41,11 +44,13 @@ app = FastAPI(title="TuneGraph API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origin_list,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 app.include_router(artists_router)
 app.include_router(tracks_router)
+app.include_router(taste_router)
+app.include_router(spotify_auth_router)
 
 
 @app.exception_handler(ProviderError)
@@ -68,6 +73,7 @@ async def health() -> dict:
             "lastfm": s.lastfm_enabled,
             "apple_music": s.apple_music_enabled,
             "spotify": s.spotify_enabled,
+            "jev": s.jev_enabled,
             "mock": s.mock_providers,
         },
         "cache_entries": len(cache),

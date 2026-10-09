@@ -43,7 +43,9 @@ Run the backend tests with `cd backend && .venv/bin/pytest`.
 | `APPLE_MUSIC_KEY_ID` | Optional | Key ID of your MusicKit private key |
 | `APPLE_MUSIC_PRIVATE_KEY` or `APPLE_MUSIC_PRIVATE_KEY_PATH` | Optional | The `.p8` contents (newlines as `\n`) or a path to the file |
 | `APPLE_MUSIC_STOREFRONT` | Optional | Catalog storefront, default `us` |
-| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Optional | Resolves real Spotify artist URLs for the "Open in Spotify" link (client-credentials, no user OAuth) |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Optional | Client ID enables listener PKCE import; both credentials resolve public artist links |
+| `JEV_API_KEY` | Required for taste checks | Server-side key sent as `X-API-Key` to JevLab's `/noul` endpoint |
+| `JEV_BASE_URL` | Optional | JevLab service URL; defaults to `https://jevlab.onrender.com` |
 | `CORS_ORIGINS` | Optional | Comma-separated allowed origins, default `http://localhost:5173` |
 | `TUNEGRAPH_MOCK` | Optional | `1` serves canned fixture data instead of calling any provider |
 
@@ -57,11 +59,34 @@ All secrets stay on the backend. The frontend only ever talks to `/api/*` (proxi
   create a key with **Media Services (MusicKit)** enabled. Note the Key ID, download the `.p8` once, and use
   your Team ID from the membership page. The backend signs an ES256 developer token itself.
 - **Spotify** (optional): create an app at https://developer.spotify.com/dashboard and copy the client ID/secret.
+- **JevLab**: set `JEV_API_KEY` in `backend/.env` for local development and in Vercel project environment
+  variables for deployment. The key is never included in frontend code.
 
 Without Apple Music, the play buttons resolve to "no preview" and the panel still offers Apple Music / Spotify /
 YouTube links. Without Spotify credentials, the Spotify link falls back to a search URL. MusicBrainz link data
 (`url-rels`) is used first whenever an artist has an MBID, so real Spotify/Apple links often appear with no
 extra keys at all.
+
+### Taste checks and Spotify import
+
+Use **Add your music taste** to enter liked artists, songs, genres, dislikes, and notes. The profile is stored
+in this browser's local storage. Selecting an artist or song exposes **Check my taste**, which sends that profile
+and the selected item's metadata through the backend to JevLab. Checks happen only when clicked. The result is
+an experimental model estimate, not a calibrated probability or the graph's similarity score. **Clear profile**
+removes the local copy. No profile database or user login is involved.
+
+**Import top music** uses Spotify's Authorization Code with PKCE flow and requests only `user-top-read`.
+After the listener approves, TuneGraph copies up to 15 top artists and 15 top songs into the editable profile.
+It keeps the access token in memory for this one import and does not store a refresh token. Existing manual
+preferences are preserved. The Spotify client secret remains on the backend for public artist-link lookup;
+the import uses the public client ID only.
+
+Configure a Spotify app in the [Developer Dashboard](https://developer.spotify.com/dashboard). Register
+`http://127.0.0.1:5173/spotify/callback` for local development and
+`https://music-map-lovat.vercel.app/spotify/callback` for production. These must exactly match the URL where
+listeners open the app. In development mode the app owner needs Spotify Premium and each test listener must
+be on the app's user allowlist. The listener completes Spotify's authorization screen; app credentials alone
+cannot grant access to personal listening data.
 
 ## Deploy to Vercel
 
@@ -127,6 +152,7 @@ Python functions bundle every project file reachable at build time, so `backend/
 
 ```
 GET /api/health
+GET /api/spotify/config
 GET /api/artists/search?q=radiohead
 GET /api/artists/{id}
 GET /api/artists/{id}/similar?limit=8
@@ -137,6 +163,7 @@ GET /api/tracks/{id}
 GET /api/tracks/{id}/release-date
 GET /api/tracks/{id}/similar?limit=8
 GET /api/tracks/{id}/preview
+POST /api/taste/evaluate
 ```
 
 Artist ids are self-describing so no persistence is needed:
@@ -154,10 +181,13 @@ Provider rate limits are surfaced as `429` with `Retry-After`; missing keys are 
 backend/app/
   api/routes/artists.py   HTTP surface (artists)
   api/routes/tracks.py    HTTP surface (song-seeded maps)
+  api/routes/taste.py     Personal taste evaluation route
+  api/routes/spotify_auth.py  Public client ID for Spotify PKCE
   services/lastfm.py      relationships, tags, tracks (primary engine)
   services/musicbrainz.py identity + streaming links, throttled to 1 req/s
   services/apple_music.py developer token + catalog preview lookup
   services/spotify.py     optional artist links
+  services/jev.py         JevLab taste estimate adapter
   services/preview.py     PreviewProvider abstraction
   services/links.py       outbound link resolution with fallbacks
   services/mock.py        fixture data for TUNEGRAPH_MOCK=1
@@ -167,6 +197,9 @@ frontend/src/
   graph/useMusicGraph.ts  client-side graph state, dedupe by id / deterministic edge ids
   components/ForceGraph.tsx  D3 simulation: zoom, pan, drag, animate-in, selection dimming
   components/ArtistPanel.tsx tags, top tracks, preview player, expand, outbound links
+  components/TastePreferences.tsx manual taste editor
+  components/TasteCheck.tsx on-demand artist/song taste estimate
+  spotifyImport.ts         One-time Spotify PKCE import
   components/SearchBar.tsx   debounced artist / song search with keyboard navigation
   components/JourneyTrail.tsx breadcrumb of expanded nodes: jump to a stop or collapse its branch
 ```

@@ -4,12 +4,24 @@ import { ArtistPanel } from './components/ArtistPanel'
 import { ForceGraph } from './components/ForceGraph'
 import { JourneyTrail } from './components/JourneyTrail'
 import { SearchBar, type SearchMode } from './components/SearchBar'
+import { TastePreferences } from './components/TastePreferences'
+import { finishSpotifyImport } from './spotifyImport'
 import { artistNode, planPrune, trackNode, useMusicGraph } from './graph/useMusicGraph'
-import type { ArtistRef, PruneMode, TrackRef } from './types'
+import type { ArtistRef, PruneMode, TasteProfile, TrackRef } from './types'
 
 const EXPAND_LIMIT = 7
 
 type Toast = { msg: string; action?: { label: string; run: () => void } }
+const TASTE_STORAGE_KEY = 'tunegraph:taste:v1'
+
+function readTaste(): TasteProfile | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(TASTE_STORAGE_KEY) ?? 'null')
+    if (!value || !Array.isArray(value.liked_artists) || !Array.isArray(value.liked_tracks)
+      || !Array.isArray(value.liked_genres) || !Array.isArray(value.disliked) || typeof value.notes !== 'string') return null
+    return value as TasteProfile
+  } catch { return null }
+}
 
 export default function App() {
   const g = useMusicGraph()
@@ -17,6 +29,8 @@ export default function App() {
   const [toast, setToast] = useState<Toast | null>(null)
   const [searchMode, setSearchMode] = useState<SearchMode>('artist')
   const [centerRequest, setCenterRequest] = useState<{ id: string; nonce: number }>()
+  const [taste, setTaste] = useState<TasteProfile | null>(readTaste)
+  const [tasteOpen, setTasteOpen] = useState(false)
   const inflight = useRef(new Set<string>())
   const toastTimer = useRef<number>(0)
 
@@ -103,6 +117,7 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (tasteOpen) return
       const el = document.activeElement as HTMLElement | null
       const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
       if (e.key === 'Escape') {
@@ -118,7 +133,30 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [g, selected, prune])
+  }, [g, selected, prune, tasteOpen])
+
+  const saveTaste = (next: TasteProfile) => {
+    setTaste(next)
+    try { localStorage.setItem(TASTE_STORAGE_KEY, JSON.stringify(next)) } catch { /* private browsing */ }
+    setTasteOpen(false)
+  }
+  const clearTaste = () => {
+    setTaste(null)
+    try { localStorage.removeItem(TASTE_STORAGE_KEY) } catch { /* private browsing */ }
+    setTasteOpen(false)
+  }
+
+  useEffect(() => {
+    void finishSpotifyImport(readTaste())
+      .then((imported) => {
+        if (!imported) return
+        setTaste(imported)
+        try { localStorage.setItem(TASTE_STORAGE_KEY, JSON.stringify(imported)) } catch { /* private browsing */ }
+        setTasteOpen(true)
+        showToast({ msg: 'Spotify music imported. Review and save your preferences.' }, 7000)
+      })
+      .catch((err) => showToast({ msg: err instanceof Error ? err.message : 'Spotify import failed.' }, 7000))
+  }, [showToast])
 
   const jumpTo = (id: string) => {
     g.select(id)
@@ -136,6 +174,7 @@ export default function App() {
           <h1 className="hero__title">Explore music</h1>
           <p className="hero__sub">Start from an artist or a song, then wander outward through who they're connected to.</p>
           <SearchBar {...searchProps} autoFocus />
+          <button className="taste-entry" onClick={() => setTasteOpen(true)}>{taste ? 'Edit your music taste' : 'Add your music taste'}</button>
           <p className="hero__hint">
             {searchMode === 'song' ? 'Try “Creep”, “Glory Box”, or “Teardrop”.' : 'Try “Radiohead”, “Portishead”, or “Björk”.'}
           </p>
@@ -154,6 +193,7 @@ export default function App() {
               <span className="brand__name">TuneGraph</span>
             </button>
             <SearchBar {...searchProps} compact />
+            <button className="taste-entry taste-entry--topbar" onClick={() => setTasteOpen(true)}>{taste ? 'My taste' : 'Add taste'}</button>
             <div className="topbar__stats" aria-live="polite">
               {g.nodes.length} {rootKind === 'track' ? 'songs' : 'artists'} · {g.edges.length} links
             </div>
@@ -172,6 +212,8 @@ export default function App() {
                 onClose={() => g.select(undefined)}
                 onTags={g.setTags}
                 onOpenArtist={onSelectSearch}
+                taste={taste}
+                onEditTaste={() => setTasteOpen(true)}
               />
             )}
             <ForceGraph
@@ -220,6 +262,7 @@ export default function App() {
           )}
         </div>
       )}
+      {tasteOpen && <TastePreferences profile={taste ?? { liked_artists: [], liked_tracks: [], liked_genres: [], disliked: [], notes: '' }} onSave={saveTaste} onClear={clearTaste} onClose={() => setTasteOpen(false)} />}
     </div>
   )
 }

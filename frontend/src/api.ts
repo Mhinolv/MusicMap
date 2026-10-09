@@ -1,4 +1,4 @@
-import type { Artist, ArtistRef, PreviewResult, SimilarArtist, SimilarTrack, Track, TrackDetails, TrackRef } from './types'
+import type { Artist, ArtistRef, PreviewResult, SimilarArtist, SimilarTrack, TasteEvaluation, TasteProfile, Track, TrackDetails, TrackRef } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -28,6 +28,32 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
     } catch {
       /* non-JSON error body */
     }
+    throw new ApiError(message, res.status, retryAfter)
+  }
+  return (await res.json()) as T
+}
+
+async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(path, {
+      method: 'POST',
+      signal,
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') throw err
+    throw new ApiError('Network error', 0)
+  }
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`
+    let retryAfter: number | undefined
+    try {
+      const response = await res.json()
+      if (response?.error) message = response.error
+      if (typeof response?.retry_after === 'number') retryAfter = response.retry_after
+    } catch { /* non-JSON error body */ }
     throw new ApiError(message, res.status, retryAfter)
   }
   return (await res.json()) as T
@@ -65,4 +91,9 @@ export const api = {
     get<{ release_date: string | null }>(`/api/tracks/${enc(id)}/release-date`, signal).then((r) => r.release_date),
 
   trackPreview: (id: string, signal?: AbortSignal) => get<PreviewResult>(`/api/tracks/${enc(id)}/preview`, signal),
+
+  tasteEvaluate: (kind: 'artist' | 'track', itemId: string, profile: TasteProfile, signal?: AbortSignal) =>
+    post<TasteEvaluation>('/api/taste/evaluate', { kind, item_id: itemId, profile }, signal),
+
+  spotifyConfig: () => get<{ client_id: string }>('/api/spotify/config'),
 }

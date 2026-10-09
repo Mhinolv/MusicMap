@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, ApiError } from '../api'
-import type { Artist, ArtistNode, ArtistRef, PreviewResult, PruneMode, Track, TrackDetails } from '../types'
+import { TasteCheck } from './TasteCheck'
+import type { Artist, ArtistNode, ArtistRef, PreviewResult, PruneMode, TasteProfile, Track, TrackDetails } from '../types'
 
 type Props = {
   node: ArtistNode
@@ -13,6 +14,8 @@ type Props = {
   onTags: (id: string, tags: string[]) => void
   /** Song nodes: start a fresh artist-rooted map from the song's artist. */
   onOpenArtist: (artist: ArtistRef) => void
+  taste: TasteProfile | null
+  onEditTaste: () => void
 }
 
 type Details = { artist?: Artist; tracks?: Track[]; error?: string }
@@ -162,7 +165,7 @@ function fmtDate(d?: string | null): string {
 }
 
 /** Panel for a song node: album, release date, duration, tags, description, preview. */
-function TrackPanel({ node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist, sheet }: Omit<Props, 'onTags'> & { sheet: Sheet }) {
+function TrackPanel({ node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist, taste, onEditTaste, sheet }: Omit<Props, 'onTags'> & { sheet: Sheet }) {
   const [details, setDetails] = useState<TrackDetails | null>(null)
   // undefined = still looking it up, null = unknown.
   const [releaseDate, setReleaseDate] = useState<string | null | undefined>(undefined)
@@ -259,6 +262,8 @@ function TrackPanel({ node, isRoot, impact, onExpand, onPrune, onClose, onOpenAr
         <ExpandButton node={node} onExpand={onExpand} />
         <PruneActions node={node} isRoot={isRoot} impact={impact} onPrune={onPrune} />
       </div>
+
+      <TasteCheck key={`${node.id}:${JSON.stringify(taste)}`} kind="track" itemId={node.id} profile={taste} onEdit={onEditTaste} />
 
       {loading ? (
         <div className="panel__loading">
@@ -385,7 +390,7 @@ export function ArtistPanel(props: Props) {
   return <ArtistDetails {...props} sheet={sheet} />
 }
 
-function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTags, sheet }: Omit<Props, 'onOpenArtist'> & { sheet: Sheet }) {
+function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTags, taste, onEditTaste, sheet }: Omit<Props, 'onOpenArtist'> & { sheet: Sheet }) {
   const [details, setDetails] = useState<Details>({})
   const [loading, setLoading] = useState(true)
   const [playing, setPlaying] = useState<{ track: string; preview: PreviewResult } | null>(null)
@@ -475,6 +480,8 @@ function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTag
         <ExpandButton node={node} onExpand={onExpand} />
         <PruneActions node={node} isRoot={isRoot} impact={impact} onPrune={onPrune} />
       </div>
+
+      <TasteCheck key={`${node.id}:${JSON.stringify(taste)}`} kind="artist" itemId={node.id} profile={taste} onEdit={onEditTaste} />
 
       {loading ? (
         <div className="panel__loading">

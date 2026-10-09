@@ -10,5 +10,8 @@
       "maxDuration": 30
     }
   },
-  "rewrites": [{ "source": "/api/(.*)", "destination": "/api/index" }]
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/spotify/callback", "destination": "/index.html" }
+  ]
 }

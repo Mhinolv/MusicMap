@@ -75,6 +75,22 @@ export type PreviewResult = {
   artwork_url?: string | null
 }
 
+export type TasteProfile = {
+  liked_artists: string[]
+  liked_tracks: string[]
+  liked_genres: string[]
+  disliked: string[]
+  notes: string
+}
+
+export type TasteEvaluation = {
+  kind: 'artist' | 'track'
+  item_id: string
+  estimate: number
+  model?: string | null
+  tags: string[]
+}
+
 // ---- Graph state (MVP §8) -------------------------------------------------
 
 /** A map is rooted at either an artist or a song; every other node is an artist. */
