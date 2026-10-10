@@ -571,7 +571,10 @@ const scenarios = [
     { name: 'connections-pending', click: true, hang: true, expect: 'Checking…' },
     { name: 'connections-mixed-simulated', click: true, expect: "Couldn't check" },
     { name: 'connections-error', click: true, respond: 504, expect: 'JEV took too long to answer. Try again.' },
+    // Its own notes give it fresh cache keys: the backend still holds the desktop scenario's
+    // answers, which would make this a one-song retry that the fixture answers.
     { name: 'connections-mobile', click: true, viewport: MOBILE, userAgent: MOBILE_UA,
+      profile: { liked_genres: ['trip-hop', 'electronic'], disliked: ['rock'], notes: 'phone' },
       extraMedia: [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }], expect: "Couldn't check" },
   ].map(({ viewport = DESKTOP, profile = { liked_genres: ['trip-hop', 'electronic'], disliked: ['rock'] }, ...settings }) => ({
     ...settings,
