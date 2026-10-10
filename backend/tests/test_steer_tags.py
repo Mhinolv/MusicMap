@@ -286,10 +286,12 @@ def test_confidence_is_derived_from_the_option_distribution():
     {"type": "choice", "distribution": {"emphasize": 0.5, "neutral": 0.2}},
     {"type": "choice", "distribution": [0.9, 0.1, 0]},
     {"type": "choice"},
-    "emphasize",
+    "emphasize",                                                # a bare string, not an answer object
 ], ids=lambda b: json.dumps(b)[:40])
 def test_one_bad_answer_drops_only_that_tag(bad):
-    proposal = jev.parse_steer(steer_body([bad, "emphasize"]), TAGS[:2])
+    body = steer_body([None, "emphasize"])
+    body["answers"]["steer_0"] = bad  # raw, so steer_body cannot wrap it into a valid answer
+    proposal = jev.parse_steer(body, TAGS[:2])
     assert proposal.tags == ("downtempo",)
 
 
