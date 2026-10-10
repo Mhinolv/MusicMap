@@ -79,6 +79,8 @@ class TrackSearchResponse(BaseModel):
 class TrackRankingContext(BaseModel):
     mode: Literal["parent", "journey"] = "parent"
     stop_count: int = 0
+    # None when steering was not requested; distinct from pairwise edge explanations.
+    steering_matched: bool | None = None
     fallback_reason: Literal["cap_exceeded", "timeout", "missing_tags"] | None = None
 
 

@@ -41,9 +41,10 @@ async def get_similar(
     limit: int = Query(8, ge=1, le=20),
     trail: list[Annotated[str, StringConstraints(min_length=1, max_length=200)]] | None = Query(None, max_length=200),
     excluded: list[Annotated[str, StringConstraints(min_length=1, max_length=200)]] | None = Query(None, max_length=100),
+    emphasized_tags: list[Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]] | None = Query(None, max_length=3),
 ) -> TrackSimilarResponse:
     """Optional ordered journey context; edge scores always describe the parent pair."""
-    return await similarity.select_similar_tracks(track_id, limit, trail, excluded)
+    return await similarity.select_similar_tracks(track_id, limit, trail, excluded, emphasized_tags)
 
 
 @router.get("/{track_id}/preview", response_model=PreviewResult)

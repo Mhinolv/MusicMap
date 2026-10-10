@@ -31,6 +31,25 @@ export default function App() {
   const g = useMusicGraph()
   const [resetKey, setResetKey] = useState(0)
   const [followJourney, setFollowJourney] = useState(false)
+  const [steering, setSteering] = useState<{ id: string; tags: string[] } | null>(null)
+  const steeringRef = useRef(steering)
+  const updateSteering = useCallback((next: typeof steering) => {
+    steeringRef.current = next
+    setSteering(next)
+  }, [])
+  const selectNode = g.select
+  const selectionId = g.graph.selectedNodeId
+  const select = useCallback((id?: string) => {
+    if (id !== selectionId) updateSteering(null)
+    selectNode(id)
+  }, [selectNode, selectionId, updateSteering])
+  // Pruning and reset can change selection without going through select().
+  useEffect(() => {
+    if (steeringRef.current?.id !== g.graph.selectedNodeId) {
+      steeringRef.current = null
+      setSteering(null)
+    }
+  }, [g.graph.selectedNodeId])
   const mapEpoch = useRef(0)
   const [toast, setToast] = useState<Toast | null>(null)
   const [searchMode, setSearchMode] = useState<SearchMode>('artist')
@@ -98,6 +117,7 @@ export default function App() {
       if (inflight.current.has(id)) return
       const node = g.graph.nodes.get(id)
       if (!node || node.expanded) return
+      const emphasis = steeringRef.current?.id === id ? steeringRef.current : null
       const epoch = mapEpoch.current
       inflight.current.add(id)
       g.expandStart(id)
@@ -108,7 +128,7 @@ export default function App() {
         if (node.kind === 'track') {
           const trail = followJourney ? journeyContext(g.graph.journey, g.graph.nodes, id) : undefined
           const overCap = !!trail && trail.length > JOURNEY_CAP
-          const result = await api.trackSimilar(id, EXPAND_LIMIT, undefined, overCap ? undefined : trail, exclusionsRef.current.map((entry) => entry.item.id))
+          const result = await api.trackSimilar(id, EXPAND_LIMIT, undefined, overCap ? undefined : trail, exclusionsRef.current.map((entry) => entry.item.id), emphasis?.tags)
           if (epoch !== mapEpoch.current) return
           ranking = overCap ? { mode: 'parent', stop_count: trail.length, fallback_reason: 'cap_exceeded' } : result.ranking
           // Honor exclusions changed while the request was in flight, too.
@@ -119,7 +139,9 @@ export default function App() {
             similarity: t.similarity ?? undefined,
             sharedTags: t.shared_tags?.length ? t.shared_tags : undefined,
           }))
-          if (children.length < EXPAND_LIMIT && (result.excluded_count > 0 || tracks.length < result.tracks.length)) {
+          if (result.ranking.steering_matched === false && emphasis?.tags.length) {
+            showToast({ msg: `No new songs matched ${emphasis.tags.join(', ')}; showing the closest matches.` }, 7000)
+          } else if (children.length < EXPAND_LIMIT && (result.excluded_count > 0 || tracks.length < result.tracks.length)) {
             showToast({ msg: children.length ? `Only ${children.length} connections remain after not suggested songs were excluded.` : 'No connections remain after not suggested songs were excluded. Manage them in Saved → Not suggested.' }, 7000)
           } else if (!children.length) showToast({ msg: `No known connections for ${node.name}.` })
           else if (ranking.fallback_reason) showToast({ msg: ranking.fallback_reason === 'cap_exceeded'
@@ -130,6 +152,10 @@ export default function App() {
         }
         if (epoch !== mapEpoch.current) return
         g.expandSuccess(id, children, ranking)
+        if (steeringRef.current === emphasis) {
+          steeringRef.current = null
+          setSteering(null)
+        }
         if (children.length === 0 && node.kind !== 'track') showToast({ msg: `No known connections for ${node.name}.` })
       } catch (err) {
         const msg =
@@ -149,6 +175,7 @@ export default function App() {
   // After a reset, expand the root once it exists in state.
   const pendingRoot = useRef<string | null>(null)
   const onSelectSearch = (artist: ArtistRef) => {
+    updateSteering(null)
     mapEpoch.current += 1
     setFollowJourney(false)
     pendingRoot.current = artist.id
@@ -157,6 +184,7 @@ export default function App() {
     setResetKey((k) => k + 1)
   }
   const onSelectTrack = (track: TrackRef) => {
+    updateSteering(null)
     mapEpoch.current += 1
     setFollowJourney(false)
     pendingRoot.current = track.id
@@ -197,7 +225,7 @@ export default function App() {
       const el = document.activeElement as HTMLElement | null
       const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
       if (e.key === 'Escape') {
-        g.select(undefined)
+        select(undefined)
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && selected && selected.id !== g.graph.rootId) {
         e.preventDefault()
         prune(selected.id, 'remove')
@@ -209,7 +237,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [g, selected, prune, tasteOpen, savedOpen])
+  }, [g, selected, prune, tasteOpen, savedOpen, select])
 
   const saveTaste = (next: TasteProfile) => {
     setTaste(next)
@@ -235,7 +263,7 @@ export default function App() {
   }, [showToast])
 
   const jumpTo = (id: string) => {
-    g.select(id)
+    select(id)
     setCenterRequest({ id, nonce: Date.now() })
   }
 
@@ -314,6 +342,8 @@ export default function App() {
             {selected && (
               <ArtistPanel
                 node={selected}
+                emphasizedTags={steering?.id === selected.id ? steering.tags : []}
+                onEmphasizedTags={(tags) => updateSteering(tags.length ? { id: selected.id, tags } : null)}
                 excluded={exclusions.some((entry) => entry.item.id === selected.id)}
                 onToggleExclusion={toggleExclusion}
                 saved={isSaved}
@@ -324,7 +354,7 @@ export default function App() {
                 journeyStops={journeyContext(g.graph.journey, g.graph.nodes, selected.id).length}
                 onExpand={expand}
                 onPrune={prune}
-                onClose={() => g.select(undefined)}
+                onClose={() => select(undefined)}
                 onTags={g.setTags}
                 onOpenArtist={onSelectSearch}
                 taste={taste}
@@ -339,7 +369,7 @@ export default function App() {
               rootId={g.graph.rootId}
               focusId={g.graph.focusId}
               journey={g.graph.journey}
-              onSelect={g.select}
+              onSelect={select}
               onExpand={expand}
               resetKey={resetKey}
               centerRequest={centerRequest}

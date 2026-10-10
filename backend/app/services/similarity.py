@@ -75,6 +75,8 @@ async def _tags(track_id: str) -> list[str]:
 TAG_CONCURRENCY = 6
 TRAIL_CAP = 50
 POOL_SIZE = 20
+# Selection-only bonus: at most 0.5 for weighted overlap; pairwise edges stay unchanged.
+STEERING_BOOST = 0.5
 # Only optional journey work has this deadline; parent ranking remains available.
 JOURNEY_TIMEOUT = 2.0
 
@@ -130,6 +132,7 @@ def _cosine(a: dict[str, float], b: dict[str, float]) -> float | None:
 
 async def select_similar_tracks(
     seed_id: str, limit: int = 7, trail: list[str] | None = None, excluded: list[str] | None = None,
+    emphasized_tags: list[str] | None = None,
 ) -> TrackSimilarResponse:
     """Reusable bounded pool selection. No context preserves the legacy path.
 
@@ -139,22 +142,39 @@ async def select_similar_tracks(
     Last.fm already caches tags and candidates; context-specific results aren't
     cached, preventing cross-journey contamination.
     """
+    emphasis = set(_tag_vector(emphasized_tags or []))
     stops = list(dict.fromkeys(trail or []))
     if stops and seed_id not in stops:
         stops.append(seed_id)
     reason = "cap_exceeded" if len(stops) > TRAIL_CAP else None
     use_trail = len(stops) > 1 and reason is None
     excluded_ids = set(excluded or [])
-    track, candidates = await lastfm.get_similar_tracks(seed_id, POOL_SIZE if use_trail or excluded_ids else limit)
+    track, candidates = await lastfm.get_similar_tracks(seed_id, POOL_SIZE if use_trail or excluded_ids or emphasis else limit)
     excluded_count = sum(c.id in excluded_ids for c in candidates)
     candidates = [c for c in candidates if c.id not in excluded_ids]
     if not candidates:
         return TrackSimilarResponse(track_id=seed_id, track=track, excluded_count=excluded_count, tracks=[],
-            ranking=TrackRankingContext(stop_count=len(stops), fallback_reason=reason))
+            ranking=TrackRankingContext(stop_count=len(stops), fallback_reason=reason,
+                steering_matched=False if emphasis else None))
     # Compute the ordinary response first so a timed-out optional lookup never
     # forces another provider request to deliver the fallback.
     parent = await rerank_similar_tracks(track.id, candidates[:limit])
     ranking = TrackRankingContext(stop_count=len(stops), fallback_reason=reason)
+
+    def steer(scored: list[tuple[float, SimilarTrack]], tags: dict[str, list[str]]) -> list[SimilarTrack]:
+        if not emphasis:
+            scored.sort(key=lambda item: -item[0])
+            return [edge for _, edge in scored[:limit]]
+        overlaps: list[float] = []
+        for _, candidate in scored:
+            vector = _tag_vector(tags[candidate.id])
+            total = sum(vector.values())
+            overlaps.append(sum(w for t, w in vector.items() if t in emphasis) / total if total else 0.0)
+        ranking.steering_matched = any(overlaps)
+        boosted = [(score + STEERING_BOOST * overlap, edge) for (score, edge), overlap in zip(scored, overlaps)]
+        boosted.sort(key=lambda item: -item[0])
+        return [edge for _, edge in boosted[:limit]]
+
     if use_trail:
         async def rank_journey() -> list[SimilarTrack] | None:
             tags = await _tag_batch([track.id, *stops, *(c.id for c in candidates)])
@@ -169,15 +189,25 @@ async def select_similar_tracks(
                 })
                 score = blend(candidate.similarity, _cosine(vector, _tag_vector(tags[candidate.id])))
                 scored.append((score if score is not None else -1.0, edge))
-            scored.sort(key=lambda item: -item[0])
-            return [edge for _, edge in scored[:limit]]
+            return steer(scored, tags)
 
         try:
             selected = await asyncio.wait_for(rank_journey(), timeout=JOURNEY_TIMEOUT)
             if selected is not None:
                 return TrackSimilarResponse(track_id=seed_id, track=track, excluded_count=excluded_count, tracks=selected,
-                    ranking=TrackRankingContext(mode="journey", stop_count=len(stops)))
+                    ranking=ranking.model_copy(update={"mode": "journey"}))
             ranking.fallback_reason = "missing_tags"
         except TimeoutError:
             ranking.fallback_reason = "timeout"
+    if emphasis:
+        tags = await _tag_batch([track.id, *(c.id for c in candidates)])
+        edges = []
+        for candidate in candidates:
+            content, shared = tag_similarity(tags[track.id], tags[candidate.id])
+            edge = candidate.model_copy(update={"similarity": blend(candidate.similarity, content), "shared_tags": shared})
+            edges.append((edge.similarity if edge.similarity is not None else -1.0, edge))
+        selected = steer(edges, tags)
+        # No matching tags is a no-op: preserve the ordinary eligible prefix exactly.
+        if ranking.steering_matched:
+            parent = selected
     return TrackSimilarResponse(track_id=seed_id, track=track, excluded_count=excluded_count, tracks=parent, ranking=ranking)
