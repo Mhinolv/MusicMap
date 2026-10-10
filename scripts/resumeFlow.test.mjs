@@ -25,7 +25,7 @@ function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'sav
     },
     './graph/mapSnapshot': { readMap: () => savedMap, clearMap() {}, saveMap: () => saveResult },
     './graph/useMusicGraph': { useMusicGraph: () => ({ graph: activeGraph, nodes: [...activeGraph.nodes.values()],
-      edges: [], restore: (value) => restores.push(value) }) },
+      edges: [], undo: () => restores.push('undo'), restore: (value) => restores.push(value) }) },
     './components/SearchBar': { SearchBar },
     './bookmarks': { readBookmarks: () => [] },
     './exclusions': { readExclusions: () => [] },
@@ -95,4 +95,32 @@ test('oversize toast uses prescribed copy and appears only once per session', ()
   const messages = app.updates.filter((value) => value?.msg)
   assert.equal(messages.length, 1)
   assert.equal(messages[0].msg, 'This map is too large to keep for next time.')
+})
+
+
+test('both shell modes retain live counts, an empty dock, and inspector-before-graph DOM order', () => {
+  for (const kind of ['artist', 'track']) for (const count of [1, 500]) {
+    const app = render({ status: 'none' }, graph(kind, count))
+    const inspector = app.elements.find((el) => el.props?.className === 'inspector-dock')
+    const nav = app.elements.find((el) => el.props?.className === 'map-nav')
+    const stage = app.elements.find((el) => el.props?.className === 'stage ')
+    assert.ok(app.elements.indexOf(inspector) < app.elements.indexOf(nav))
+    assert.ok(app.elements.indexOf(nav) < app.elements.indexOf(stage))
+    assert.ok(content(inspector).includes('Select a star to inspect it. Double-click to expand.'))
+    const counts = app.elements.find((el) => el.props?.className === 'statusbar__counts')
+    assert.equal(counts.props['aria-live'], 'polite')
+    assert.equal(content(counts), `${count} ${kind === 'track' ? 'songs' : 'artists'} · 0 links`)
+  }
+})
+
+test('header Undo is guarded without history and restores the graph with history', () => {
+  for (const available of [false, true]) {
+    const active = graph()
+    if (available) active.undo = { seq: 1, summary: 'Removed branch' }
+    const app = render({ status: 'none' }, active)
+    const undo = app.elements.find((el) => el.props?.className?.includes('header-undo'))
+    assert.equal(undo.props['aria-disabled'], !available)
+    undo.props.onClick()
+    assert.deepEqual(app.restores, available ? ['undo'] : [])
+  }
 })

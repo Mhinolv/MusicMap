@@ -1,5 +1,5 @@
 import * as d3 from 'd3'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import type { ArtistEdge, ArtistNode, NodeKind } from '../types'
 
 type SimNode = d3.SimulationNodeDatum & {
@@ -28,6 +28,8 @@ type SimLink = d3.SimulationLinkDatum<SimNode> & {
 }
 
 type Props = {
+  zoomControl?: RefObject<(factor: number) => void>
+  onZoom?: (k: number) => void
   nodes: ArtistNode[]
   edges: ArtistEdge[]
   degree: Map<string, number>
@@ -134,11 +136,13 @@ function computeTiers(focusId: string | undefined, nodes: ArtistNode[], edges: A
   return tiers
 }
 
-export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, journey, onSelect, onExpand, resetKey, centerRequest, fitOnMount }: Props) {
+export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, journey, onSelect, onExpand, resetKey, centerRequest, fitOnMount, zoomControl, onZoom }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
   const simRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null)
   const nodeMapRef = useRef(new Map<string, SimNode>())
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null)
+  const onZoomRef = useRef(onZoom)
+  onZoomRef.current = onZoom
   const callbacksRef = useRef({ onSelect, onExpand })
   callbacksRef.current = { onSelect, onExpand }
   // One long-press can be pending at a time; a second finger or any movement cancels it.
@@ -182,12 +186,19 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
     root.append('g').attr('class', 'links')
     root.append('g').attr('class', 'nodes')
 
+    let zoomFrame = 0
+    let latestZoom = 1
     const zoom = d3
       .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.15, 5])
       .filter((event) => !event.ctrlKey && !event.button)
       .on('zoom', (event) => {
         root.attr('transform', event.transform)
+        latestZoom = event.transform.k
+        if (!zoomFrame) zoomFrame = requestAnimationFrame(() => {
+          zoomFrame = 0
+          onZoomRef.current?.(latestZoom)
+        })
         svg.select('.backdrop').attr('transform', `translate(${event.transform.x % 28},${event.transform.y % 28})`)
       })
     svg.call(zoom).on('dblclick.zoom', null)
@@ -266,6 +277,7 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
     svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2))
 
     return () => {
+      cancelAnimationFrame(zoomFrame)
       sim.stop()
     }
   }, [])
@@ -592,6 +604,12 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
     if (!svgRef.current || !zoomRef.current) return
     d3.select(svgRef.current).transition().duration(250).call(zoomRef.current.scaleBy, factor)
   }
+  useEffect(() => {
+    if (!zoomControl) return
+    zoomControl.current = zoomBy
+    return () => { zoomControl.current = () => {} }
+  }, [zoomControl])
+
   const fit = () => {
     const svg = svgRef.current
     const zoom = zoomRef.current

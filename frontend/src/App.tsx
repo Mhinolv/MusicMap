@@ -17,14 +17,32 @@ import { addExclusion, EXCLUSION_FULL_MESSAGE, readExclusions, restoreExclusions
 
 import { clearMap, readMap, saveMap } from './graph/mapSnapshot'
 
+import { zoomShortcut } from './graph/zoomShortcut'
+
 const EXPAND_LIMIT = 7
 
 type Toast = { source?: 'bookmarks' | 'exclusions' | 'taste'; msg: string; action?: { label: string; run: () => void } }
+
+const UNDO_KEY = /Mac|iPhone|iPad/.test(typeof navigator === 'undefined' ? '' : navigator.platform) ? '⌘Z' : 'Ctrl+Z'
+
+function ZoomReadout({ listener }: { listener: { current: ((k: number) => void) | undefined } }) {
+  const [percent, setPercent] = useState(100)
+  useEffect(() => {
+    listener.current = (k) => setPercent(Math.round(k * 100))
+    return () => { listener.current = undefined }
+  }, [listener])
+  return <span className="statusbar__zoom">Zoom {percent}%</span>
+}
+
 export default function App() {
   const g = useMusicGraph()
   const [savedMap, setSavedMap] = useState(readMap)
   const warnedMapSize = useRef(false)
   const persistenceStopped = useRef(false)
+  const zoomControl = useRef<(factor: number) => void>(() => {})
+  // Zoom changes every frame while panning; only the status bar readout re-renders.
+  const zoomListener = useRef<((k: number) => void) | undefined>(undefined)
+  const reportZoom = useCallback((k: number) => zoomListener.current?.(k), [])
   const [resumeFit, setResumeFit] = useState(false)
   const [resetKey, setResetKey] = useState(0)
   const [followJourney, setFollowJourney] = useState(false)
@@ -253,25 +271,34 @@ export default function App() {
     }
   }, [g.graph, selected])
 
+  const undoGraph = g.undo
+  const undoPrune = useCallback(() => {
+    undoGraph()
+    setToast((current) => current?.source ? current : null)
+  }, [undoGraph])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (tasteOpen || savedOpen) return
       const el = document.activeElement as HTMLElement | null
       const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
-      if (e.key === 'Escape') {
+      const factor = zoomShortcut(e.key, typing, tasteOpen || savedOpen, e.metaKey || e.ctrlKey || e.altKey)
+      if (factor !== undefined) {
+        e.preventDefault()
+        zoomControl.current(factor)
+      } else if (e.key === 'Escape') {
         select(undefined)
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && selected && selected.id !== g.graph.rootId) {
         e.preventDefault()
         prune(selected.id, 'remove')
       } else if (e.key === 'z' && (e.metaKey || e.ctrlKey) && !typing && g.graph.undo) {
         e.preventDefault()
-        g.undo()
-        setToast((current) => current?.source ? current : null)
+        undoPrune()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [g, selected, prune, tasteOpen, savedOpen, select])
+  }, [g, selected, prune, tasteOpen, savedOpen, select, undoPrune])
 
   const updateTaste = (next: TasteProfile | null) => {
     const profile = next && !isEmptyTaste(next) ? next : null
@@ -367,6 +394,7 @@ export default function App() {
   const savedGraph = savedMap.status === 'ready' ? savedMap.snapshot.graph : undefined
   const savedRoot = savedGraph?.nodes.get(savedGraph.rootId!)
   const savedSongMap = savedRoot?.kind === 'track'
+  const trailJourney = rootKind === 'track' ? g.graph.journey.filter((id) => g.graph.nodes.get(id)?.expanded) : g.graph.journey
 
   return (
     <div className={`app ${hasGraph ? 'app--graph' : 'app--empty'}`}>
@@ -399,7 +427,7 @@ export default function App() {
         <>
           <header className="topbar">
             <button className="brand" onClick={() => { persistenceStopped.current = true; clearMap(); window.location.reload() }} title="Start over" aria-label="TuneGraph: start over">
-              <svg className="brand__mark" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true">
+              <svg className="brand__mark" viewBox="0 0 32 32" width="22" height="22" aria-hidden="true">
                 <circle cx="16" cy="16" r="14" fill="#151a2c" />
                 <path d="M9 11l4 3M23 20l-4-2" stroke="#6b7286" strokeWidth="1.5" />
                 <circle cx="16" cy="16" r="6" fill="#f0b35b" />
@@ -409,74 +437,85 @@ export default function App() {
               <span className="brand__name">TuneGraph</span>
             </button>
             <SearchBar {...searchProps} compact />
-            <button className="taste-entry taste-entry--topbar" onClick={() => setTasteOpen(true)}>{taste ? 'My taste' : 'Add taste'}</button>
-            <button className="taste-entry taste-entry--topbar saved-entry" aria-label="Saved discoveries" onClick={() => setSavedOpen(true)}>
-              <span className="saved-entry__desktop">{bookmarks.length ? `Saved · ${bookmarks.length}` : 'Saved'}</span>
-              <span className="saved-entry__mobile"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>{bookmarks.length}</span>
+            <button className="taste-entry taste-entry--topbar saved-entry" aria-label="Library: saved discoveries and not suggested songs" onClick={() => setSavedOpen(true)}>
+              <span>Library</span><span className="library-count">{bookmarks.length + exclusions.length}</span>
             </button>
-            <div className="topbar__stats" aria-live="polite">
-              {g.nodes.length} {rootKind === 'track' ? 'songs' : 'artists'} · {g.edges.length} links
-            </div>
+            <button className="taste-entry taste-entry--topbar header-taste" onClick={() => setTasteOpen(true)}>Taste</button>
+            <button className="taste-entry taste-entry--topbar header-undo" aria-disabled={!g.graph.undo} onClick={() => { if (g.graph.undo) undoPrune() }}>Undo</button>
           </header>
-          <div className={`stage ${selected ? 'has-panel' : ''}`}>
-            {/* DOM order: the panel comes before the graph so keyboard Tab reaches
-                its controls (close, expand, tracks, links) before the graph's
-                per-node tab stops. Visual position is set by CSS, not DOM order. */}
-            {selected && (
-              <ArtistPanel
-                node={selected}
-                emphasizedTags={steering?.id === selected.id ? steering.tags : []}
-                onEmphasizedTags={(tags) => updateSteering(tags.length ? { id: selected.id, tags } : null)}
-                excluded={exclusions.some((entry) => entry.item.id === selected.id)}
-                onToggleExclusion={toggleExclusion}
-                saved={isSaved}
-                onToggleSave={toggleSave}
-                isRoot={selected.id === g.graph.rootId}
-                impact={impact}
-                followJourney={followJourney}
-                journeyStops={journeyContext(g.graph.journey, g.graph.nodes, selected.id).length}
-                onExpand={expand}
-                onPrune={prune}
-                onClose={() => select(undefined)}
-                onTags={g.setTags}
-                onOpenArtist={onSelectSearch}
-                taste={taste}
-                tasteActions={<TasteToggle node={selected} profile={taste} onToggle={togglePanelTaste} />}
-                onEditTaste={() => setTasteOpen(true)}
-              />
-            )}
-            <ForceGraph
-              nodes={g.nodes}
-              edges={g.edges}
-              degree={g.degree}
-              selectedId={g.graph.selectedNodeId}
-              rootId={g.graph.rootId}
-              focusId={g.graph.focusId}
-              journey={g.graph.journey}
-              onSelect={select}
-              onExpand={expand}
-              resetKey={resetKey}
-              fitOnMount={resumeFit}
-              centerRequest={centerRequest}
-            />
-            <JourneyTrail
-              songMode={rootKind === 'track'}
-              followJourney={followJourney}
-              onFollowJourney={() => setFollowJourney((on) => !on)}
-              journey={rootKind === 'track' ? g.graph.journey.filter((id) => g.graph.nodes.get(id)?.expanded) : g.graph.journey}
-              nodes={g.graph.nodes}
-              focusId={g.graph.focusId}
-              selectedId={g.graph.selectedNodeId}
-              onJump={jumpTo}
-              onCollapse={(id) => prune(id, 'collapse')}
-            />
-            <div className="stage__help stage__help--pointer">
-              Click a node to inspect · double-click to expand · Delete removes a branch · scroll or use +/− to zoom
+          <div className={`map-shell ${selected ? 'has-panel' : ''}`}>
+            <div className="inspector-dock">
+              {selected && (
+                <ArtistPanel
+                  node={selected}
+                  emphasizedTags={steering?.id === selected.id ? steering.tags : []}
+                  onEmphasizedTags={(tags) => updateSteering(tags.length ? { id: selected.id, tags } : null)}
+                  excluded={exclusions.some((entry) => entry.item.id === selected.id)}
+                  onToggleExclusion={toggleExclusion}
+                  saved={isSaved}
+                  onToggleSave={toggleSave}
+                  isRoot={selected.id === g.graph.rootId}
+                  impact={impact}
+                  followJourney={followJourney}
+                  journeyStops={journeyContext(g.graph.journey, g.graph.nodes, selected.id).length}
+                  onExpand={expand}
+                  onPrune={prune}
+                  onClose={() => select(undefined)}
+                  onTags={g.setTags}
+                  onOpenArtist={onSelectSearch}
+                  taste={taste}
+                  tasteActions={<TasteToggle node={selected} profile={taste} onToggle={togglePanelTaste} />}
+                  onEditTaste={() => setTasteOpen(true)}
+                />
+              )}
+              {!selected && <section className="inspector-empty" aria-label="Inspector">
+                <h2>Inspector</h2>
+                <p>Select a star to inspect it. Double-click to expand.</p>
+              </section>}
             </div>
-            {g.graph.journey.length < 2 && (
-              <div className="stage__help stage__help--touch">Tap to inspect · hold to expand · pinch to zoom</div>
-            )}
+            <nav className="map-nav" aria-label="Map navigation">
+              {/* Placeholder heads until #31; the existing trail fills Journey meanwhile. */}
+              <section><h2>Journey</h2>{trailJourney.length === 0 && <p>Expand a star to start your journey.</p>}</section>
+              <JourneyTrail
+                songMode={rootKind === 'track'}
+                followJourney={followJourney}
+                onFollowJourney={() => setFollowJourney((on) => !on)}
+                journey={trailJourney}
+                nodes={g.graph.nodes}
+                focusId={g.graph.focusId}
+                selectedId={g.graph.selectedNodeId}
+                onJump={jumpTo}
+                onCollapse={(id) => prune(id, 'collapse')}
+              />
+              <section><h2>On map</h2></section>
+            </nav>
+            <div className={`stage ${selected ? 'has-panel' : ''}`}>
+              <ForceGraph
+                zoomControl={zoomControl}
+                onZoom={reportZoom}
+                nodes={g.nodes}
+                edges={g.edges}
+                degree={g.degree}
+                selectedId={g.graph.selectedNodeId}
+                rootId={g.graph.rootId}
+                focusId={g.graph.focusId}
+                journey={g.graph.journey}
+                onSelect={select}
+                onExpand={expand}
+                resetKey={resetKey}
+                fitOnMount={resumeFit}
+                centerRequest={centerRequest}
+              />
+              {g.graph.journey.length < 2 && (
+                <div className="stage__help stage__help--touch">Tap to inspect · hold to expand · pinch to zoom</div>
+              )}
+            </div>
           </div>
+          <footer className="statusbar">
+            <span className="statusbar__counts" aria-live="polite">{g.nodes.length} {rootKind === 'track' ? 'songs' : 'artists'} · {g.edges.length} links</span>
+            <span className="statusbar__hints">Double-click expand · Del remove branch<span className="statusbar__extra"> · Esc deselect</span> · {UNDO_KEY} undo<span className="statusbar__extra"> · +/− zoom</span></span>
+            <ZoomReadout listener={zoomListener} />
+          </footer>
         </>
       )}
       {toast && (
