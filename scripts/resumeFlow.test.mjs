@@ -10,13 +10,17 @@ const ts = require('typescript')
 const source = ts.transpileModule(readFileSync(new URL('../frontend/src/App.tsx', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
 }).outputText
+const helpers = {}
+new Function('exports', ts.transpileModule(readFileSync(new URL('../frontend/src/startScreen.ts', import.meta.url), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS },
+}).outputText)(helpers)
 const graph = (kind = 'artist', count = 2, stops = 2) => ({
   nodes: new Map(Array.from({ length: count }, (_, i) => [String(i), { id: String(i), name: i ? `Node ${i}` : 'Radiohead', kind }])),
   edges: new Map(), rootId: '0', journey: Array.from({ length: stops }, (_, i) => String(i)),
 })
-function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'saved') {
+function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'saved', { bookmarks = [], exclusions = [] } = {}) {
   const effects = [], updates = [], timers = [], restores = []
-  const SearchBar = () => null
+  const SearchBar = () => null, StartScreen = () => null, LibraryButton = () => null, LibraryDrawer = () => null
   const mocks = {
     react: {
       useState: (initial) => [typeof initial === 'function' ? initial() : initial, (value) => updates.push(value)],
@@ -27,8 +31,11 @@ function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'sav
     './graph/useMusicGraph': { useMusicGraph: () => ({ graph: activeGraph, nodes: [...activeGraph.nodes.values()],
       edges: [], undo: () => restores.push('undo'), restore: (value) => restores.push(value) }) },
     './components/SearchBar': { SearchBar },
-    './bookmarks': { readBookmarks: () => [] },
-    './exclusions': { readExclusions: () => [] },
+    './components/StartScreen': { StartScreen },
+    './components/LibraryDrawer': { LibraryButton, LibraryDrawer },
+    './startScreen': helpers,
+    './bookmarks': { readBookmarks: () => bookmarks },
+    './exclusions': { readExclusions: () => exclusions },
   }
   const exports = {}
   runInNewContext(source, {
@@ -45,7 +52,8 @@ function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'sav
     for (const child of [element.props?.children].flat(Infinity)) visit(child)
   }
   visit(tree)
-  return { elements, updates, timers, restores, effects, SearchBar }
+  return { elements, updates, timers, restores, effects, SearchBar, LibraryButton, LibraryDrawer,
+    start: elements.find((el) => el.type === StartScreen) }
 }
 const content = (element) => [element.props?.children].flat(Infinity).map((child) =>
   typeof child === 'object' && child ? content(child) : child ?? '').join('')
@@ -54,36 +62,44 @@ const ready = (value) => ({ status: 'ready', snapshot: { graph: value, followJou
 test('Resume restores the graph and announces Map restored. for four seconds', () => {
   const value = graph()
   const app = render(ready(value))
-  app.elements.find((el) => el.type === 'button' && content(el) === 'Resume').props.onClick()
+  app.start.props.onResume()
   assert.equal(app.restores[0], value)
   assert.ok(app.updates.some((value) => value?.msg === 'Map restored.'), 'Resume must announce Map restored.')
   assert.equal(app.timers.at(-1).ms, 4000)
 })
 
-test('resume card describes both modes, minimum/maximum sizes, and absent/present stops', () => {
-  for (const kind of ['artist', 'track']) for (const count of [1, 500]) for (const stops of [0, 1, count]) {
-    const app = render(ready(graph(kind, count, stops)))
-    const description = app.elements.find((el) => el.type === 'section').props.children
-    const expected = `${kind === 'track' ? 'Song' : 'Artist'} map from “Radiohead” · ${count} ${kind === 'track' ? 'songs' : 'artists'}${stops ? ` · ${stops} stops` : ''}`
-    assert.ok(content({ props: { children: description } }).includes(expected), expected)
+test('start screen receives every snapshot state; DISCARD/START FRESH clears it to none', () => {
+  for (const saved of [{ status: 'none' }, { status: 'invalid' }, ready(graph('track', 500, 500))]) {
+    const app = render(saved)
+    assert.equal(app.start.props.savedMap, saved)
+    assert.equal(app.elements.some((el) => el.props?.className === 'statusbar'), false)
+    app.start.props.onStartFresh()
+    assert.equal(app.updates.at(-1).status, 'none')
+  }
+  // The map shell replaces the start screen once a graph exists.
+  assert.equal(render({ status: 'none' }, graph()).start, undefined)
+})
+
+// #24: the entry count covered bookmarks only ("Open saved discoveries (0)" with exclusions saved).
+test('LIBRARY count is saved + not suggested on the start screen and in the map header', () => {
+  const song = (id) => ({ kind: 'track', item: { id, name: id, artist: { id: 'a', name: 'A' } }, savedAt: 0 })
+  for (const [bookmarks, exclusions] of [[0, 0], [0, 1], [2, 0], [3, 4], [200, 100]]) {
+    const lists = { bookmarks: Array.from({ length: bookmarks }, (_, i) => song(`b${i}`)), exclusions: Array.from({ length: exclusions }, (_, i) => song(`e${i}`)) }
+    assert.equal(render({ status: 'none' }, undefined, 'saved', lists).start.props.libraryCount, bookmarks + exclusions)
+    const map = render({ status: 'none' }, graph(), 'saved', lists)
+    assert.equal(map.elements.find((el) => el.type === map.LibraryButton).props.count, bookmarks + exclusions)
   }
 })
 
-test('card reuses taste-import before search with accessible name and ghost Start fresh', () => {
-  const app = render(ready(graph()))
-  const card = app.elements.find((el) => el.type === 'section')
-  assert.ok(card.props.className.split(' ').includes('taste-import'))
-  assert.equal(card.props['aria-label'], 'Resume last map')
-  assert.ok(app.elements.indexOf(card) < app.elements.findIndex((el) => el.type === app.SearchBar))
-  assert.equal(app.elements.find((el) => el.type === 'button' && content(el) === 'Start fresh').props.className, 'btn btn--ghost')
-})
-
-test('invalid snapshot uses prescribed detail and only Start fresh; no snapshot hides card', () => {
-  const app = render({ status: 'invalid' })
-  const card = app.elements.find((el) => el.type === 'section')
-  assert.ok(content(card).includes('It was damaged or too large to load.'))
-  assert.equal(app.elements.filter((el) => el.type === 'button' && content(el) === 'Resume').length, 0)
-  assert.equal(render({ status: 'none' }).elements.filter((el) => el.type === 'section').length, 0)
+test('LIBRARY toggles the non-modal drawer, and the drawer only renders while open', () => {
+  const app = render({ status: 'none' })
+  assert.equal(app.start.props.libraryOpen, false)
+  assert.equal(app.elements.some((el) => el.type === app.LibraryDrawer), false)
+  app.start.props.onToggleLibrary()
+  const toggle = app.updates.at(-1)
+  assert.equal(typeof toggle, 'function')
+  assert.equal(toggle(false), true)
+  assert.equal(toggle(true), false)
 })
 
 test('oversize toast uses prescribed copy and appears only once per session', () => {
@@ -109,7 +125,9 @@ test('both shell modes retain live counts, an empty dock, and inspector-before-g
     assert.ok(content(inspector).includes('Select a star to inspect it. Double-click to expand.'))
     const counts = app.elements.find((el) => el.props?.className === 'statusbar__counts')
     assert.equal(counts.props['aria-live'], 'polite')
-    assert.equal(content(counts), `${count} ${kind === 'track' ? 'songs' : 'artists'} · 0 links`)
+    // #24 plurals: "1 song", never "1 songs".
+    const noun = kind === 'track' ? 'song' : 'artist'
+    assert.equal(content(counts), `${count} ${count === 1 ? noun : `${noun}s`} · 0 links`)
   }
 })
 
