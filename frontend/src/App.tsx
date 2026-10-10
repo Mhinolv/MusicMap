@@ -4,6 +4,8 @@ import { ArtistPanel } from './components/ArtistPanel'
 import { ForceGraph } from './components/ForceGraph'
 import { JourneyTrail } from './components/JourneyTrail'
 import { SearchBar, type SearchMode } from './components/SearchBar'
+import { SavedDiscoveries } from './components/SavedDiscoveries'
+import { addBookmark, bookmarkKey, BOOKMARK_FULL_MESSAGE, nodeBookmark, readBookmarks, restoreBookmarks, writeBookmarks, type Bookmark } from './bookmarks'
 import { TastePreferences } from './components/TastePreferences'
 import { finishSpotifyImport } from './spotifyImport'
 import { artistNode, planPrune, trackNode, useMusicGraph } from './graph/useMusicGraph'
@@ -11,7 +13,7 @@ import type { ArtistRef, PruneMode, TasteProfile, TrackRef } from './types'
 
 const EXPAND_LIMIT = 7
 
-type Toast = { msg: string; action?: { label: string; run: () => void } }
+type Toast = { source?: 'bookmarks'; msg: string; action?: { label: string; run: () => void } }
 const TASTE_STORAGE_KEY = 'tunegraph:taste:v1'
 
 function readTaste(): TasteProfile | null {
@@ -31,6 +33,10 @@ export default function App() {
   const [centerRequest, setCenterRequest] = useState<{ id: string; nonce: number }>()
   const [taste, setTaste] = useState<TasteProfile | null>(readTaste)
   const [tasteOpen, setTasteOpen] = useState(false)
+  const [bookmarks, setBookmarks] = useState(readBookmarks)
+  const bookmarksRef = useRef(bookmarks)
+  const [savedOpen, setSavedOpen] = useState(false)
+  const closeSaved = useCallback(() => setSavedOpen(false), [])
   const inflight = useRef(new Set<string>())
   const toastTimer = useRef<number>(0)
 
@@ -39,6 +45,26 @@ export default function App() {
     setToast(t)
     toastTimer.current = window.setTimeout(() => setToast((cur) => (cur === t ? null : cur)), ms)
   }, [])
+
+  const updateBookmarks = (next: Bookmark[]) => {
+    if (!writeBookmarks(next)) {
+      showToast({ source: 'bookmarks', msg: "Couldn't save: this browser is blocking local storage." }, 7000)
+      return false
+    }
+    bookmarksRef.current = next
+    setBookmarks(next)
+    return true
+  }
+  const removeBookmarks = (removed: Bookmark[]) => {
+    const keys = new Set(removed.map(bookmarkKey))
+    const next = bookmarksRef.current.filter((entry) => !keys.has(bookmarkKey(entry)))
+    if (!updateBookmarks(next)) return
+    showToast({ source: 'bookmarks', msg: removed.length === 1 ? `Removed “${removed[0].item.name}” from saved.` : `Cleared ${removed.length} saved discoveries.`, action: { label: 'Undo', run: () => {
+      const restored = restoreBookmarks(bookmarksRef.current, removed)
+      if (restored === bookmarksRef.current) showToast({ source: 'bookmarks', msg: BOOKMARK_FULL_MESSAGE }, 7000)
+      else updateBookmarks(restored)
+    } } }, 7000)
+  }
 
   const expand = useCallback(
     async (id: string) => {
@@ -117,7 +143,7 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (tasteOpen) return
+      if (tasteOpen || savedOpen) return
       const el = document.activeElement as HTMLElement | null
       const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
       if (e.key === 'Escape') {
@@ -128,12 +154,12 @@ export default function App() {
       } else if (e.key === 'z' && (e.metaKey || e.ctrlKey) && !typing && g.graph.undo) {
         e.preventDefault()
         g.undo()
-        setToast(null)
+        setToast((current) => current?.source === 'bookmarks' ? current : null)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [g, selected, prune, tasteOpen])
+  }, [g, selected, prune, tasteOpen, savedOpen])
 
   const saveTaste = (next: TasteProfile) => {
     setTaste(next)
@@ -163,6 +189,23 @@ export default function App() {
     setCenterRequest({ id, nonce: Date.now() })
   }
 
+  const openBookmark = (entry: Bookmark) => {
+    setSavedOpen(false)
+    setSearchMode(entry.kind === 'track' ? 'song' : 'artist')
+    if (entry.kind === 'track') onSelectTrack(entry.item)
+    else onSelectSearch(entry.item)
+  }
+  const selectedBookmark = selected ? nodeBookmark(selected) : null
+  const isSaved = !!selectedBookmark && bookmarks.some((entry) => bookmarkKey(entry) === bookmarkKey(selectedBookmark))
+  const toggleSave = () => {
+    if (!selectedBookmark) return
+    const existing = bookmarksRef.current.find((entry) => bookmarkKey(entry) === bookmarkKey(selectedBookmark))
+    if (existing) return removeBookmarks([existing])
+    const next = addBookmark(bookmarksRef.current, selectedBookmark)
+    if (next === bookmarksRef.current) return showToast({ source: 'bookmarks', msg: BOOKMARK_FULL_MESSAGE }, 7000)
+    updateBookmarks(next)
+  }
+
   const hasGraph = g.nodes.length > 0
   const rootKind = g.graph.rootId ? g.graph.nodes.get(g.graph.rootId)?.kind : undefined
   const searchProps = { onSelect: onSelectSearch, onSelectTrack, mode: searchMode, onModeChange: setSearchMode }
@@ -175,6 +218,7 @@ export default function App() {
           <p className="hero__sub">Start from an artist or a song, then wander outward through who they're connected to.</p>
           <SearchBar {...searchProps} autoFocus />
           <button className="taste-entry" onClick={() => setTasteOpen(true)}>{taste ? 'Edit your music taste' : 'Add your music taste'}</button>
+          {bookmarks.length > 0 && <button className="link-btn saved-entry" onClick={() => setSavedOpen(true)}>Open saved discoveries ({bookmarks.length})</button>}
           <p className="hero__hint">
             {searchMode === 'song' ? 'Try “Creep”, “Glory Box”, or “Teardrop”.' : 'Try “Radiohead”, “Portishead”, or “Björk”.'}
           </p>
@@ -194,6 +238,10 @@ export default function App() {
             </button>
             <SearchBar {...searchProps} compact />
             <button className="taste-entry taste-entry--topbar" onClick={() => setTasteOpen(true)}>{taste ? 'My taste' : 'Add taste'}</button>
+            <button className="taste-entry taste-entry--topbar saved-entry" aria-label="Saved discoveries" onClick={() => setSavedOpen(true)}>
+              <span className="saved-entry__desktop">{bookmarks.length ? `Saved · ${bookmarks.length}` : 'Saved'}</span>
+              <span className="saved-entry__mobile"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>{bookmarks.length}</span>
+            </button>
             <div className="topbar__stats" aria-live="polite">
               {g.nodes.length} {rootKind === 'track' ? 'songs' : 'artists'} · {g.edges.length} links
             </div>
@@ -205,6 +253,8 @@ export default function App() {
             {selected && (
               <ArtistPanel
                 node={selected}
+                saved={isSaved}
+                onToggleSave={toggleSave}
                 isRoot={selected.id === g.graph.rootId}
                 impact={impact}
                 onExpand={expand}
@@ -253,8 +303,8 @@ export default function App() {
             <button
               className="toast__action"
               onClick={() => {
-                toast.action!.run()
                 setToast(null)
+                toast.action!.run()
               }}
             >
               {toast.action.label}
@@ -262,6 +312,7 @@ export default function App() {
           )}
         </div>
       )}
+      {savedOpen && <SavedDiscoveries entries={bookmarks} onOpen={openBookmark} onRemove={(entry) => removeBookmarks([entry])} onClear={() => removeBookmarks(bookmarksRef.current)} onClose={closeSaved} />}
       {tasteOpen && <TastePreferences profile={taste ?? { liked_artists: [], liked_tracks: [], liked_genres: [], disliked: [], notes: '' }} onSave={saveTaste} onClear={clearTaste} onClose={() => setTasteOpen(false)} />}
     </div>
   )
