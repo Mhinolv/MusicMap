@@ -60,10 +60,10 @@ test('#51 tentative taste scenarios exist and stub well-formed replies', async (
   assert.deepEqual([body.outcome, body.level, body.item_id, body.kind], ['uncertain', 3, 'creep', 'track'])
   assert.ok(body.tags.includes('grunge'), 'shared tag with the liked genre')
   await scenarios.find((scenario) => scenario.name === 'connections-tentative').run(page)
-  handlers.pop()(request('/api/taste/connections/evaluate', { item_ids: ['a', 'b', 'c', 'd'], profile: {} }))
+  handlers.pop()(request('/api/taste/connections/evaluate', { item_ids: ['a', 'b', 'c', 'd', 'e'], profile: {} }))
   const batch = JSON.parse(responses.pop().body)
   assert.deepEqual(batch.results.map((r) => [r.item_id, r.outcome, r.level]),
-    [['a', 'fit', 4], ['b', 'uncertain', 3], ['c', 'fit', 0], ['d', 'fit', 3]])
+    [['a', 'fit', 4], ['b', 'uncertain', 3], ['c', 'fit', 3], ['d', 'fit', 4], ['e', 'fit', 0]])
 })
 
 test('left pane scenarios from the #31 design notes exist', () => {
