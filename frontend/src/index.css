@@ -61,8 +61,8 @@ a:hover { color: var(--cyan-hover); }
 }
 
 /* SVG graph nodes retain their own ring until the constellation PR.
-   Search inputs show only the text cursor on focus (owner decision, #33). */
-:is(button, a, input, textarea, select, [tabindex]):not(.node, .search__field input):focus-visible {
+   Search and steer inputs show only the text cursor on focus (owner decisions, #33, #38). */
+:is(button, a, input, textarea, select, [tabindex]):not(.node, .search__field input, .steer-words__field input):focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 1px;
 }
@@ -659,12 +659,13 @@ a:hover { color: var(--cyan-hover); }
 /* Plain-word steering (#38): proposes chips from the song's own tags. */
 .steer-words { display: grid; gap: 6px; margin-bottom: 10px; }
 .steer-words__form { display: flex; gap: 8px; align-items: stretch; }
+/* Ghost buttons grow by default; here the field takes the width so the text is not squeezed. */
+.steer-words__form .btn { flex: none; }
 .steer-words__field {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
   background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 0 10px; min-height: 32px; transition: border-color 0.15s;
+  padding: 0 10px; min-height: 32px;
 }
-.steer-words__field:focus-within { border-color: var(--cyan); }
 .steer-words__field input {
   flex: 1; min-width: 0; background: none; border: 0; outline: none;
   color: var(--text); font: inherit; font-size: 12px; padding: 6px 0;
@@ -678,6 +679,8 @@ a:hover { color: var(--cyan-hover); }
 .steer-words__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .steer-words__label { color: var(--muted); font-size: 12px; }
 .steer-words__actions { display: flex; align-items: center; gap: 12px; }
+/* Clear space between the steering chips and the instruction under them (owner decision). */
+.panel__hint.steer-hint { margin-top: 10px; }
 
 .app--empty { overflow-y: auto; }
 

@@ -390,7 +390,7 @@ function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleE
               ) : (
                 <p className="panel__empty">No tags listed for this song.</p>
               )}
-              {!node.expanded && details.tags.length > 0 && <p className="panel__hint">Pick up to 3 for more of that flavour. Tags come from Last.fm listeners.</p>}
+              {!node.expanded && details.tags.length > 0 && <p className="panel__hint steer-hint">Pick up to 3 for more of that flavour. Tags come from Last.fm listeners.</p>}
             </section>
 
             {details.summary && (
