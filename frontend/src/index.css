@@ -705,9 +705,9 @@ a:hover { color: var(--cyan-hover); }
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
-.app--empty { position: relative; display: block; }
+.app--empty { position: relative; display: flex; flex-direction: column; }
 .start-header {
-  position: sticky; top: 0; z-index: 5; height: 48px; padding: 0 12px;
+  position: sticky; top: 0; z-index: 5; flex: none; height: 48px; padding: 0 12px;
   display: flex; align-items: center; gap: 12px;
   background: var(--pane); border-bottom: 1px solid var(--hairline);
 }
@@ -717,12 +717,19 @@ a:hover { color: var(--cyan-hover); }
 .library-button .library-count { margin-left: 0; }
 .library-button[aria-expanded="true"] { border-color: var(--cyan); background: var(--cyan-soft); }
 .start-sky { position: absolute; top: 48px; left: 0; width: 100%; height: calc(100% - 48px); pointer-events: none; }
+/* Centred both ways below the header; auto margins collapse to the 40px padding on short screens, which scroll. */
 .start {
+  --start-gutter: clamp(24px, 5.5vw, 80px);
   position: relative; display: flex; flex-direction: column; gap: 24px;
-  margin: 72px 0 48px clamp(24px, 5.5vw, 80px);
-  width: min(900px, calc(100% - 160px));
+  flex: none; margin: auto; padding-block: 40px;
+  width: min(900px, 100% - 2 * var(--start-gutter));
 }
-.start--library { width: min(900px, calc(100% - clamp(24px, 5.5vw, 80px) - 404px)); }
+/* Library open: centred in the width left of the 380px drawer. */
+.start--library {
+  --start-w: min(900px, 100% - 380px - 2 * var(--start-gutter));
+  width: var(--start-w);
+  margin-left: calc((100% - 380px - var(--start-w)) / 2);
+}
 .start-panel { background: var(--pane); border: 1px solid var(--hairline); }
 .start-panel__head {
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
@@ -795,13 +802,9 @@ a:hover { color: var(--cyan-hover); }
 .library-drawer__note { margin: 0; padding: 12px 14px 0; color: var(--muted); line-height: 1.6; }
 .library-drawer__note:last-child { padding-bottom: 12px; }
 
-@media (max-width: 1023px) {
-  .start { width: calc(100% - 2 * clamp(24px, 5.5vw, 80px)); }
-  .start--library { width: calc(100% - clamp(24px, 5.5vw, 80px) - 404px); }
-}
 @media (max-width: 860px) {
   /* Too narrow to share the row: the drawer overlays the column instead. */
-  .start--library { width: calc(100% - 2 * clamp(24px, 5.5vw, 80px)); }
+  .start--library { --start-w: min(900px, 100% - 2 * var(--start-gutter)); margin-left: auto; }
   .resume { flex-wrap: wrap; }
   .resume__info { flex-basis: calc(100% - 224px); }
   .resume__actions { flex-direction: row; flex-basis: 100%; }
@@ -812,7 +815,8 @@ a:hover { color: var(--cyan-hover); }
     padding-left: calc(12px + env(safe-area-inset-left)); padding-right: calc(12px + env(safe-area-inset-right));
   }
   .start-sky { top: calc(48px + env(safe-area-inset-top)); }
-  .start, .start--library { width: auto; margin: 24px 16px 32px; }
+  /* Phones stay top-anchored so the soft keyboard never covers the suggestions (#53). */
+  .start, .start--library { width: auto; margin: 0 16px; padding: 24px 0 32px; }
   .start-panel__aside { display: none; }
   .search--start { flex-wrap: wrap; }
   .search--start .search__anchor { flex-basis: 100%; }
