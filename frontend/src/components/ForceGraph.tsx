@@ -1,5 +1,7 @@
 import * as d3 from 'd3'
 import { useEffect, useMemo, useRef, type RefObject } from 'react'
+import { generateStarField, journeyPath, labelLines, placeLabels, starRadius } from '../graph/constellation'
+import type { LabelPosition } from '../graph/constellation'
 import type { ArtistEdge, ArtistNode, NodeKind } from '../types'
 
 type SimNode = d3.SimulationNodeDatum & {
@@ -16,6 +18,7 @@ type SimNode = d3.SimulationNodeDatum & {
   tier: number
   parentId?: string
   subtitle?: string
+  match?: number
 }
 
 type SimLink = d3.SimulationLinkDatum<SimNode> & {
@@ -47,7 +50,6 @@ type Props = {
 
 const NODE_MIN_R = 13
 const NODE_MAX_R = 30
-const LABEL_MAX = 22
 const MAX_TIER = 3
 // How much each tier shrinks relative to the focus.
 const TIER_SCALE = [1, 0.92, 0.72, 0.58]
@@ -68,26 +70,6 @@ function baseRadius(d: SimNode): number {
 function radius(d: SimNode): number {
   return baseRadius(d) * TIER_SCALE[Math.min(d.tier, MAX_TIER)]
 }
-function label(name: string): string {
-  return name.length > LABEL_MAX ? name.slice(0, LABEL_MAX - 1) + '…' : name
-}
-/** Leaves label outward from their hub; hubs label below. */
-function labelPlacement(d: SimNode, map: Map<string, SimNode>) {
-  const r = radius(d)
-  const p = !d.expanded && d.parentId ? map.get(d.parentId) : undefined
-  if (!p || p.x == null || p.y == null || d.x == null || d.y == null) {
-    return { x: 0, y: r + 16, anchor: 'middle', baseline: 'auto' }
-  }
-  const a = Math.atan2(d.y - p.y, d.x - p.x)
-  const c = Math.cos(a)
-  const sn = Math.sin(a)
-  if (Math.abs(c) < 0.35) {
-    return { x: 0, y: sn > 0 ? r + 16 : -(r + 8), anchor: 'middle', baseline: 'auto' }
-  }
-  const off = r + 8
-  return { x: c * off, y: sn * off, anchor: c > 0 ? 'start' : 'end', baseline: 'central' }
-}
-
 /** Eat the synthetic click a browser fires after a touch, for a short window. */
 function swallowNextClick() {
   const eat = (e: Event) => {
@@ -145,45 +127,46 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
   onZoomRef.current = onZoom
   const callbacksRef = useRef({ onSelect, onExpand })
   callbacksRef.current = { onSelect, onExpand }
+  const visualRef = useRef({ selectedId, focusId, journey })
+  visualRef.current = { selectedId, focusId, journey }
+  const renderRef = useRef<(labels?: boolean) => void>(() => {})
+  const labelPositionsRef = useRef(new Map<string, LabelPosition>())
   // One long-press can be pending at a time; a second finger or any movement cancels it.
   const pressRef = useRef<{ timer: number; x: number; y: number; fired: boolean } | null>(null)
 
   const tiers = useMemo(() => computeTiers(focusId, nodes, edges), [focusId, nodes, edges])
 
-  // ---- one-time setup: defs, layers, zoom, simulation --------------------------
+  // ---- one-time setup: layers, zoom, simulation --------------------------
   useEffect(() => {
     const svg = d3.select(svgRef.current!)
     svg.selectAll('*').remove()
 
-    const defs = svg.append('defs')
-    const grad = (id: string, from: string, to: string) => {
-      const g = defs.append('radialGradient').attr('id', id).attr('cx', '35%').attr('cy', '30%').attr('r', '75%')
-      g.append('stop').attr('offset', '0%').attr('stop-color', from)
-      g.append('stop').attr('offset', '100%').attr('stop-color', to)
+    svg.append('rect').attr('class', 'backdrop').attr('width', '100%').attr('height', '100%').attr('fill', 'transparent')
+    const field = svg.append('g').attr('class', 'star-field').attr('aria-hidden', 'true').style('pointer-events', 'none')
+    const media = window.matchMedia('(prefers-reduced-motion: reduce), (max-width: 640px), (pointer: coarse)')
+    let resizeTimer: number | undefined
+    const drawField = () => {
+      const { width, height } = svgRef.current!.getBoundingClientRect()
+      const stars = generateStarField(width, height, window.matchMedia('(max-width: 640px)').matches)
+      field.selectAll('*').remove()
+      field.selectAll('circle.sky-halo').data(media.matches ? [] : stars.filter(s => s.soft)).join('circle').attr('class', 'sky-halo')
+        .attr('cx', d => d.x).attr('cy', d => d.y).attr('r', 4).attr('fill', 'rgba(138,142,150,.35)')
+      field.selectAll('circle.sky-dot').data(stars).join('circle').attr('class', 'sky-dot')
+        .attr('cx', d => d.x).attr('cy', d => d.y).attr('r', d => d.r).attr('fill', d => d.color)
+      svg.classed('reduced-glow', media.matches)
+      renderRef.current(true)
     }
-    grad('grad-node', '#8fb4ff', '#4a63e7')
-    grad('grad-expanded', '#a9c4ff', '#5f7cf0')
-    grad('grad-focus', '#ffd08a', '#f0913f')
-    grad('grad-root', '#ffe1a6', '#e8a84a')
-    grad('grad-track', '#a6f2e3', '#2fb89c')
-    grad('grad-track-expanded', '#c4f7ec', '#49c9ad')
-    const glow = defs.append('filter').attr('id', 'glow').attr('x', '-60%').attr('y', '-60%').attr('width', '220%').attr('height', '220%')
-    glow.append('feGaussianBlur').attr('stdDeviation', 5).attr('result', 'blur')
-    const merge = glow.append('feMerge')
-    merge.append('feMergeNode').attr('in', 'blur')
-    merge.append('feMergeNode').attr('in', 'SourceGraphic')
-    const dots = defs
-      .append('pattern')
-      .attr('id', 'dots')
-      .attr('width', 28)
-      .attr('height', 28)
-      .attr('patternUnits', 'userSpaceOnUse')
-    dots.append('circle').attr('cx', 1).attr('cy', 1).attr('r', 1).attr('fill', 'rgba(255,255,255,0.06)')
-
-    svg.append('rect').attr('class', 'backdrop').attr('width', '100%').attr('height', '100%').attr('fill', 'url(#dots)')
+    const fieldObserver = new ResizeObserver(() => {
+      window.clearTimeout(resizeTimer)
+      resizeTimer = window.setTimeout(drawField, 120)
+    })
+    fieldObserver.observe(svgRef.current!)
+    media.addEventListener('change', drawField)
+    drawField()
 
     const root = svg.append('g').attr('class', 'viewport')
     root.append('g').attr('class', 'links')
+    root.append('path').attr('class', 'journey-path').attr('aria-hidden', 'true')
     root.append('g').attr('class', 'nodes')
 
     let zoomFrame = 0
@@ -199,8 +182,9 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
           zoomFrame = 0
           onZoomRef.current?.(latestZoom)
         })
-        svg.select('.backdrop').attr('transform', `translate(${event.transform.x % 28},${event.transform.y % 28})`)
+        renderRef.current()
       })
+      .on('end', () => renderRef.current(true))
     svg.call(zoom).on('dblclick.zoom', null)
     svg.on('click', (event) => {
       const t = event.target as Element
@@ -209,6 +193,71 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
     // Long-pressing a node on a touch screen must not open the browser's context menu.
     svg.on('contextmenu', (event) => event.preventDefault())
     zoomRef.current = zoom
+
+    let labelWidths = new WeakMap<SVGTextElement, { key: string; main: number; sub: number }>()
+    renderRef.current = (labels = false) => {
+      const { selectedId, focusId, journey } = visualRef.current
+      const stops = new Set(journey)
+      const transform = d3.zoomTransform(svgRef.current!)
+      const k = transform.k
+      const mobile = window.matchMedia('(max-width: 640px)').matches
+      const { width, height } = svgRef.current!.getBoundingClientRect()
+      const groups = root.selectAll<SVGGElement, SimNode>('g.node')
+      const points: Parameters<typeof placeLabels>[0] = []
+      groups.each(function(d) {
+        const g = d3.select(this)
+        const selected = d.id === selectedId
+        const stop = d.isRoot || stops.has(d.id)
+        const core = starRadius(d.match, d.degree, TIER_SCALE[Math.min(d.tier, MAX_TIER)], selected, stop)
+        const ring = selected ? 22 : stop ? 15 : 13
+        const color = selected ? 'var(--cyan)' : stop ? 'var(--amber)' : 'var(--star)'
+        g.classed('is-selected', selected).classed('is-journey', stops.has(d.id)).attr('aria-pressed', selected)
+        g.selectAll('circle').attr('transform', `scale(${1 / k})`)
+        g.select('.node__hit').attr('r', 22)
+        g.select('.node__body').attr('r', core).attr('fill', color)
+        g.select('.node__ring').attr('r', ring).attr('stroke', selected || stop ? color : `rgba(201,203,207,${d.parentId === focusId ? 0.4 : 0.22})`).attr('stroke-width', selected ? 1.5 : 1)
+        g.select('.node__outer').attr('r', 32).style('display', selected ? '' : 'none')
+        g.select('.node__focus').attr('r', ring + 4)
+        g.select('.node__glow').attr('r', core + (selected ? 10 : 5)).attr('fill', color)
+          .attr('opacity', selected ? 0.25 : 0.12).style('display', media.matches || (stop && !selected) ? 'none' : '')
+        g.select('.node__label').attr('transform', `scale(${1 / k})`)
+        if (!labels) return
+        const lines = labelLines(d.name, d.subtitle, d.match, d.isRoot, mobile)
+        const text = g.select<SVGTextElement>('.node__label').style('display', '').attr('transform', `scale(${1 / k})`)
+        text.select('.node__label-main').text(lines.main)
+        text.select('.node__label-sub').style('display', '').text(lines.sub)
+        const [x, y] = transform.apply([d.x ?? 0, d.y ?? 0])
+        // Cache font measurements; collision passes during ticks use only arithmetic.
+        const key = JSON.stringify([lines.main, lines.sub, selected])
+        let measured = labelWidths.get(text.node()!)
+        if (measured?.key !== key) {
+          measured = { key,
+            main: text.select<SVGTSpanElement>('.node__label-main').node()!.getComputedTextLength(),
+            sub: lines.sub ? text.select<SVGTSpanElement>('.node__label-sub').node()!.getComputedTextLength() : 0 }
+          labelWidths.set(text.node()!, measured)
+        }
+        points.push({ id: d.id, name: d.name, x, y, core, ring,
+          mainWidth: measured.main, subWidth: measured.sub,
+          selected, root: d.isRoot, journey: stops.has(d.id), match: d.match })
+      })
+      root.select('.journey-path').attr('d', journeyPath(journey, nodeMapRef.current))
+      if (!labels) return
+      const positions = placeLabels(points, width, height, mobile, labelPositionsRef.current)
+      labelPositionsRef.current = positions
+      groups.select<SVGTextElement>('.node__label').each(function(d) {
+        const p = positions.get(d.id)!
+        const text = d3.select(this).style('display', p.hidden ? 'none' : '')
+          .attr('text-anchor', p.anchor).attr('dominant-baseline', 'hanging')
+        text.select('.node__label-main').attr('x', p.x).attr('y', p.y)
+        text.select('.node__label-sub').attr('x', p.x).attr('y', p.y + 16).style('display', p.sub ? '' : 'none')
+      })
+    }
+    const fontReady = () => {
+      labelWidths = new WeakMap()
+      renderRef.current(true)
+    }
+    document.fonts?.addEventListener('loadingdone', fontReady)
+    let ticks = 0
 
     // Pulls each leaf toward the hub that discovered it, so clusters stay compact.
     const clusterForce = (alpha: number) => {
@@ -258,19 +307,14 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
           .attr('y1', (d) => (d.source as SimNode).y!)
           .attr('x2', (d) => (d.target as SimNode).x!)
           .attr('y2', (d) => (d.target as SimNode).y!)
-        const nodeG = root
+        root
           .select<SVGGElement>('.nodes')
           .selectAll<SVGGElement, SimNode>('g.node')
           .attr('transform', (d) => `translate(${d.x},${d.y})`)
-        const map = nodeMapRef.current
-        nodeG.select<SVGTextElement>('.node__label').each(function (d) {
-          const p = labelPlacement(d, map)
-          const t = d3.select(this)
-          t.attr('x', p.x).attr('y', p.y).attr('text-anchor', p.anchor).attr('dominant-baseline', p.baseline)
-          // The second line must restart at the same x to sit under the first.
-          t.select('.node__label-sub').attr('x', p.x)
-        })
+        root.select('.journey-path').attr('d', journeyPath(visualRef.current.journey, nodeMapRef.current))
+        if (++ticks % 10 === 0) renderRef.current(true)
       })
+      .on('end.labels', () => renderRef.current(true))
     simRef.current = sim
 
     const { width, height } = svgRef.current!.getBoundingClientRect()
@@ -279,6 +323,12 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
     return () => {
       cancelAnimationFrame(zoomFrame)
       sim.stop()
+      document.fonts?.removeEventListener('loadingdone', fontReady)
+      fieldObserver.disconnect()
+      media.removeEventListener('change', drawField)
+      window.clearTimeout(resizeTimer)
+      if (pressRef.current) window.clearTimeout(pressRef.current.timer)
+      renderRef.current = () => {}
     }
   }, [])
 
@@ -307,6 +357,7 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
   // ---- new search: clear positions and re-centre --------------------------------
   useEffect(() => {
     nodeMapRef.current.clear()
+    labelPositionsRef.current.clear()
     const svg = d3.select(svgRef.current!)
     if (zoomRef.current && svgRef.current) {
       const { width, height } = svgRef.current.getBoundingClientRect()
@@ -354,6 +405,15 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
       return heading - fan / 2 + (count > 1 ? (fan * i) / (count - 1) : 0)
     }
 
+    const matches = new Map<string, number>()
+    const parents = new Map(nodes.map(n => [n.id, n.parentId]))
+    for (const e of edges) {
+      if (e.similarity == null) continue
+      for (const [id, other] of [[e.source, e.target], [e.target, e.source]]) {
+        if (!parents.get(id) || parents.get(id) === other) matches.set(id, Math.max(matches.get(id) ?? 0, e.similarity))
+      }
+    }
+
     const simNodes: SimNode[] = nodes.map((n) => {
       seen.add(n.id)
       const tier = tiers.get(n.id) ?? MAX_TIER
@@ -363,7 +423,7 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
         const angle = spawnAngle(n, anchor)
         const dist = SPAWN_DISTANCE + Math.random() * 20
         s = {
-          id: n.id, name: n.name, kind: n.kind, subtitle: n.subtitle, expanded: n.expanded, loading: n.loading, error: n.error,
+          id: n.id, name: n.name, kind: n.kind, subtitle: n.subtitle, match: matches.get(n.id), expanded: n.expanded, loading: n.loading, error: n.error,
           degree: degree.get(n.id) ?? 0, isRoot: n.id === rootId, isNew: true, tier, parentId: n.parentId,
           x: (anchor?.x ?? 0) + Math.cos(angle) * dist,
           y: (anchor?.y ?? 0) + Math.sin(angle) * dist,
@@ -371,7 +431,7 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
         map.set(n.id, s)
       } else {
         Object.assign(s, {
-          name: n.name, kind: n.kind, subtitle: n.subtitle, expanded: n.expanded, loading: n.loading, error: n.error,
+          name: n.name, kind: n.kind, subtitle: n.subtitle, match: matches.get(n.id), expanded: n.expanded, loading: n.loading, error: n.error,
           degree: degree.get(n.id) ?? 0, isRoot: n.id === rootId, isNew: false, tier, parentId: n.parentId,
         })
       }
@@ -411,10 +471,7 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
         line.select('title').remove()
         if (d.sharedTags?.length) line.append('title').text(`Similar: ${d.sharedTags.join(', ')}`)
       })
-      .transition()
-      .duration(500)
-      .attr('stroke-width', (d) => (1 + 2.5 * (d.similarity ?? 0.5)) * TIER_SCALE[Math.min(d.tier, MAX_TIER)])
-      .attr('stroke-opacity', (d) => (0.3 + 0.6 * (d.similarity ?? 0.5)) * [1, 0.9, 0.5, 0.3][Math.min(d.tier, MAX_TIER)])
+      .attr('stroke-width', 1).attr('stroke-opacity', 1)
 
     const nodeSel = rootSel
       .select<SVGGElement>('.nodes')
@@ -429,18 +486,12 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
             .attr('role', 'button')
             .attr('aria-label', (d) => d.name)
             .style('opacity', 0)
-          g.append('circle').attr('class', 'node__glow').attr('r', 0)
-          g.append('circle').attr('class', 'node__ring').attr('r', 0)
-          g.append('circle').attr('class', 'node__body').attr('r', 0)
-          g.append('circle').attr('class', 'node__shine').attr('r', 0)
-          g.append('text').attr('class', 'node__glyph').attr('text-anchor', 'middle').attr('dy', '0.36em').text('♪')
-          const text = g.append('text').attr('class', 'node__label').attr('text-anchor', 'middle')
+          g.append('circle').attr('class', 'node__hit').attr('r', 22).attr('fill', 'transparent')
+          for (const name of ['glow', 'outer', 'ring', 'body', 'focus']) g.append('circle').attr('class', `node__${name}`)
+          const text = g.append('text').attr('class', 'node__label')
           text.append('tspan').attr('class', 'node__label-main')
-          text.append('tspan').attr('class', 'node__label-sub').attr('dy', '1.2em')
-          const badge = g.append('g').attr('class', 'node__badge')
-          badge.append('circle').attr('r', 8)
-          badge.append('text').attr('text-anchor', 'middle').attr('dy', '0.35em')
-          g.transition().duration(500).style('opacity', 1)
+          text.append('tspan').attr('class', 'node__label-sub')
+          g.transition().duration(500).style('opacity', 1).on('end', function() { d3.select(this).style('opacity', null) })
           g.on('click', (event, d) => {
             event.stopPropagation()
             callbacksRef.current.onSelect(d.id)
@@ -504,21 +555,7 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
       .classed('is-expanded', (d) => d.expanded)
       .classed('is-loading', (d) => d.loading)
       .classed('has-error', (d) => !!d.error)
-    nodeSel.select<SVGCircleElement>('.node__body').transition().duration(450).attr('r', radius)
-    nodeSel.select<SVGCircleElement>('.node__shine').transition().duration(450).attr('r', (d) => radius(d) * 0.55).attr('cx', (d) => -radius(d) * 0.25).attr('cy', (d) => -radius(d) * 0.3)
-    nodeSel.select<SVGCircleElement>('.node__ring').transition().duration(450).attr('r', (d) => radius(d) + 4)
-    nodeSel.select<SVGCircleElement>('.node__glow').transition().duration(450).attr('r', (d) => radius(d) + 6)
-    nodeSel
-      .select<SVGTextElement>('.node__glyph')
-      .style('display', (d) => (d.kind === 'track' ? 'inline' : 'none'))
-      .attr('font-size', (d) => radius(d) * 1.15)
-    nodeSel.select<SVGTSpanElement>('.node__label-main').text((d) => label(d.name))
-    nodeSel.select<SVGTSpanElement>('.node__label-sub').text((d) => (d.subtitle ? label(d.subtitle) : ''))
-    nodeSel
-      .select<SVGTextElement>('.node__label')
-      .transition()
-      .duration(450)
-      .attr('font-size', (d) => 12 * (0.85 + 0.15 * TIER_SCALE[Math.min(d.tier, MAX_TIER)]))
+    nodeSel.attr('aria-label', d => [d.name, d.subtitle, d.isRoot ? 'ROOT' : ''].filter(Boolean).join(' · '))
 
     const drag = d3
       .drag<SVGGElement, SimNode>()
@@ -543,29 +580,11 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
     sim.force<d3.ForceManyBody<SimNode>>('charge')!.initialize(simNodes, Math.random)
     const anyNew = simNodes.some((n) => n.isNew)
     sim.alpha(anyNew ? 0.9 : 0.3).restart()
+    renderRef.current(true)
   }, [nodes, edges, degree, rootId, focusId, tiers])
 
-  // ---- exploration trail -------------------------------------------------------------
-  useEffect(() => {
-    const svg = svgRef.current
-    if (!svg) return
-    const step = new Map(journey.map((id, i) => [id, i + 1]))
-    const trailEdges = new Set<string>()
-    for (let i = 1; i < journey.length; i++) {
-      const a = journey[i - 1]
-      const b = journey[i]
-      trailEdges.add(a < b ? `${a}::${b}` : `${b}::${a}`)
-    }
-    const sel = d3.select(svg)
-    const nodeSel = sel.selectAll<SVGGElement, SimNode>('g.node').classed('is-journey', (d) => step.has(d.id))
-    nodeSel
-      .select<SVGGElement>('.node__badge')
-      .style('display', (d) => (step.has(d.id) ? null : 'none'))
-      .attr('transform', (d) => `translate(${radius(d) * 0.75},${-radius(d) * 0.75})`)
-      .select('text')
-      .text((d) => step.get(d.id) ?? '')
-    sel.selectAll<SVGLineElement, SimLink>('line.link').classed('is-trail', (d) => trailEdges.has(d.id))
-  }, [journey, nodes, edges, tiers])
+  // Visual priority and label placement update immediately, without React tick state.
+  useEffect(() => { renderRef.current(true) }, [journey, selectedId, nodes, edges, tiers])
 
   // ---- selection highlighting ------------------------------------------------------
   useEffect(() => {
@@ -660,13 +679,11 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
           −
         </button>
         <button onClick={fit} aria-label="Fit graph to view" title="Fit to view">
-          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-            <path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          FIT
         </button>
       </div>
-      <svg ref={svgRef} className="graph" role="img" aria-label="Artist relationship graph">
-        <title>Artist relationship graph</title>
+      <svg ref={svgRef} className="graph" role="img" aria-label="Music relationship graph">
+        <title>Music relationship graph</title>
       </svg>
     </div>
   )
