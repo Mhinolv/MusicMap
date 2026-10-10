@@ -184,7 +184,8 @@ const scenarios = [
       // Select a leaf through its existing keyboard control, avoiding panel overlap.
       const leaf = await page.$('g.node:not(.is-root)')
       if (!leaf) throw new Error('no song leaf')
-      await leaf.focus()
+      // ElementHandle.focus() rejects SVG; use the node's native DOM focus.
+      await page.evaluate((node) => node.focus(), leaf)
       await page.keyboard.press('Enter')
       await waitForPanel(page)
       await page.waitForFunction(() => [...document.querySelectorAll('.panel__hint')]
