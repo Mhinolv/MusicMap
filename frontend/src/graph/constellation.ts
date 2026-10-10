@@ -22,8 +22,13 @@ export function labelLines(name: string, artist: string | undefined, match: numb
   return { main: truncate(name, mobile ? 15 : 20), sub: truncate(mobile ? artist ?? '' : [artist, detail].filter(Boolean).join(' · '), mobile ? 16 : 22) }
 }
 
+/** Selection halo radius (64px artboard diameter) and the clear space labels keep past it. */
+export const SELECTED_OUTER_RING = 32
+export const LABEL_GAP = 6
+
+/** `outer` is the outermost visible ring (the selection halo); labels clear it by LABEL_GAP. */
 export type LabelPoint = {
-  id: string; name: string; x: number; y: number; core: number; ring: number
+  id: string; name: string; x: number; y: number; core: number; ring: number; outer?: number
   mainWidth: number; subWidth: number; selected: boolean; root: boolean; journey: boolean; match?: number
 }
 type Side = 'right' | 'left' | 'below'
@@ -42,12 +47,14 @@ export function placeLabels(points: LabelPoint[], width: number, height: number,
     let sides: Side[] = mobile ? ['below'] : ['right', 'left', 'below']
     const old = previous.get(p.id)
     if (old && !old.hidden && sides.includes(old.side)) sides = [old.side, ...sides.filter(s => s !== old.side)]
+    const beside = p.outer ? p.outer + LABEL_GAP : 18
+    const below = p.outer ? p.outer + LABEL_GAP : p.ring + 4
     let found: LabelPosition | undefined
     for (const sub of p.subWidth ? [true, false] : [false]) {
       for (const side of sides) {
         const w = Math.max(p.mainWidth, sub ? p.subWidth : 0)
-        const x = side === 'right' ? 18 : side === 'left' ? -18 : 0
-        const y = side === 'below' ? p.ring + 4 : -8
+        const x = side === 'right' ? beside : side === 'left' ? -beside : 0
+        const y = side === 'below' ? below : -8
         const box = { x: p.x + x - (side === 'left' ? w : side === 'below' ? w / 2 : 0), y: p.y + y, w, h: sub ? 30 : 15 }
         if (box.x < 8 || box.y < 8 || box.x + w > width - 8 || box.y + box.h > height - 8 || placed.some(b => overlaps(box, b)) || cores.some(b => overlaps(box, b))) continue
         found = { side, x, y, anchor: side === 'right' ? 'start' : side === 'left' ? 'end' : 'middle', sub, hidden: false }
@@ -56,7 +63,7 @@ export function placeLabels(points: LabelPoint[], width: number, height: number,
       }
       if (found) break
     }
-    result.set(p.id, found ?? { side: 'below', x: 0, y: p.ring + 4, anchor: 'middle', sub: false, hidden: true })
+    result.set(p.id, found ?? { side: 'below', x: 0, y: below, anchor: 'middle', sub: false, hidden: true })
   }
   return result
 }

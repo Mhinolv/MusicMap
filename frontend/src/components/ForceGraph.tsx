@@ -1,6 +1,6 @@
 import * as d3 from 'd3'
 import { useEffect, useMemo, useRef, type RefObject } from 'react'
-import { generateStarField, journeyPath, labelLines, placeLabels, starRadius } from '../graph/constellation'
+import { generateStarField, journeyPath, labelLines, placeLabels, SELECTED_OUTER_RING, starRadius } from '../graph/constellation'
 import type { LabelPosition } from '../graph/constellation'
 import type { ArtistEdge, ArtistNode, NodeKind } from '../types'
 
@@ -216,7 +216,7 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
         g.select('.node__hit').attr('r', 22)
         g.select('.node__body').attr('r', core).attr('fill', color)
         g.select('.node__ring').attr('r', ring).attr('stroke', selected || stop ? color : `rgba(201,203,207,${d.parentId === focusId ? 0.4 : 0.22})`).attr('stroke-width', selected ? 1.5 : 1)
-        g.select('.node__outer').attr('r', 32).style('display', selected ? '' : 'none')
+        g.select('.node__outer').attr('r', SELECTED_OUTER_RING).style('display', selected ? '' : 'none')
         g.select('.node__focus').attr('r', ring + 4)
         g.select('.node__glow').attr('r', core + (selected ? 10 : 5)).attr('fill', color)
           .attr('opacity', selected ? 0.25 : 0.12).style('display', media.matches || (stop && !selected) ? 'none' : '')
@@ -236,7 +236,7 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
             sub: lines.sub ? text.select<SVGTSpanElement>('.node__label-sub').node()!.getComputedTextLength() : 0 }
           labelWidths.set(text.node()!, measured)
         }
-        points.push({ id: d.id, name: d.name, x, y, core, ring,
+        points.push({ id: d.id, name: d.name, x, y, core, ring, outer: selected ? SELECTED_OUTER_RING : undefined,
           mainWidth: measured.main, subWidth: measured.sub,
           selected, root: d.isRoot, journey: stops.has(d.id), match: d.match })
       })
