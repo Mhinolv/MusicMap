@@ -1,4 +1,4 @@
-import type { Artist, ArtistRef, PreviewResult, SimilarArtist, SimilarTrack, TasteConnections, TasteEvaluation, TasteProfile, Track, TrackDetails, TrackRankingContext, TrackRef } from './types'
+import type { Artist, ArtistRef, PreviewResult, SimilarArtist, SimilarTrack, TasteConnections, TasteEvaluation, TasteProfile, TasteSteer, Track,TrackDetails, TrackRankingContext, TrackRef } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -104,6 +104,9 @@ export const api = {
 
   tasteConnections: (itemIds: string[], profile: TasteProfile, signal?: AbortSignal) =>
     post<TasteConnections>('/api/taste/connections/evaluate', { item_ids: itemIds, profile }, signal),
+
+  tasteSteer: (itemId: string, text: string, tags: string[], signal?: AbortSignal) =>
+    post<TasteSteer>('/api/taste/steer-tags', { item_id: itemId, text, tags }, signal),
 
   spotifyConfig: () => get<{ client_id: string }>('/api/spotify/config'),
 }

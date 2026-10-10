@@ -111,3 +111,49 @@ class TasteConnectionsResponse(BaseModel):
     model: str | None = None
     rubric_version: str
     simulated: bool = False
+
+
+# Same bound as the emphasized_tags query on /api/tracks/{id}/similar.
+SteerTag = Annotated[str, StringConstraints(min_length=1, max_length=100)]
+
+
+class TasteSteerRequest(BaseModel):
+    """Plain-word steering (#38): the listener's request plus the seed song's displayed tags,
+    which must match the song's own Last.fm tags exactly."""
+
+    item_id: ItemId
+    text: str = Field(max_length=200)
+    tags: list[SteerTag] = Field(min_length=1, max_length=12)
+
+    @model_validator(mode="after")
+    def text_and_unique_tags(self) -> "TasteSteerRequest":
+        self.text = self.text.strip()
+        if not self.text:
+            raise ValueError("text must not be empty")
+        if len(set(self.tags)) != len(self.tags):
+            raise ValueError("tags must be unique")
+        return self
+
+
+# "proposed": at least one tag to emphasize. "no_match": no tag fits the request.
+# "low_confidence": the request may point at a tag, but not clearly enough to propose it.
+SteerOutcome = Literal["proposed", "no_match", "low_confidence"]
+
+
+class TasteSteerResponse(BaseModel):
+    """Version 1: up to three tags to emphasize, all from the request's tag list. Tags the
+    request asks for less of are never returned; avoid_ignored says that part was left out."""
+
+    version: Literal[1] = 1
+    outcome: SteerOutcome
+    tags: list[str] = Field(default_factory=list, max_length=3)
+    avoid_ignored: bool = False
+    model: str | None = None
+    rubric_version: str
+    simulated: bool = False
+
+    @model_validator(mode="after")
+    def tags_only_when_proposed(self) -> "TasteSteerResponse":
+        if (self.outcome == "proposed") != bool(self.tags):
+            raise ValueError("tags are required for proposed outcomes and absent otherwise")
+        return self

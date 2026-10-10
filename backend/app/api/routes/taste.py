@@ -1,11 +1,11 @@
 """Evaluate one selected artist or song, or the songs of one song expansion, against a
-listener's supplied preferences."""
+listener's supplied preferences; turn a plain-word steering request into seed tags."""
 
 from __future__ import annotations
 
 import asyncio
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from app.config import get_settings
 from app.models.taste import (
@@ -14,6 +14,8 @@ from app.models.taste import (
     TasteConnectionsResponse,
     TasteEvaluationRequest,
     TasteEvaluationResponse,
+    TasteSteerRequest,
+    TasteSteerResponse,
 )
 from app.services import jev, lastfm
 from app.services.errors import ProviderError
@@ -101,5 +103,30 @@ async def _evaluate_connections(request: TasteConnectionsRequest) -> TasteConnec
 async def evaluate_connections(request: TasteConnectionsRequest) -> TasteConnectionsResponse:
     try:
         return await asyncio.wait_for(_evaluate_connections(request), timeout=jev.DEADLINE_SECONDS)
+    except TimeoutError as exc:
+        raise ProviderError(jev.PROVIDER, "timed out", status=504) from exc
+
+
+async def _steer(request: TasteSteerRequest) -> TasteSteerResponse:
+    # The allowlist is the song's own Last.fm tags, so a client can't add tags of its own.
+    _, allowed = await canonical_target("track", request.item_id)
+    if not set(request.tags) <= set(allowed):
+        raise HTTPException(422, "tags must be this song's own tags")
+    proposal = await jev.steer_tags(request.text, request.tags)
+    return TasteSteerResponse(
+        outcome=proposal.outcome,
+        tags=list(proposal.tags),
+        avoid_ignored=proposal.avoid_ignored,
+        model=proposal.model,
+        rubric_version=jev.STEER_RUBRIC_VERSION,
+        simulated=proposal.simulated,
+    )
+
+
+@router.post("/steer-tags", response_model=TasteSteerResponse)
+async def steer_tags(request: TasteSteerRequest) -> TasteSteerResponse:
+    """Plain-word steering (#38): proposes tags only; the listener applies them."""
+    try:
+        return await asyncio.wait_for(_steer(request), timeout=jev.DEADLINE_SECONDS)
     except TimeoutError as exc:
         raise ProviderError(jev.PROVIDER, "timed out", status=504) from exc

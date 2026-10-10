@@ -14,6 +14,10 @@ no level, and a split Score distribution becomes "uncertain" with a tentative le
 batched request (at most ``MAX_CANDIDATES`` candidates, 14 questions). Each candidate is
 cached on its own, so only misses are sent, and one bad answer leaves only that
 candidate unknown.
+
+Plain-word steering (#38) sends one Choice question per available seed tag (at most
+``MAX_STEER_TAGS``): emphasize / avoid / neutral. Code keeps up to three confident
+"emphasize" tags; "avoid" is reported but never applied (no negative steering yet).
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -74,6 +79,20 @@ MOCK_MODEL = "mock-fixture"
 
 # Same cap as the frontend's EXPAND_LIMIT: one song expansion.
 MAX_CANDIDATES = 7
+
+# ---- plain-word steering (#38) ----
+STEER_RUBRIC_VERSION = "steer-tags-v1"
+STEER_QUESTION = "How should the user's request affect emphasis of available_tags[{ref}] in the next expansion?"
+STEER_CRITERIA = {
+    "emphasize": "The request explicitly or semantically asks for more of this tag",
+    "avoid": "The request asks for less of this tag",
+    "neutral": "The request does not address this tag or is ambiguous",
+}
+MAX_STEER_TAGS = 12
+# Same cap as emphasized_tags on /api/tracks/{id}/similar.
+MAX_STEER_CHIPS = 3
+# Provisional, like CONFIDENCE_MIN: an emphasize/avoid answer below this is not acted on.
+STEER_CONFIDENCE_MIN = 0.4
 
 
 @dataclass(frozen=True)
@@ -300,6 +319,118 @@ async def _request(payload: dict) -> TasteJudgment:
     return parse_judgment(await _post(payload))
 
 
+# ---- plain-word steering (#38) --------------------------------------------------
+
+@dataclass(frozen=True)
+class SteerProposal:
+    outcome: str
+    tags: tuple[str, ...]
+    avoid_ignored: bool
+    model: str | None
+    simulated: bool = False
+
+
+def build_steer_payload(text: str, tags: list[str], model: str) -> dict:
+    """One Choice per available tag. Tag and question ids are positional, so neither the
+    request nor a tag is ever used as an id; instructions reference available_tags[t<i>]."""
+    return {
+        "model": model,
+        "state": {"request": text, "available_tags": {f"t{i}": tag for i, tag in enumerate(tags)}},
+        "questions": {
+            f"steer_{i}": {
+                "type": "choice",
+                "instructions": f"{SAFETY_PREAMBLE} {STEER_QUESTION.format(ref=f't{i}')}",
+                "criteria": STEER_CRITERIA,
+            }
+            for i in range(len(tags))
+        },
+    }
+
+
+def steer_cache_key(text: str, tags: list[str], model: str) -> str:
+    """Hash of the request, the ordered tag list, model and rubric version."""
+    raw = json.dumps(
+        {"request": text, "tags": tags, "model": model, "rubric": STEER_RUBRIC_VERSION},
+        ensure_ascii=False, separators=(",", ":"),
+    )
+    return f"jev:steer:{hashlib.sha256(raw.encode()).hexdigest()}"
+
+
+def _choice(answer: dict) -> tuple[str, float | None]:
+    """The chosen option and its confidence. Without a confidence field, confidence is
+    1 - normalized entropy of the option distribution; without either it is unknown."""
+    distribution = answer.get("distribution", answer.get("probabilities"))
+    probs = None
+    if distribution is not None:
+        if not isinstance(distribution, dict) or not set(distribution) <= set(STEER_CRITERIA):
+            raise ValueError("distribution has the wrong shape")
+        probs = {option: _finite(distribution.get(option, 0), 0, 1) for option in STEER_CRITERIA}
+        if abs(sum(probs.values()) - 1) > 0.02:
+            raise ValueError("distribution does not sum to 1")
+    choice = answer.get("choice")
+    if choice is None and probs is not None:
+        choice = max(STEER_CRITERIA, key=probs.__getitem__)
+    if not isinstance(choice, str) or choice not in STEER_CRITERIA:
+        raise ValueError("unexpected option")
+    if answer.get("confidence") is not None:
+        return choice, _finite(answer["confidence"], 0, 1)
+    if probs is None:
+        return choice, None
+    entropy = -sum(p * math.log(p) for p in probs.values() if p > 0)
+    return choice, max(0.0, 1 - entropy / math.log(len(probs)))
+
+
+def parse_steer(body: Any, tags: list[str]) -> SteerProposal:
+    """Validate a steering /systemone body. A malformed envelope, or no readable answer at
+    all, raises ProviderError; one malformed answer only drops that tag."""
+    try:
+        answers, model = _result(body)
+    except _PARSE_ERRORS as exc:
+        raise ProviderError(PROVIDER, "invalid response") from exc
+    emphasize: list[tuple[float, int]] = []
+    readable, unsure, avoid_ignored = 0, False, False
+    for i in range(len(tags)):
+        try:
+            choice, confidence = _choice(_answer(answers, f"steer_{i}", "choice"))
+        except _PARSE_ERRORS:
+            continue
+        readable += 1
+        if choice == "neutral":
+            continue
+        if confidence is not None and confidence < STEER_CONFIDENCE_MIN:
+            unsure = True
+        elif choice == "avoid":
+            # Negative steering is out of scope: report it, never apply it as positive.
+            avoid_ignored = True
+        else:
+            emphasize.append((1.0 if confidence is None else confidence, i))
+    if not readable:
+        raise ProviderError(PROVIDER, "invalid response")
+    # The most confident three, shown in the song's own tag order.
+    picked = sorted(i for _, i in sorted(emphasize, key=lambda e: (-e[0], e[1]))[:MAX_STEER_CHIPS])
+    outcome = "proposed" if picked else "low_confidence" if unsure else "no_match"
+    return SteerProposal(outcome, tuple(tags[i] for i in picked), avoid_ignored, model)
+
+
+async def steer_tags(text: str, tags: list[str]) -> SteerProposal:
+    """Map a plain-word request onto up to MAX_STEER_CHIPS of the supplied tags with one
+    Choice batch. Results are cached per request text, ordered tags, model and rubric."""
+    if not 1 <= len(tags) <= MAX_STEER_TAGS:
+        raise ValueError(f"1 to {MAX_STEER_TAGS} tags")
+    settings = get_settings()
+    # Fixtures come before the key check so mock mode never needs JEV_API_KEY or network.
+    if settings.mock_providers:
+        return replace(parse_steer(mock_steer_body(text, tags), tags), simulated=True)
+    if not settings.jev_enabled:
+        raise ProviderNotConfigured(PROVIDER, "JEV_API_KEY is not configured")
+    model = settings.jev_model
+
+    async def compute() -> SteerProposal:
+        return parse_steer(await _post(build_steer_payload(text, tags, model)), tags)
+
+    return await cache.get_or_set(steer_cache_key(text, tags, model), settings.ttl_taste, compute)
+
+
 async def _post(payload: dict) -> Any:
     settings = get_settings()
     try:
@@ -404,4 +535,49 @@ def mock_batch_body(profile: TasteProfile, targets: list[dict]) -> dict:
         last = MAX_CANDIDATES - 1
         answers[f"taste_fit_{last}"] = {"type": "score", "score": "unreadable"}
         del answers[f"taste_evidence_{last}"]
+    return {"model": MOCK_MODEL, "answers": answers}
+
+
+# Plain-word steering fixtures: canned phrase families over the mock catalogue's tags.
+_NEGATIONS = {"less", "no", "not", "without", "fewer", "avoid", "minus", "never", "don't", "dont"}
+_MOCK_DARK_WORDS = ("dark", "moody", "gloomy", "melanchol", "brooding")
+_MOCK_DARK_TAGS = {"trip-hop", "downtempo", "melancholic", "grunge", "post-punk", "ambient", "experimental rock"}
+_MOCK_VAGUE_WORDS = ("different", "something else", "surprise", "vibe", "weird")
+
+
+def _mentioned(request: str, phrases: tuple[str, ...]) -> str | None:
+    """'emphasize' or 'avoid' for the first phrase found (avoid when one of the two
+    preceding words negates it), or None when no phrase appears."""
+    for phrase in phrases:
+        found = re.search(rf"(?<![\w-]){re.escape(phrase)}", request)
+        if found:
+            before = re.findall(r"[a-z']+", request[:found.start()])[-2:]
+            return "avoid" if _NEGATIONS & set(before) else "emphasize"
+    return None
+
+
+def mock_steer_body(text: str, tags: list[str]) -> dict:
+    """A deterministic, key-free /systemone-shaped steering body:
+
+    * a tag named in the request          -> emphasize (avoid when negated: "less rock")
+    * "darker", "moody", "melancholy"...  -> emphasize the catalogue's moodier tags
+      ("not so dark" avoids them instead)
+    * vague ("something different")       -> a split distribution on the first tag (low confidence)
+    * anything else                       -> neutral for every tag (no match)
+    """
+    request = text.casefold()
+    dark = _mentioned(request, _MOCK_DARK_WORDS)
+    vague = _mentioned(request, _MOCK_VAGUE_WORDS)
+    answers = {}
+    for i, tag in enumerate(tags):
+        named = _mentioned(request, (tag.casefold(),))
+        if named:
+            answer = {"choice": named, "confidence": 0.9}
+        elif dark and tag.casefold() in _MOCK_DARK_TAGS:
+            answer = {"choice": dark, "confidence": 0.8}
+        elif vague and i == 0:
+            answer = {"choice": "emphasize", "distribution": {"emphasize": 0.4, "avoid": 0.2, "neutral": 0.4}}
+        else:
+            answer = {"choice": "neutral", "confidence": 0.9}
+        answers[f"steer_{i}"] = {"type": "choice", **answer}
     return {"model": MOCK_MODEL, "answers": answers}
