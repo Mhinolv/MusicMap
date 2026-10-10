@@ -122,6 +122,95 @@ async function artistGraph(page) {
 
 const scenarios = [
   {
+    name: 'saved-empty',
+    viewport: DESKTOP,
+    async run(page) {
+      await artistGraph(page)
+      await waitForPanel(page)
+      await page.click('.topbar .saved-entry')
+      await page.waitForSelector('.saved-dialog', { visible: true })
+    },
+  },
+  ...[
+    { name: 'saved-discoveries', viewport: DESKTOP },
+    { name: 'saved-discoveries-mobile', viewport: MOBILE, userAgent: MOBILE_UA },
+  ].map((options) => ({
+    ...options,
+    async run(page) {
+      await artistGraph(page)
+      await waitForPanel(page)
+      await page.click('.bookmark-toggle')
+      await search(page, 'song', 'Creep', 'Creep')
+      await waitForPanel(page)
+      await page.click('.bookmark-toggle')
+      await search(page, 'song', 'Glory Box', 'Glory Box')
+      await waitForPanel(page)
+      await page.click('.bookmark-toggle')
+      await page.click('.topbar .saved-entry')
+      await page.waitForSelector('.saved-dialog', { visible: true })
+    },
+  })),
+  {
+    name: 'saved-remove-undo',
+    viewport: DESKTOP,
+    async run(page) {
+      await artistGraph(page)
+      await waitForPanel(page)
+      await page.click('.bookmark-toggle')
+      await page.click('.topbar .saved-entry')
+      await page.click('.saved-list .icon-btn')
+      await page.waitForSelector('.toast__action', { visible: true })
+    },
+  },
+  {
+    name: 'saved-artist-panel',
+    viewport: DESKTOP,
+    async run(page) {
+      await artistGraph(page)
+      await waitForPanel(page)
+      await page.click('.bookmark-toggle')
+      await waitForSettle(page)
+    },
+  },
+  {
+    name: 'saved-song-panel',
+    viewport: DESKTOP,
+    async run(page) {
+      await search(page, 'song', 'Creep', 'Creep')
+      await waitForPanel(page)
+      await page.click('.bookmark-toggle')
+      await waitForSettle(page)
+    },
+  },
+  {
+    name: 'saved-mobile-panel',
+    viewport: MOBILE,
+    userAgent: MOBILE_UA,
+    extraMedia: [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }],
+    async run(page) {
+      await artistGraph(page)
+      await waitForPanel(page)
+      await page.click('.bookmark-toggle')
+      await waitForSettle(page)
+    },
+  },
+  {
+    name: 'saved-full',
+    viewport: DESKTOP,
+    async run(page) {
+      await page.evaluate(() => localStorage.setItem('tunegraph:bookmarks:v1', JSON.stringify({
+        version: 1,
+        items: Array.from({ length: 200 }, (_, i) => ({ kind: 'artist', item: { id: `saved-${i}`, name: `Discovery ${i + 1}` }, savedAt: i })),
+      })))
+      await page.reload({ waitUntil: 'networkidle0' })
+      await artistGraph(page)
+      await waitForPanel(page)
+      await page.click('.bookmark-toggle')
+      await page.waitForSelector('.toast', { visible: true })
+      await waitForSettle(page)
+    },
+  },
+  {
     name: 'empty',
     viewport: DESKTOP,
     async run(page) {

@@ -18,6 +18,8 @@ type Props = {
   onOpenArtist: (artist: ArtistRef) => void
   taste: TasteProfile | null
   onEditTaste: () => void
+  saved: boolean
+  onToggleSave: () => void
 }
 
 type Details = { artist?: Artist; tracks?: Track[]; error?: string }
@@ -167,7 +169,7 @@ function fmtDate(d?: string | null): string {
 }
 
 /** Panel for a song node: album, release date, duration, tags, description, preview. */
-function TrackPanel({ node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist, taste, onEditTaste, followJourney, journeyStops, sheet }: Omit<Props, 'onTags'> & { sheet: Sheet }) {
+function TrackPanel({ node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist, taste, onEditTaste, followJourney, journeyStops, saved, onToggleSave, sheet }: Omit<Props, 'onTags'> & { sheet: Sheet }) {
   const [details, setDetails] = useState<TrackDetails | null>(null)
   // undefined = still looking it up, null = unknown.
   const [releaseDate, setReleaseDate] = useState<string | null | undefined>(undefined)
@@ -255,9 +257,12 @@ function TrackPanel({ node, isRoot, impact, onExpand, onPrune, onClose, onOpenAr
             )}
           </div>
         </div>
-        <button className="icon-btn" onClick={onClose} aria-label="Close panel">
-          ×
-        </button>
+        <div className="panel__header-actions">
+          <button className={`icon-btn bookmark-toggle ${saved ? 'is-saved' : ''}`} onClick={onToggleSave} aria-pressed={saved} aria-label={saved ? `Remove ${node.name} from saved` : `Save ${node.name}`} title={saved ? 'Saved: click to remove' : 'Save'}>
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z" fill={saved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
+          </button>
+          <button className="icon-btn" onClick={onClose} aria-label="Close panel">×</button>
+        </div>
       </header>
 
       <div className="panel__actions">
@@ -403,7 +408,7 @@ export function ArtistPanel(props: Props) {
   return <ArtistDetails {...props} sheet={sheet} />
 }
 
-function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTags, taste, onEditTaste, sheet }: Omit<Props, 'onOpenArtist'> & { sheet: Sheet }) {
+function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTags, taste, onEditTaste, saved, onToggleSave, sheet }: Omit<Props, 'onOpenArtist'> & { sheet: Sheet }) {
   const [details, setDetails] = useState<Details>({})
   const [loading, setLoading] = useState(true)
   const [playing, setPlaying] = useState<{ track: string; preview: PreviewResult } | null>(null)
@@ -484,9 +489,12 @@ function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTag
           <h2 className="panel__title">{name}</h2>
           {artist?.listeners != null && <div className="panel__meta">{fmt(artist.listeners)} listeners on Last.fm</div>}
         </div>
-        <button className="icon-btn" onClick={onClose} aria-label="Close panel">
-          ×
-        </button>
+        <div className="panel__header-actions">
+          <button className={`icon-btn bookmark-toggle ${saved ? 'is-saved' : ''}`} onClick={onToggleSave} aria-pressed={saved} aria-label={saved ? `Remove ${node.name} from saved` : `Save ${node.name}`} title={saved ? 'Saved: click to remove' : 'Save'}>
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z" fill={saved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
+          </button>
+          <button className="icon-btn" onClick={onClose} aria-label="Close panel">×</button>
+        </div>
       </header>
 
       <div className="panel__actions">
