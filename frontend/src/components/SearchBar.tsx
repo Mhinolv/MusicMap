@@ -121,6 +121,7 @@ export function SearchBar({ onSelect, onSelectTrack, mode, onModeChange, compact
   return (
     <div ref={wrapRef} className={`search ${compact ? 'search--compact' : ''}`}>
       <div className="search__field">
+        {compact && <span className="search__find" aria-hidden="true">Find</span>}
         <svg className="search__icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
           <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -134,7 +135,7 @@ export function SearchBar({ onSelect, onSelectTrack, mode, onModeChange, compact
           aria-autocomplete="list"
           aria-label={mode === 'song' ? 'Search for a song' : 'Search for an artist'}
           aria-activedescendant={open && results.length > 0 ? `${listId}-${active}` : undefined}
-          placeholder={mode === 'song' ? 'Search for a song…' : 'Search for an artist…'}
+          placeholder={compact ? (mode === 'song' ? 'song title or artist' : 'artist name') : (mode === 'song' ? 'Search for a song…' : 'Search for an artist…')}
           value={query}
           autoFocus={autoFocus}
           onChange={(e) => setQuery(e.target.value)}

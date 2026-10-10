@@ -174,6 +174,32 @@ const scenarios = [
     },
   })),
   ...[
+    { name: 'shell-empty-inspector', viewport: DESKTOP, empty: true },
+    { name: 'shell-song-selected', viewport: DESKTOP, song: true },
+    { name: 'shell-undo-enabled', viewport: DESKTOP, prune: true },
+    { name: 'shell-1024', viewport: { width: 1024, height: 800 } },
+    { name: 'shell-900', viewport: { width: 900, height: 800 } },
+  ].map((settings) => ({
+    ...settings,
+    async run(page) {
+      await search(page, settings.song ? 'song' : 'artist', settings.song ? 'Creep' : 'Radiohead', settings.song ? 'Creep' : 'Radiohead')
+      await waitForNodes(page, 3)
+      await waitForPanel(page)
+      if (settings.empty) {
+        await page.click('[aria-label="Close inspector"]')
+        await page.waitForSelector('.inspector-empty', { visible: true })
+      }
+      if (settings.prune) {
+        await page.click('.panel__prune button[title="Undo this expansion: remove everything explored from here"]')
+        await page.waitForSelector('.header-undo[aria-disabled="false"]')
+      }
+      await page.waitForSelector('.statusbar', { visible: true })
+      await waitForSettle(page)
+      return 'Studio Sky shell with fixed inspector dock and live status bar'
+    },
+  })),
+
+  ...[
     { name: 'taste-artist-added', viewport: DESKTOP, kind: 'artist', action: 'like' },
     { name: 'taste-song-added', viewport: DESKTOP, kind: 'song', action: 'like' },
     { name: 'taste-song-disliked', viewport: DESKTOP, kind: 'song', action: 'dislike' },
