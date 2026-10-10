@@ -40,6 +40,8 @@ async function setScheme(ctx, scheme) {
 
 async function search(page, mode, query, pick) {
   const input = 'input[role="combobox"]'
+  // Phone map header (#34): the search field opens from the Find icon.
+  if (!(await page.$(input)) && (await page.$('.topbar__find'))) await page.click('.topbar__find')
   await page.waitForSelector(input, { visible: true })
   if (mode === 'song') {
     const isSong = await page.$eval('.search__mode [role="radio"]:nth-child(2)', (b) => b.getAttribute('aria-checked') === 'true')
@@ -276,7 +278,7 @@ const scenarios = [
       }
       await search(page, settings.kind, settings.kind === 'artist' ? 'Radiohead' : 'Creep', settings.kind === 'artist' ? 'Radiohead' : 'Creep')
       await waitForPanel(page)
-      if (settings.viewport === MOBILE) await page.click('.panel__handle')
+      if (settings.viewport === MOBILE) await page.click('.sheet__handle')
       await page.click(settings.action === 'dislike' ? '.taste-toggle__dislike' : '.taste-toggle__like')
       await page.waitForSelector('.toast__action', { visible: true })
       await page.waitForFunction((action) => document.querySelector('.toast__action')?.textContent === (action === 'full' ? 'Edit taste' : 'Undo'), {}, settings.action)
@@ -336,7 +338,7 @@ const scenarios = [
         if (settings.selectedTags) await page.waitForFunction(() => [...document.querySelectorAll('.panel__hint')].some((el) => el.textContent.includes('Steering:')))
         if (settings.selectedTags === 3 && !(await page.$('button.tag[aria-disabled="true"]'))) throw new Error('fourth chip must be disabled')
       }
-      if (settings.viewport === MOBILE) await page.click('.panel__handle')
+      if (settings.viewport === MOBILE) await page.click('.sheet__handle')
       await waitForSettle(page)
       return 'Song tag steering; artist and expanded tags remain plain'
     },
@@ -697,20 +699,114 @@ const scenarios = [
       await search(page, 'song', 'Creep', 'Creep')
       await waitForNodes(page, 3)
       await waitForPanel(page)
-      await page.waitForSelector('.journey__follow[aria-checked="false"]')
-      await page.click('.journey__follow')
-      // Select a leaf through its existing keyboard control, avoiding panel overlap.
+      await page.click('#sheet-tab-journey')
+      await page.waitForSelector('.sheet .map-nav__follow[aria-checked="false"]', { visible: true })
+      await page.click('.sheet .map-nav__follow')
+      await page.waitForSelector('.sheet .map-nav__follow[aria-checked="true"]')
+      // Select a leaf through its existing keyboard control, avoiding sheet overlap.
       const leaf = await page.$('g.node:not(.is-root)')
       if (!leaf) throw new Error('no song leaf')
       // ElementHandle.focus() rejects SVG; use the node's native DOM focus.
       await page.evaluate((node) => node.focus(), leaf)
       await page.keyboard.press('Enter')
+      await page.waitForSelector('#sheet-tab-inspector[aria-selected="true"]')
       await waitForPanel(page)
       await page.waitForFunction(() => [...document.querySelectorAll('.panel__hint')]
         .some((el) => el.textContent.includes('Next expansion follows your')))
-      await page.waitForFunction(() => getComputedStyle(document.querySelector('.journey')).opacity === '1')
+      await page.click('#sheet-tab-journey')
+      await page.waitForSelector('#sheet-panel-journey .nav-stop', { visible: true })
       await waitForSettle(page)
-      return 'Follow journey on, full-opacity trail and next-expansion hint'
+      return 'Follow journey on in the JOURNEY tab; selecting a leaf switched to INSPECTOR with the next-expansion hint'
+    },
+  })),
+  // #34 phone sheet states. Coarse pointer; Studio Sky is dark only.
+  ...[
+    { name: 'mobile-peek', state: 'peek' },
+    { name: 'mobile-on-map-tab', state: 'onmap' },
+    { name: 'mobile-artist-inspector', state: 'artist' },
+    { name: 'mobile-full-sheet', state: 'full' },
+    { name: 'mobile-search-overlay', state: 'search' },
+  ].map((settings) => ({
+    ...settings, viewport: MOBILE, userAgent: MOBILE_UA,
+    extraMedia: [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }],
+    async run(page) {
+      if (settings.state === 'artist') await artistGraph(page)
+      else {
+        await search(page, 'song', 'Creep', 'Creep')
+        await waitForNodes(page, 3)
+      }
+      await waitForPanel(page)
+      if (await page.$('.topbar .header-taste, .topbar .header-undo')) throw new Error('the phone header has no Taste or Undo')
+      const tabs = await page.$$eval('.sheet__tabs [role="tab"]', (els) => els.map((el) => [el.textContent, el.getBoundingClientRect().height]))
+      if (tabs.length !== 3 || tabs.some(([, h]) => h < 44)) throw new Error(`tabs must be three 44px targets: ${JSON.stringify(tabs)}`)
+      if (settings.state === 'peek') {
+        await page.click('.panel [aria-label="Close inspector"]')
+        await page.waitForSelector('.sheet.sheet--peek #sheet-tab-journey[aria-selected="true"]')
+      } else if (settings.state === 'onmap') {
+        await page.click('#sheet-tab-onmap')
+        await page.waitForSelector('#sheet-panel-onmap .nav-row', { visible: true })
+        const short = await page.$$eval('#sheet-panel-onmap .nav-row', (rows) => rows.filter((row) => row.getBoundingClientRect().height < 44).length)
+        if (short) throw new Error(`${short} On map rows are under 44px`)
+      } else if (settings.state === 'full') {
+        await page.click('.sheet__handle')
+        await page.waitForSelector('.sheet.sheet--full')
+        await sleep(350) // height transition
+        const [header, sheet] = await page.$$eval('.topbar, .sheet', (els) => els.map((el) => el.getBoundingClientRect().toJSON()))
+        if (sheet.top < header.bottom) throw new Error('the full sheet must leave the header visible')
+      } else if (settings.state === 'search') {
+        await page.click('.topbar__find')
+        await page.waitForSelector('.topbar__search input[role="combobox"]', { visible: true })
+        await page.type('.topbar__search input[role="combobox"]', 'Radio', { delay: 20 })
+        await page.waitForSelector('.topbar__search .search__item', { visible: true })
+      }
+      await waitForSettle(page)
+      return `${settings.state}: tabs ${tabs.map(([label]) => label).join(' | ')}`
+    },
+  })),
+  // #24: phone toasts sit above the sheet and never cover the header, search or tabs.
+  // The combined cases answer a leaf's expansion with a shortfall plus a journey fallback.
+  ...[
+    { name: 'mobile-toast-above-sheet', viewport: MOBILE, userAgent: MOBILE_UA },
+    { name: 'mobile-combined-toast', viewport: MOBILE, userAgent: MOBILE_UA, combined: true },
+    { name: 'combined-toast', viewport: DESKTOP, combined: true },
+  ].map((settings) => ({
+    ...settings,
+    ...(settings.viewport === MOBILE ? { extraMedia: [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }] } : {}),
+    async run(page) {
+      const mobile = settings.viewport === MOBILE
+      await search(page, 'song', 'Creep', 'Creep')
+      await waitForNodes(page, 3)
+      await waitForPanel(page)
+      if (!settings.combined) {
+        await page.click('.exclusion-toggle')
+      } else {
+        await page.setRequestInterception(true)
+        page.on('request', (request) => {
+          if (!/\/api\/tracks\/[^/]+\/similar/.test(request.url())) return request.continue()
+          const tracks = ['One', 'Two', 'Three'].map((name, i) => ({ id: `combined-${i}`, name: `Combined ${name}`,
+            artist: { id: 'combined-artist', name: 'Combined Artist' }, similarity: 0.6 - i / 10, shared_tags: [] }))
+          return request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify({
+            track: null, tracks, excluded_count: 2, ranking: { mode: 'parent', stop_count: 2, fallback_reason: 'timeout' } }) })
+        })
+        if (mobile) await page.click('#sheet-tab-onmap')
+        const row = mobile ? '#sheet-panel-onmap .nav-row' : '.map-nav .nav-row'
+        await page.waitForSelector(row, { visible: true })
+        await page.click(row)
+        await page.waitForSelector('.panel .btn--primary:not([disabled])', { visible: true })
+        await page.click('.panel .btn--primary')
+        await page.waitForSelector('.toast--lines .toast__lines span:nth-child(2)', { visible: true })
+      }
+      await page.waitForSelector('.toast', { visible: true })
+      if (mobile) {
+        const box = await page.evaluate(() => {
+          const rect = (sel) => document.querySelector(sel)?.getBoundingClientRect().toJSON()
+          return { toast: rect('.toast'), header: rect('.topbar'), tabs: rect('.sheet__tabs') }
+        })
+        if (box.toast.top < box.header.bottom) throw new Error('toast covers the header')
+        if (box.toast.bottom > box.tabs.top) throw new Error(`toast covers the sheet tabs: ${JSON.stringify(box)}`)
+      }
+      await waitForSettle(page)
+      return settings.combined ? 'shortfall and journey fallback stacked in one toast' : "Won't suggest toast above the half sheet"
     },
   })),
   // #36 taste check outcomes. Mock fixtures pick the outcome from profile/tag overlap
@@ -750,7 +846,7 @@ const scenarios = [
       }
       await search(page, settings.kind, settings.kind === 'artist' ? 'Radiohead' : 'Creep', settings.kind === 'artist' ? 'Radiohead' : 'Creep')
       await waitForPanel(page)
-      if (viewport === MOBILE) await page.click('.panel__handle')
+      if (viewport === MOBILE) await page.click('.sheet__handle')
       await page.click('.taste-check__actions .btn:not(.btn--ghost)')
       await page.waitForFunction((text) => [...document.querySelectorAll('.taste-check *')]
         .some((el) => el.textContent.trim() === text), {}, settings.expect)
@@ -798,7 +894,7 @@ const scenarios = [
       await search(page, 'song', 'Creep', 'Creep')
       await waitForNodes(page, 3)
       await waitForPanel(page)
-      if (viewport === MOBILE) await page.click('.panel__handle')
+      if (viewport === MOBILE) await page.click('.sheet__handle')
       await page.waitForSelector('.connections-check .connections__row')
       if (settings.click) await page.click('.connections-check .btn--ghost')
       await page.waitForFunction((text) => [...document.querySelectorAll('.connections-check *')]
