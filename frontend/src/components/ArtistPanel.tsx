@@ -4,6 +4,8 @@ import { TasteCheck } from './TasteCheck'
 import type { Artist, ArtistNode, ArtistRef, PreviewResult, PruneMode, TasteProfile, Track, TrackDetails } from '../types'
 
 type Props = {
+  emphasizedTags?: string[]
+  onEmphasizedTags?: (tags: string[]) => void
   followJourney?: boolean
   journeyStops?: number
   node: ArtistNode
@@ -171,7 +173,7 @@ function fmtDate(d?: string | null): string {
 }
 
 /** Panel for a song node: album, release date, duration, tags, description, preview. */
-function TrackPanel({ excluded, onToggleExclusion, node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist, taste, onEditTaste, followJourney, journeyStops, saved, onToggleSave, sheet }: Omit<Props, 'onTags'> & { sheet: Sheet }) {
+function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleExclusion, node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist, taste, onEditTaste, followJourney, journeyStops, saved, onToggleSave, sheet }: Omit<Props, 'onTags'> & { sheet: Sheet }) {
   const [details, setDetails] = useState<TrackDetails | null>(null)
   // undefined = still looking it up, null = unknown.
   const [releaseDate, setReleaseDate] = useState<string | null | undefined>(undefined)
@@ -280,6 +282,9 @@ function TrackPanel({ excluded, onToggleExclusion, node, isRoot, impact, onExpan
             ? 'Journey is over 50 stops; next expansion will use only this song.'
             : `Next expansion follows your ${journeyStops}-stop journey.`}</p>
         ) : null}
+        {emphasizedTags.length > 0 && (
+          <p className="panel__hint" aria-live="polite">Steering: {emphasizedTags.join(', ')} · <button className="link-btn" disabled={node.loading} onClick={() => onEmphasizedTags?.([])}>Clear</button></p>
+        )}
         <PruneActions node={node} isRoot={isRoot} impact={impact} onPrune={onPrune} />
         <button className="btn btn--ghost exclusion-toggle" aria-pressed={excluded} onClick={onToggleExclusion}>{excluded ? 'Suggest again' : "Don't suggest again"}</button>
       </div>
@@ -339,18 +344,31 @@ function TrackPanel({ excluded, onToggleExclusion, node, isRoot, impact, onExpan
             </section>
 
             <section className="panel__section">
-              <h3>Tags</h3>
+              <h3>{node.expanded ? 'Tags' : 'Tags · steer next expansion'}</h3>
               {details.tags.length > 0 ? (
                 <ul className="tags">
                   {details.tags.map((t) => (
-                    <li key={t} className="tag">
-                      {t}
-                    </li>
+                    node.expanded ? <li key={t} className="tag">{t}</li> : (
+                      <li key={t}>
+                        <button className="tag tag--steering"
+                          aria-pressed={emphasizedTags.includes(t)}
+                          aria-disabled={node.loading || (!emphasizedTags.includes(t) && emphasizedTags.length >= 3)}
+                          title={!emphasizedTags.includes(t) && emphasizedTags.length >= 3 ? 'Up to 3 tags' : undefined}
+                          onClick={() => {
+                            if (node.loading) return
+                            if (emphasizedTags.includes(t)) onEmphasizedTags?.(emphasizedTags.filter((tag) => tag !== t))
+                            else if (emphasizedTags.length < 3) onEmphasizedTags?.([...emphasizedTags, t])
+                          }}>
+                          {emphasizedTags.includes(t) && <span aria-hidden="true">✓ </span>}{t}
+                        </button>
+                      </li>
+                    )
                   ))}
                 </ul>
               ) : (
                 <p className="panel__empty">No tags listed for this song.</p>
               )}
+              {!node.expanded && details.tags.length > 0 && <p className="panel__hint">Pick up to 3 for more of that flavour. Tags come from Last.fm listeners.</p>}
             </section>
 
             {details.summary && (

@@ -88,7 +88,8 @@ test('invalid snapshot uses prescribed detail and only Start fresh; no snapshot 
 
 test('oversize toast uses prescribed copy and appears only once per session', () => {
   const app = render({ status: 'none' }, graph(), 'too-large')
-  app.effects[0]()
+  // Find the map-saving effect by content: other effects may be declared before it.
+  app.effects.find((fn) => String(fn).includes('saveMap'))()
   app.timers[0].fn()
   app.timers[0].fn()
   const messages = app.updates.filter((value) => value?.msg)

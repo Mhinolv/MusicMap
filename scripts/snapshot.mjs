@@ -122,6 +122,39 @@ async function artistGraph(page) {
 
 const scenarios = [
   ...[
+    { name: 'steering-unselected', viewport: DESKTOP, selectedTags: 0 },
+    { name: 'steering-two', viewport: DESKTOP, selectedTags: 2 },
+    { name: 'steering-three', viewport: DESKTOP, selectedTags: 3 },
+    { name: 'steering-expanded', viewport: DESKTOP, expandedSong: true },
+    { name: 'steering-artist-regression', viewport: DESKTOP, artistMode: true },
+    { name: 'steering-mobile', viewport: MOBILE, userAgent: MOBILE_UA, selectedTags: 2,
+      extraMedia: [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }] },
+  ].map((settings) => ({
+    ...settings,
+    async run(page) {
+      await search(page, settings.artistMode ? 'artist' : 'song', settings.artistMode ? 'Radiohead' : 'Creep', settings.artistMode ? 'Radiohead' : 'Creep')
+      await waitForNodes(page, 3)
+      await waitForPanel(page)
+      await page.waitForSelector('.tags .tag')
+      await page.waitForFunction(() => document.querySelector('.panel__actions .btn--primary')?.textContent.includes('Connections expanded'))
+      if (settings.artistMode || settings.expandedSong) {
+        if (await page.$('button.tag')) throw new Error('expanded/artist tags must be plain')
+      } else {
+        await page.click('.panel__prune button[title="Undo this expansion: remove everything explored from here"]')
+        await page.waitForSelector('button.tag--steering')
+        const chips = await page.$$('button.tag--steering')
+        if (chips.length < 4) throw new Error('fixture needs at least four tags')
+        for (let i = 0; i < settings.selectedTags; i++) await chips[i].click()
+        await page.waitForFunction((count) => document.querySelectorAll('button.tag[aria-pressed="true"]').length === count, {}, settings.selectedTags)
+        if (settings.selectedTags) await page.waitForFunction(() => [...document.querySelectorAll('.panel__hint')].some((el) => el.textContent.includes('Steering:')))
+        if (settings.selectedTags === 3 && !(await page.$('button.tag[aria-disabled="true"]'))) throw new Error('fourth chip must be disabled')
+      }
+      if (settings.viewport === MOBILE) await page.click('.panel__handle')
+      await waitForSettle(page)
+      return 'Song tag steering; artist and expanded tags remain plain'
+    },
+  })),
+  ...[
     { name: 'resume-map', viewport: DESKTOP },
     { name: 'resume-map-mobile', viewport: MOBILE, userAgent: MOBILE_UA },
   ].map((options) => ({

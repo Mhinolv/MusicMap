@@ -27,6 +27,7 @@ export type SimilarTrack = TrackRef & {
 }
 
 export type TrackRankingContext = {
+  steering_matched?: boolean | null
   mode: 'parent' | 'journey'
   stop_count: number
   fallback_reason: 'cap_exceeded' | 'timeout' | 'missing_tags' | null

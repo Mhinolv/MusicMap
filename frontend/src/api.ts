@@ -84,10 +84,11 @@ export const api = {
 
   track: (id: string, signal?: AbortSignal) => get<TrackDetails>(`/api/tracks/${enc(id)}`, signal),
 
-  trackSimilar: (id: string, limit = 7, signal?: AbortSignal, trail?: string[], excluded?: string[]) => {
+  trackSimilar: (id: string, limit = 7, signal?: AbortSignal, trail?: string[], excluded?: string[], emphasizedTags?: string[]) => {
     const query = new URLSearchParams({ limit: String(limit) })
     trail?.forEach((stop) => query.append('trail', stop))
     excluded?.forEach((id) => query.append('excluded', id))
+    emphasizedTags?.forEach((tag) => query.append('emphasized_tags', tag))
     return get<{ track: TrackRef | null; tracks: SimilarTrack[]; excluded_count: number; ranking: TrackRankingContext }>(
       `/api/tracks/${enc(id)}/similar?${query}`, signal,
     )
