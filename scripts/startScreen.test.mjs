@@ -179,6 +179,25 @@ test('start screen header: hidden h1, LIBRARY with saved + not-suggested count, 
   }
 })
 
+test('intro copy sits above NEW MAP as visible text, the same with and without a saved map (#62)', () => {
+  for (const savedMap of [{ status: 'none' }, ready(graphOf()), { status: 'invalid' }]) for (const mode of ['artist', 'song']) {
+    const app = renderStart(savedMap, { mode })
+    const main = app.elements.find((el) => el.type === 'main')
+    const children = [main.props.children].flat().filter(Boolean)
+    const intro = children.find((el) => el.props?.className === 'start-intro')
+    assert.ok(intro, 'start-intro is a child of main.start')
+    // Reading order: hidden h1, intro, then the NEW MAP section.
+    assert.deepEqual(children.slice(0, 3).map((el) => el.props.className), ['sr-only', 'start-intro', 'start-panel'])
+    const parts = visit(intro).filter((el) => el.type === 'p')
+    assert.deepEqual(parts.map((el) => el.props.className), ['start-intro__title', 'start-intro__text'])
+    assert.deepEqual(parts.map(text), ['Map the music around any artist or song',
+      'Search a name, then branch out through related artists or songs, with a 30-second preview at every stop.'])
+    // Plain text, not a heading and not screen-reader only; one h1 stays.
+    assert.ok(!visit(intro).some((el) => /^h[1-6]$/.test(el.type) || el.props?.className?.includes('sr-only')))
+    assert.equal(app.elements.filter((el) => el.type === 'h1').length, 1)
+  }
+})
+
 test('no snapshot: NEW MAP only, MAP IT is the amber primary, hint follows mode', () => {
   for (const mode of ['artist', 'song']) {
     const app = renderStart({ status: 'none' }, { mode })
