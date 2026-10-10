@@ -177,7 +177,8 @@ test('phone sheet: peek on JOURNEY with nothing selected, labelled by the map mo
     const app = harness({ narrow: true, graph })
     assert.equal(app.find((el) => el.type === 'MapNavPane'), undefined, 'no desktop left pane on phones')
     const mobile = app.find((el) => el.type === 'MobileSheet')
-    assert.deepEqual(mobile.props.view, { tab: 'journey', size: 'peek' })
+    // App's initial view is built inside the vm context, so copy it out of that realm before the strict prototype check.
+    assert.deepEqual({ ...mobile.props.view }, { tab: 'journey', size: 'peek' })
     assert.equal(mobile.props.label, kind === 'track' ? 'Song details' : 'Artist details')
     assert.equal(mobile.props.journeyCount, 1)
     assert.equal(mobile.props.onMapCount, 2)
@@ -186,9 +187,9 @@ test('phone sheet: peek on JOURNEY with nothing selected, labelled by the map mo
     assert.equal(mobile.props.journey.props.songMode, kind === 'track')
     // Tapping a tab from peek opens the sheet to half on that tab.
     mobile.props.onTab('onmap')
-    assert.deepEqual(app.updates.at(-1), { tab: 'onmap', size: 'half' })
+    assert.deepEqual({ ...app.updates.at(-1) }, { tab: 'onmap', size: 'half' })
     mobile.props.onResize('tap')
-    assert.deepEqual(app.updates.at(-1), { tab: 'journey', size: 'half' })
+    assert.deepEqual({ ...app.updates.at(-1) }, { tab: 'journey', size: 'half' })
     // A list row selects the node and switches to INSPECTOR.
     mobile.props.onMap.props.onJump('leaf')
     assert.ok(app.updates.some((value) => value?.tab === 'inspector' && value.selectionId === 'leaf' && value.size === 'half'))
@@ -203,7 +204,7 @@ test('phone sheet: a selected node shows the inspector at half height', () => {
   const graph = { nodes: new Map([['root', root]]), edges: new Map(), rootId: 'root', journey: [], selectedNodeId: 'root' }
   const app = harness({ narrow: true, graph })
   const mobile = app.find((el) => el.type === 'MobileSheet')
-  assert.deepEqual(mobile.props.view, { tab: 'inspector', size: 'half', selectionId: 'root' })
+  assert.deepEqual({ ...mobile.props.view }, { tab: 'inspector', size: 'half', selectionId: 'root' })
   assert.equal(mobile.props.inspector.type, 'ArtistPanel')
   // Taste is reached from the inspector, since the phone header has no Taste button.
   mobile.props.inspector.props.onEditTaste()
