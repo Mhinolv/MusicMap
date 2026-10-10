@@ -150,7 +150,7 @@ function panelHarness(initial = null, writable = true) {
     './graph/mapSnapshot': { readMap: () => ({ status: 'none' }) },
     './graph/useMusicGraph': { useMusicGraph: () => ({ graph, nodes: [node], edges: [] }), planPrune: () => null },
     './graph/journey': { journeyContext: () => [] },
-    './graph/onMap': { onMapRows: () => ({ count: 1, rows: [] }), journeyStops: () => [] },
+    './graph/onMap': { onMapRows: () => ({ count: 1, rows: [] }), journeyStops: () => [], matchFact: () => null, stopNumber: String },
     './bookmarks': { readBookmarks: () => [], nodeBookmark: () => null },
     './exclusions': { readExclusions: () => [] },
     './startScreen': startScreen,
@@ -240,8 +240,8 @@ test('toggle labels, stored hints, and click targets cover both modes and both l
       const calls = []
       const elements = componentTree('TasteToggle', 'TasteToggle', { node, profile, onToggle: (...args) => calls.push(args) })
       const buttons = elements.filter(el => el.type === 'button')
-      assert.equal(text(buttons[0]), liked ? 'Remove from my taste' : 'Add to my taste')
-      assert.equal(text(buttons[1]), disliked ? 'Remove from dislikes' : 'Not my taste')
+      assert.equal(text(buttons[0]), liked ? 'In my taste · Remove' : 'Add to my taste')
+      assert.equal(text(buttons[1]), disliked ? 'Not my taste · Remove' : 'Not my taste')
       assert.equal(buttons[0].props['aria-pressed'], liked)
       assert.equal(buttons[1].props['aria-pressed'], disliked)
       buttons.forEach(button => button.props.onClick())

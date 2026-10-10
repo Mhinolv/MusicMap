@@ -285,6 +285,41 @@ const scenarios = [
       return settings.action === 'full' ? 'Full taste list with Edit taste action' : 'Panel taste toggle with stored entry and Undo'
     },
   })),
+  // #32 YOUR TASTE slot with no taste saved: add / not-my-taste over the Add preferences prompt.
+  ...[
+    { name: 'taste-slot-none', viewport: DESKTOP },
+    { name: 'taste-slot-none-mobile', viewport: MOBILE, userAgent: MOBILE_UA,
+      extraMedia: [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }] },
+  ].map((settings) => ({
+    ...settings,
+    async run(page) {
+      await search(page, 'song', 'Creep', 'Creep')
+      await waitForPanel(page)
+      if (settings.viewport === MOBILE) await page.click('.sheet__handle')
+      await page.$eval('.taste-check', (el) => el.scrollIntoView({ block: 'center' }))
+      await sleep(200)
+      const widths = await page.$$eval('.taste-check .btn', (els) => els.map((el) => Math.round(el.getBoundingClientRect().width)))
+      if (new Set(widths).size !== 1) throw new Error(`taste buttons differ in width: ${widths}`)
+      return `YOUR TASTE with no profile; ${widths.length} equal buttons`
+    },
+  })),
+  // #32 preview row when the providers have no clip: disabled play button and "no preview".
+  {
+    name: 'preview-unavailable',
+    viewport: DESKTOP,
+    async run(page) {
+      await page.setRequestInterception(true)
+      page.on('request', (request) => request.url().includes('/preview')
+        ? request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: false }) })
+        : request.continue())
+      await search(page, 'song', 'Creep', 'Creep')
+      await waitForPanel(page)
+      await page.click('.panel__preview .track__play')
+      await page.waitForFunction(() => document.querySelector('.panel__time')?.textContent === 'no preview')
+      if (!(await page.$('.panel__preview .track__play[disabled]'))) throw new Error('play button must be disabled')
+      return 'Preview unavailable: disabled play button, no preview'
+    },
+  },
   ...['artist', 'song'].flatMap((kind) => ['taste', 'dislikes'].map((target) => ({
     name: `taste-${kind}-moved-to-${target}`,
     viewport: DESKTOP,
@@ -324,10 +359,12 @@ const scenarios = [
       await search(page, settings.artistMode ? 'artist' : 'song', settings.artistMode ? 'Radiohead' : 'Creep', settings.artistMode ? 'Radiohead' : 'Creep')
       await waitForNodes(page, 3)
       await waitForPanel(page)
-      await page.waitForSelector('.tags .tag')
-      await page.waitForFunction(() => document.querySelector('.panel__actions .btn--primary')?.textContent.includes('Connections expanded'))
+      // #32: song tags sit in the STEER NEXT EXPAND grid; artist tags are the TAGS fact row.
+      await page.waitForSelector(settings.artistMode ? '.facts__list .facts__wrap' : '.tags .tag')
+      await page.waitForFunction(() => document.querySelector('.panel__expand')?.textContent.includes('Expanded'))
       if (settings.artistMode || settings.expandedSong) {
         if (await page.$('button.tag')) throw new Error('expanded/artist tags must be plain')
+        if (settings.expandedSong && !(await page.$('.panel__expand.is-expanded[disabled]'))) throw new Error('expanded song shows a disabled EXPANDED button')
       } else {
         await page.click('.panel__prune button[title="Undo this expansion: remove everything explored from here"]')
         await page.waitForSelector('button.tag--steering')
@@ -336,7 +373,10 @@ const scenarios = [
         for (let i = 0; i < settings.selectedTags; i++) await chips[i].click()
         await page.waitForFunction((count) => document.querySelectorAll('button.tag[aria-pressed="true"]').length === count, {}, settings.selectedTags)
         if (settings.selectedTags) await page.waitForFunction(() => [...document.querySelectorAll('.panel__hint')].some((el) => el.textContent.includes('Steering:')))
-        if (settings.selectedTags === 3 && !(await page.$('button.tag[aria-disabled="true"]'))) throw new Error('fourth chip must be disabled')
+        if (settings.selectedTags === 3 && !(await page.$('button.tag[aria-disabled="true"][title="Up to 3 tags"]'))) throw new Error('fourth chip must be disabled')
+        const label = await page.$eval('.panel__expand', (el) => el.textContent)
+        const want = settings.selectedTags ? `Expand · ${settings.selectedTags} tag${settings.selectedTags === 1 ? '' : 's'}` : 'Expand'
+        if (label !== want) throw new Error(`expand label ${label}, want ${want}`)
       }
       if (settings.viewport === MOBILE) await page.click('.sheet__handle')
       await waitForSettle(page)
@@ -482,13 +522,13 @@ const scenarios = [
     async run(page) {
       await artistGraph(page)
       await waitForPanel(page)
-      await page.click('.bookmark-toggle')
+      await page.click('.save-toggle')
       await search(page, 'song', 'Creep', 'Creep')
       await waitForPanel(page)
-      await page.click('.bookmark-toggle')
+      await page.click('.save-toggle')
       await search(page, 'song', 'Glory Box', 'Glory Box')
       await waitForPanel(page)
-      await page.click('.bookmark-toggle')
+      await page.click('.save-toggle')
       await page.click('.topbar .saved-entry')
       await page.waitForSelector('.library-drawer', { visible: true })
     },
@@ -499,7 +539,7 @@ const scenarios = [
     async run(page) {
       await artistGraph(page)
       await waitForPanel(page)
-      await page.click('.bookmark-toggle')
+      await page.click('.save-toggle')
       await page.click('.topbar .saved-entry')
       await page.click('.saved-list .icon-btn')
       await page.waitForSelector('.toast__action', { visible: true })
@@ -511,7 +551,7 @@ const scenarios = [
     async run(page) {
       await artistGraph(page)
       await waitForPanel(page)
-      await page.click('.bookmark-toggle')
+      await page.click('.save-toggle')
       await waitForSettle(page)
     },
   },
@@ -521,8 +561,24 @@ const scenarios = [
     async run(page) {
       await search(page, 'song', 'Creep', 'Creep')
       await waitForPanel(page)
-      await page.click('.bookmark-toggle')
+      await page.click('.save-toggle')
       await waitForSettle(page)
+    },
+  },
+  // #21 on the #32 inspector: a hovered SAVED toggle keeps its amber text and border.
+  {
+    name: 'saved-song-hover',
+    viewport: DESKTOP,
+    async run(page) {
+      await search(page, 'song', 'Creep', 'Creep')
+      await waitForPanel(page)
+      await page.click('.save-toggle')
+      await page.waitForSelector('.save-toggle[aria-pressed="true"]')
+      await page.hover('.save-toggle')
+      await sleep(200)
+      const color = await page.$eval('.save-toggle', (el) => getComputedStyle(el).color)
+      if (color !== 'rgb(255, 181, 71)') throw new Error(`hovered SAVED lost its amber: ${color}`)
+      return 'Hovered SAVED keeps amber text and border'
     },
   },
   {
@@ -533,7 +589,7 @@ const scenarios = [
     async run(page) {
       await artistGraph(page)
       await waitForPanel(page)
-      await page.click('.bookmark-toggle')
+      await page.click('.save-toggle')
       await waitForSettle(page)
     },
   },
@@ -548,7 +604,7 @@ const scenarios = [
       await page.reload({ waitUntil: 'networkidle0' })
       await artistGraph(page)
       await waitForPanel(page)
-      await page.click('.bookmark-toggle')
+      await page.click('.save-toggle')
       await page.waitForSelector('.toast', { visible: true })
       await waitForSettle(page)
     },
@@ -930,7 +986,7 @@ const scenarios = [
       await page.reload({ waitUntil: 'networkidle0' })
       await artistGraph(page)
       await waitForPanel(page)
-      await page.waitForFunction(() => document.querySelector('.panel__actions .btn--primary')?.textContent.includes('Connections expanded'))
+      await page.waitForFunction(() => document.querySelector('.panel__expand')?.textContent.includes('Expanded'))
       if (await page.$('.connections-check')) throw new Error('artist panels must not show the connections check')
       return 'Expanded artist panel without the connections section'
     },

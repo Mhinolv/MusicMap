@@ -4,7 +4,7 @@ import test from 'node:test'
 
 const css = readFileSync(new URL('../frontend/src/index.css', import.meta.url), 'utf8')
 
-test('icon hover preserves the saved state colour (#21)', () => {
+test('hover preserves the saved state colour (#21)', () => {
   const hoverRules = [...css.matchAll(/\.icon-btn:hover\s*\{([^}]+)\}/g)]
   assert.ok(hoverRules.length, 'icon hover has a background affordance')
   for (const [, declarations] of hoverRules) {
@@ -12,7 +12,14 @@ test('icon hover preserves the saved state colour (#21)', () => {
       'icon hover must not override the saved state colour')
     assert.match(declarations, /background\s*:/)
   }
-  assert.match(css, /\.bookmark-toggle\.is-saved\s*\{\s*color:\s*var\(--(?:accent|amber)\)/)
+  // #32 retired the bookmark icon for a SAVE / SAVED text toggle with the same rule.
+  assert.match(css, /\.save-toggle\[aria-pressed="true"\]\s*\{\s*color:\s*var\(--amber\);\s*border-color:\s*var\(--amber\)/)
+  const saveHover = [...css.matchAll(/(?:^|\})\s*([^{}]*:hover[^{}]*)\{([^}]+)\}/g)]
+    .filter(([, selector]) => /^\.btn:hover$|\.panel__save|\.save-toggle/.test(selector.trim()))
+  assert.ok(saveHover.length >= 2, 'base and inspector hover rules found')
+  for (const [, selector, declarations] of saveHover) {
+    assert.doesNotMatch(declarations, /(?:^|;)\s*(?:color|border-color)\s*:/, `${selector.trim()} must not override the saved amber`)
+  }
 })
 
 test('search box focus shows no highlight while other controls keep their ring (#33)', () => {

@@ -16,7 +16,7 @@ import { TasteToggle } from './components/TasteToggle'
 import { finishSpotifyImport } from './spotifyImport'
 import { artistNode, planPrune, trackNode, useMusicGraph, type ExpandedChild } from './graph/useMusicGraph'
 import { JOURNEY_CAP, journeyContext } from './graph/journey'
-import { journeyStops, onMapRows } from './graph/onMap'
+import { journeyStops, matchFact, onMapRows, stopNumber } from './graph/onMap'
 import type { ArtistRef, PruneMode, TasteProfile, TrackRankingContext, TrackRef } from './types'
 import { addExclusion, EXCLUSION_FULL_MESSAGE, readExclusions, restoreExclusions, writeExclusions, type ExcludedSong } from './exclusions'
 
@@ -307,6 +307,9 @@ export default function App() {
   // Ranked from graph state only, so selection and focus changes never reshuffle the rows.
   const onMap = useMemo(() => onMapRows({ nodes: g.graph.nodes, edges: g.graph.edges, rootId: g.graph.rootId }),
     [g.graph.nodes, g.graph.edges, g.graph.rootId])
+  // Inspector MATCH / SHARED rows: the edge to the node the selection was expanded from.
+  const selectedMatch = useMemo(() => (selected ? matchFact({ nodes: g.graph.nodes, edges: g.graph.edges }, selected.id) : null),
+    [g.graph.nodes, g.graph.edges, selected])
 
   // Song expansions only: the children still on the map, for "Check these connections".
   const connections = useMemo(
@@ -443,9 +446,12 @@ export default function App() {
   const libraryCount = bookmarks.length + exclusions.length
 
   // One inspector and one graph, placed by the layout: the dock and panes, or the phone sheet.
+  const stopIndex = selected ? stops.findIndex((n) => n.id === selected.id) : -1
   const panel = selected && (
     <ArtistPanel
       node={selected}
+      stop={stopIndex >= 0 ? stopNumber(stopIndex) : undefined}
+      match={selectedMatch}
       emphasizedTags={steering?.id === selected.id ? steering.tags : []}
       onEmphasizedTags={(tags) => updateSteering(tags.length ? { id: selected.id, tags } : null)}
       excluded={exclusions.some((entry) => entry.item.id === selected.id)}

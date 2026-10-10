@@ -26,7 +26,7 @@ type Props = {
 export function TasteCheck({ actions, ...props }: Props) {
   return (
     <section className="panel__section taste-check">
-      <h3>For your taste</h3>
+      <h3>Your taste</h3>
       {actions}
       <TasteEvaluationCheck key={`${props.kind}:${props.itemId}:${JSON.stringify(props.profile)}`} {...props} />
     </section>
@@ -70,7 +70,9 @@ function TasteEvaluationCheck({ kind, itemId, profile, onEdit }: Props) {
       {!hasPositiveTaste(profile) ? (
         <>
           <p className="panel__hint">Add a few things you like to check this {kind === 'track' ? 'song' : 'artist'}.</p>
-          <button className="btn btn--ghost" onClick={onEdit}>Add preferences</button>
+          <div className="taste-check__actions">
+            <button className="btn btn--ghost" onClick={onEdit}>Add preferences</button>
+          </div>
         </>
       ) : (
         <>
