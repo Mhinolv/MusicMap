@@ -25,20 +25,40 @@ test('five Score levels map to named bands with 1-5 pips and design tones', () =
     ['strong', 'Strong fit', 'accent', 5],
   ]
   expected.forEach(([key, label, tone, pips], level) => {
-    assert.deepEqual(f.bandFor({ outcome: 'fit', level }), { key, label, tone, pips })
+    assert.deepEqual(f.bandFor({ outcome: 'fit', level }), { key, label, tone, pips, tentative: false })
   })
   assert.equal(f.FIT_PIPS, 5)
 })
 
-test('uncertainty outcomes sit outside the scale, with no pips or leaning band', () => {
-  for (const level of [null, 0, 4]) {
-    const insufficient = f.bandFor({ outcome: 'insufficient_evidence', level })
-    assert.equal(insufficient.label, 'Not enough information')
-    assert.equal(insufficient.pips, 0)
-    const uncertain = f.bandFor({ outcome: 'uncertain', level })
-    assert.equal(uncertain.label, 'Uncertain estimate')
-    assert.equal(uncertain.pips, 0)
-    assert.equal(uncertain.tone, 'uncertain')
+test('not enough information never shows pips or a leaning band, whatever the level (#36)', () => {
+  for (const level of [null, 0, 2, 4, Number.NaN]) {
+    assert.deepEqual(f.bandFor({ outcome: 'insufficient_evidence', level }),
+      { key: 'insufficient', label: 'Not enough information', tone: 'uncertain', pips: 0, tentative: false })
+  }
+})
+
+test('uncertain estimates show the leaning band as tentative, always in the uncertain tone (#51)', () => {
+  const expected = [
+    ['conflict', 'Conflicts with your dislikes', 1],
+    ['unlikely', 'Unlikely fit', 2],
+    ['mixed', 'Mixed signals', 3],
+    ['likely', 'Likely fit', 4],
+    ['strong', 'Strong fit', 5],
+  ]
+  expected.forEach(([key, label, pips], level) => {
+    assert.deepEqual(f.bandFor({ outcome: 'uncertain', level }), { key, label, tone: 'uncertain', pips, tentative: true })
+  })
+  // Same clamping and rounding as fit; a tentative Strong is never the accent tone.
+  assert.equal(f.bandFor({ outcome: 'uncertain', level: 9 }).key, 'strong')
+  assert.equal(f.bandFor({ outcome: 'uncertain', level: -1 }).key, 'conflict')
+  assert.equal(f.bandFor({ outcome: 'uncertain', level: 2.6 }).key, 'likely')
+  assert.notEqual(f.bandFor({ outcome: 'uncertain', level: 4 }).tone, 'accent')
+})
+
+test('an uncertain estimate without a finite level falls back to zero pips', () => {
+  for (const level of [null, Number.NaN, Number.POSITIVE_INFINITY, undefined]) {
+    assert.deepEqual(f.bandFor({ outcome: 'uncertain', level }),
+      { key: 'uncertain', label: 'Uncertain estimate', tone: 'uncertain', pips: 0, tentative: false })
   }
 })
 
@@ -58,6 +78,13 @@ test('uncertain hints name the item kind and only exist for uncertainty states',
     "Your preferences and this song's tags don't overlap enough to judge. Adding genres you like helps.")
   assert.match(f.uncertainHint(insufficient, 'artist'), /this artist's tags/)
   assert.equal(f.uncertainHint(f.bandFor({ outcome: 'uncertain', level: null }), 'track'),
-    "The model's answer was split, so no fit is shown.")
-  assert.equal(f.uncertainHint(f.bandFor({ outcome: 'fit', level: 0 }), 'track'), null)
+    "The model's answer was split, so no fit could be estimated.")
+  for (let level = 0; level <= 4; level++) {
+    for (const kind of ['track', 'artist']) {
+      const hint = f.uncertainHint(f.bandFor({ outcome: 'uncertain', level }), kind)
+      assert.equal(hint, "The model's answer was split, so this is a tentative lean, not a firm fit.")
+      assert.doesNotMatch(hint, /\d|%/, 'no confidence or score is ever shown')
+    }
+    assert.equal(f.uncertainHint(f.bandFor({ outcome: 'fit', level }), 'track'), null)
+  }
 })

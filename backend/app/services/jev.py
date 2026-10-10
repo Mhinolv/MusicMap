@@ -7,8 +7,8 @@ independent questions over the same state:
 * ``taste_fit`` (Score, five ordered levels 0–4): how well the supplied facts align.
 * ``taste_evidence`` (Noul): whether there is comparable evidence to judge at all.
 
-Code, not the model, combines them: weak evidence or a split Score distribution
-becomes an uncertainty outcome instead of a fit level.
+Code, not the model, combines them: weak evidence becomes "insufficient_evidence" with
+no level, and a split Score distribution becomes "uncertain" with a tentative level.
 
 "Check these connections" (#37) repeats the same pair once per candidate song in one
 batched request (at most ``MAX_CANDIDATES`` candidates, 14 questions). Each candidate is
@@ -94,7 +94,8 @@ class TasteJudgment:
 
     @property
     def level(self) -> int | None:
-        if self.outcome != "fit":
+        # "uncertain" keeps its tentative (leaning) level; only missing evidence has none.
+        if self.outcome == "insufficient_evidence":
             return None
         # Round half up to the nearest ordered level (Python's round() is banker's rounding).
         return min(MAX_LEVEL, max(0, math.floor(self.score + 0.5)))

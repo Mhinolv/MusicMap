@@ -241,6 +241,10 @@ a:hover { color: var(--cyan-hover); }
 .fit--conflict { border-left: 2px solid var(--border-strong); }
 .fit-tone--uncertain { border-style: dashed; background: none; }
 .fit-tone--uncertain .fit-band { color: var(--text-dim); }
+/* #51 tentative lean: "Leaning:" in regular weight, ring "on" pips; the dashed box replaces the conflict rule. */
+.fit-band__prefix { font-family: var(--font-mono); font-size: 12px; font-weight: 400; }
+.is-tentative .fit-pips i.is-on { box-sizing: border-box; border: 1px solid currentColor; background: transparent; }
+.taste-check__result.is-tentative.fit--conflict { border-left: 1px dashed var(--border); }
 /* minmax(0, 1fr): the nowrap song names must not widen the track past the panel. */
 .connections-check { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; }
 .connections-check h3 { margin-bottom: 0; }

@@ -82,10 +82,13 @@ function TasteEvaluationCheck({ kind, itemId, profile, onEdit }: Props) {
           </div>
           {loading && <p className="panel__hint" role="status">JEV is checking (up to 5 seconds).</p>}
           {error && <p className="panel__error" role="alert">{error}</p>}
-          {result && band && <div className={`taste-check__result fit--${band.key} fit-tone--${band.tone}`} role="status">
+          {result && band && <div className={`taste-check__result fit--${band.key} fit-tone--${band.tone}${band.tentative ? ' is-tentative' : ''}`} role="status">
             <div className="fit-band">
               {band.key === 'conflict' && <ConflictIcon />}
-              <strong className="fit-band__label">{band.label}</strong>
+              <span className="fit-band__text">
+                {band.tentative && <span className="fit-band__prefix">Leaning: </span>}
+                <strong className="fit-band__label">{band.label}</strong>
+              </span>
               {band.pips > 0 && <span className="fit-pips" aria-hidden="true">
                 {Array.from({ length: FIT_PIPS }, (_, i) => <i key={i} className={i < band.pips ? 'is-on' : undefined} />)}
               </span>}
