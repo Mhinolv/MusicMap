@@ -59,8 +59,9 @@ a:hover { color: var(--cyan-hover); }
   text-transform: uppercase;
 }
 
-/* SVG graph nodes retain their own ring until the constellation PR. */
-:is(button, a, input, textarea, select, [tabindex]):not(.node):focus-visible {
+/* SVG graph nodes retain their own ring until the constellation PR.
+   Search inputs show only the text cursor on focus (owner decision, #33). */
+:is(button, a, input, textarea, select, [tabindex]):not(.node, .search__field input):focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 1px;
 }
@@ -115,7 +116,6 @@ a:hover { color: var(--cyan-hover); }
   border-radius: var(--radius); padding: 0 10px; min-height: 32px;
   transition: border-color 0.15s, background 0.15s;
 }
-.search__field:focus-within { border-color: var(--cyan); }
 .search__icon { color: var(--text-faint); flex: none; }
 .search__field input {
   flex: 1; min-width: 0; background: none; border: 0;
@@ -755,7 +755,7 @@ a:hover { color: var(--cyan-hover); }
 .library-drawer__head { display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 8px 14px; border-bottom: 1px solid var(--hairline); }
 .library-drawer__head h2 { margin: 0; font: 700 13px var(--font-label); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 .library-drawer__close { width: 32px; height: 32px; border: 0; background: transparent; color: var(--muted); font: 500 16px var(--font-mono); }
-.library-drawer__close:hover, .saved-list .icon-btn:hover { color: var(--text); background: var(--raised); }
+.library-drawer__close:hover { color: var(--text); background: var(--raised); }
 .library-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--hairline); }
 .library-tabs [role="tab"] {
   height: 40px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted);

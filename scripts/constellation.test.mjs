@@ -12,16 +12,16 @@ const point = (id, overrides = {}) => ({ id, name: id, x: 200, y: 100, core: 6, 
 test('star field is deterministic, bounded, sparse on mobile and reusable faint', () => {
   assert.deepEqual(generateStarField(0, 0, false), [])
   assert.deepEqual(generateStarField(0, 0, false, true), [])
-  for (const mobile of [false, true]) for (const [w, h] of [[1, 1], [390, 844], [1440, 852], [10000, 10000]]) {
+  for (const mobile of [false, true]) for (const [w, h] of [[1, 1], [390, 844], [640, 1500], [1440, 852], [10000, 10000]]) {
     const dots = generateStarField(w, h, mobile)
     assert.deepEqual(dots, generateStarField(w, h, mobile))
     assert.ok(dots.length <= (mobile ? 35 : 127))
     assert.equal(dots.filter(s => s.soft).length, dots.length ? mobile ? 3 : 7 : 0)
     assert.ok(dots.every(s => s.x >= 0 && s.x < w && s.y >= 0 && s.y < h && [0.5, 1, 1.5].includes(s.r)))
-    // Start screen: about 1 dot per 29,000px², at most 42 plus 4 soft stars, on any viewport.
+    // Start screen: about 1 dot per 29,000px², at most 42 and never more than the graph field, plus 4 soft stars.
     const faint = generateStarField(w, h, mobile, true)
     const plain = faint.filter(s => !s.soft).length
-    assert.equal(plain, Math.min(42, Math.floor(w * h / 29000)))
+    assert.equal(plain, Math.min(42, Math.floor(w * h / 29000), mobile ? 32 : 120))
     assert.equal(faint.length - plain, plain ? 4 : 0)
     assert.ok(faint.every(s => s.x >= 0 && s.x < w && s.y >= 0 && s.y < h))
     if (plain) assert.ok(plain <= dots.filter(s => !s.soft).length)

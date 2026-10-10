@@ -14,3 +14,13 @@ test('icon hover preserves the saved state colour (#21)', () => {
   }
   assert.match(css, /\.bookmark-toggle\.is-saved\s*\{\s*color:\s*var\(--(?:accent|amber)\)/)
 })
+
+test('search box focus shows no highlight while other controls keep their ring (#33)', () => {
+  const ring = css.match(/([^{}]*):focus-visible\s*\{[^}]*outline:\s*2px solid var\(--cyan\)/)
+  assert.ok(ring, 'global focus ring still exists')
+  assert.match(ring[1], /\bbutton\b/, 'buttons keep the ring')
+  assert.match(ring[1], /\[tabindex\]/, 'ARTIST/SONG switch and other controls keep the ring')
+  assert.match(ring[1], /:not\([^)]*\.search__field input[^)]*\)/, 'search input is excluded from the ring')
+  assert.doesNotMatch(css, /\.search__field:focus-within/, 'search group border does not change on focus')
+  assert.doesNotMatch(css, /\.search__field input:focus(?:-visible)?\s*\{[^}]*(?:outline|border|box-shadow)\s*:\s*(?!none|0)/)
+})
