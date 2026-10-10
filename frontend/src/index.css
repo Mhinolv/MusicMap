@@ -817,6 +817,11 @@ a:hover { color: var(--cyan-hover); }
   width: var(--start-w);
   margin-left: calc((100% - 380px - var(--start-w)) / 2);
 }
+/* What TuneGraph is (#62): above NEW MAP, on a --bg knockout so contour lines never run behind the text. */
+.start-intro { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-bottom: -4px; }
+.start-intro__title, .start-intro__text { margin: 0; background: var(--bg); box-shadow: 0 0 0 6px var(--bg); }
+.start-intro__title { font: 700 34px/1.05 var(--font-label); letter-spacing: 0.04em; text-transform: uppercase; color: var(--text); }
+.start-intro__text { max-width: 64ch; font-size: 13px; line-height: 1.6; color: var(--muted); }
 .start-panel { background: var(--pane); border: 1px solid var(--hairline); }
 .start-panel__head {
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
@@ -905,6 +910,9 @@ a:hover { color: var(--cyan-hover); }
   /* Phones stay top-anchored so the soft keyboard never covers the suggestions (#53). */
   .start, .start--library { width: auto; margin: 0 16px; padding: 24px 0 32px; }
   .start-panel__aside { display: none; }
+  .start-intro { gap: 8px; margin-bottom: -8px; }
+  .start-intro__title { font-size: 24px; }
+  .start-intro__text { font-size: 12px; line-height: 1.55; }
   .search--start { flex-wrap: wrap; }
   .search--start .search__anchor { flex-basis: 100%; }
   .search--start .search__mode { flex: 1; }

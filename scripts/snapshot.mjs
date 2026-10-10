@@ -412,7 +412,20 @@ const scenarios = [
       }))
       if (backdrop.hidden !== 'true' || backdrop.pointer !== 'none' || backdrop.dots) throw new Error(`backdrop must be decorative contours only: ${JSON.stringify(backdrop)}`)
       if (await page.$('.start-sky')) throw new Error('old star sky must be gone')
-      return `Contour backdrop below the header (top ${backdrop.top}px), ${backdrop.kb} KB of path data`
+      // #62: intro copy visible above NEW MAP, NEW MAP fully above the fold, no horizontal scroll.
+      const intro = await page.evaluate(() => {
+        const box = (el) => el?.getBoundingClientRect()
+        const title = box(document.querySelector('.start-intro__title'))
+        const text = box(document.querySelector('.start-intro__text'))
+        const panel = box(document.querySelector('.start-panel[aria-labelledby="new-map-title"]'))
+        return { title, text, panel: panel && { top: panel.top, bottom: panel.bottom }, vh: innerHeight,
+          scrollX: document.documentElement.scrollWidth > document.documentElement.clientWidth }
+      })
+      if (!intro.title?.height || !intro.text?.height) throw new Error(`intro copy must be visible: ${JSON.stringify(intro)}`)
+      if (intro.text.bottom > intro.panel.top) throw new Error(`intro must sit above NEW MAP: ${JSON.stringify(intro)}`)
+      if (intro.panel.bottom > intro.vh) throw new Error(`NEW MAP must stay above the fold: ${JSON.stringify(intro)}`)
+      if (intro.scrollX) throw new Error('start screen must not scroll horizontally')
+      return `Contour backdrop below the header (top ${backdrop.top}px), ${backdrop.kb} KB of path data; intro above NEW MAP (top ${Math.round(intro.panel.top)}px)`
     },
   })),
   {

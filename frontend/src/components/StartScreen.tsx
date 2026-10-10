@@ -49,6 +49,10 @@ export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onTog
       <StartBackdrop />
       <main className={`start ${libraryOpen ? 'start--library' : ''}`}>
         <h1 className="sr-only">TuneGraph</h1>
+        <div className="start-intro">
+          <p className="start-intro__title">Map the music around any artist or song</p>
+          <p className="start-intro__text">Search a name, then branch out through related artists or songs, with a 30-second preview at every stop.</p>
+        </div>
         <section className="start-panel" aria-labelledby="new-map-title">
           <div className="start-panel__head">
             <h2 id="new-map-title">New map</h2>
