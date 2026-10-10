@@ -1,13 +1,18 @@
-/** Fixed seed, independent of the force simulation; also usable by the start screen. */
+/** Fixed seed, independent of the force simulation. The faint start-screen variant is
+ *  sparser (1 dot per 29,000px², at most 42 and never more than the graph field, plus 4 soft)
+ *  and weighted toward --sky-1. */
 export function generateStarField(width: number, height: number, mobile: boolean, faint = false) {
   let seed = 29
   const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296 }
-  const count = width > 0 && height > 0 ? Math.min(mobile ? 32 : 120, Math.floor(width * height / 6000)) : 0
-  return Array.from({ length: count + (count ? mobile ? 3 : 7 : 0) }, (_, i) => {
+  const area = width > 0 && height > 0 ? width * height : 0
+  const graphCount = Math.min(mobile ? 32 : 120, Math.floor(area / 6000))
+  const count = faint ? Math.min(42, Math.floor(area / 29000), graphCount) : graphCount
+  const [bright, mid] = faint ? [0.92, 0.78] : [0.82, 0.61]
+  return Array.from({ length: count + (count ? faint ? 4 : mobile ? 3 : 7 : 0) }, (_, i) => {
     const tone = random()
     return { x: random() * width, y: random() * height, r: i >= count ? 1.5 : random() < 0.5 ? 0.5 : 1,
-      color: i >= count || tone >= 0.82 ? '#8A8E96' : tone >= 0.61 ? '#5A5E66' : '#3A3D44',
-      soft: i >= count, opacity: faint ? 0.35 : 1 }
+      color: i >= count || tone >= bright ? '#8A8E96' : tone >= mid ? '#5A5E66' : '#3A3D44',
+      soft: i >= count }
   })
 }
 

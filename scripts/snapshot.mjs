@@ -121,6 +121,43 @@ async function artistGraph(page) {
   await waitForSettle(page)
 }
 
+/** Saves a real map, rewrites its journey to `stops` stops, then reloads to the start screen. */
+async function resumeFixture(page, { song = false, stops = 2 } = {}) {
+  if (song) {
+    await search(page, 'song', 'Creep', 'Creep')
+    await waitForNodes(page, 3)
+  } else await artistGraph(page)
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('tunegraph:map:v1') ?? 'null')?.nodes?.length > 2)
+  const raw = await page.evaluate((count) => {
+    const map = JSON.parse(localStorage.getItem('tunegraph:map:v1'))
+    const leaves = map.nodes.filter((n) => n.id !== map.rootId)
+    map.journey = [map.rootId, ...leaves.slice(0, count - 1).map((n) => n.id)]
+    map.selectedNodeId = map.journey.at(-1)
+    return JSON.stringify(map)
+  }, stops)
+  // Install after the live app's pagehide flush, before React reads storage.
+  await page.evaluateOnNewDocument((value) => localStorage.setItem('tunegraph:map:v1', value), raw)
+  await page.reload({ waitUntil: 'networkidle0' })
+  await page.waitForSelector('.resume-card--ready', { visible: true })
+}
+
+/** Library fixtures with known ages; reload so the start screen reads them. */
+async function libraryFixture(page, { saved = true, excluded = true } = {}) {
+  await page.evaluate(({ saved, excluded }) => {
+    const day = 86400000, now = Date.now()
+    const song = (id, name, artist, age) => ({ kind: 'track', item: { id, name, artist: { id: artist, name: artist } }, savedAt: now - age * day })
+    localStorage.setItem('tunegraph:bookmarks:v1', JSON.stringify({ version: 1, items: saved ? [
+      song('glory-box', 'Glory Box', 'Portishead', 0), song('teardrop', 'Teardrop', 'Massive Attack', 0),
+      { kind: 'artist', item: { id: 'sigur-ros', name: 'Sigur Rós' }, savedAt: now - day },
+      song('karma-police', 'Karma Police', 'Radiohead', 12),
+    ] : [] }))
+    localStorage.setItem('tunegraph:exclusions:v1', JSON.stringify({ version: 1, items: excluded ? [
+      song('no-surprises', 'No Surprises', 'Radiohead', 3), song('unfinished', 'Unfinished Sympathy', 'Massive Attack', 0),
+    ] : [] }))
+  }, { saved, excluded })
+  await page.reload({ waitUntil: 'networkidle0' })
+}
+
 // ---- scenarios ---------------------------------------------------------------------
 
 const scenarios = [
@@ -283,17 +320,18 @@ const scenarios = [
     },
   })),
   ...[
-    { name: 'resume-map', viewport: DESKTOP },
-    { name: 'resume-map-mobile', viewport: MOBILE, userAgent: MOBILE_UA },
+    { name: 'resume-map', viewport: DESKTOP, song: true, stops: 2 },
+    { name: 'resume-map-mobile', viewport: MOBILE, userAgent: MOBILE_UA, song: true, stops: 2 },
+    { name: 'resume-one-stop', viewport: DESKTOP, song: false, stops: 1 },
   ].map((options) => ({
     ...options,
     async run(page) {
-      await artistGraph(page)
-      await waitForSettle(page)
-      await page.waitForFunction(() => JSON.parse(localStorage.getItem('tunegraph:map:v1') ?? 'null')?.nodes?.length > 1)
-      await page.reload()
-      await page.waitForSelector('.resume-card', { visible: true })
-      return 'Last map available; search retains initial focus'
+      await resumeFixture(page, options)
+      await page.waitForSelector('.resume__map circle')
+      const title = await page.$eval('.resume__title', (el) => el.textContent)
+      if (options.stops > 1 !== title.includes('›')) throw new Error(`unexpected resume title "${title}"`)
+      if (await page.$('.search__map-it.btn--primary')) throw new Error('MAP IT must be outlined while RESUME shows')
+      return `RESUME "${title}", ${options.stops} stop(s); search keeps initial focus`
     },
   })),
   {
@@ -301,10 +339,32 @@ const scenarios = [
     async run(page) {
       await page.evaluate(() => localStorage.setItem('tunegraph:map:v1', '{broken'))
       await page.reload()
-      await page.waitForSelector('.resume-card', { visible: true })
-      return 'Corrupt snapshot offers Start fresh only'
+      await page.waitForSelector('.resume-card--invalid', { visible: true })
+      await page.waitForSelector('.search__map-it.btn--primary')
+      return 'Corrupt snapshot offers START FRESH only; MAP IT is primary'
     },
   },
+  {
+    name: 'library-badge-exclusions', viewport: DESKTOP,
+    async run(page) {
+      await libraryFixture(page, { saved: false })
+      await page.waitForFunction(() => document.querySelector('.start-header .library-count')?.textContent === '2')
+      return 'Badge counts not-suggested songs with nothing saved (#24)'
+    },
+  },
+  ...[
+    { name: 'library-start', viewport: DESKTOP },
+    { name: 'library-start-mobile', viewport: MOBILE, userAgent: MOBILE_UA },
+  ].map((options) => ({
+    ...options,
+    async run(page) {
+      await libraryFixture(page)
+      await page.click('.start-header .library-button')
+      await page.waitForSelector('.library-drawer', { visible: true })
+      await page.waitForFunction(() => document.activeElement?.id === 'saved-tab')
+      return 'Start screen with the library drawer open on Saved'
+    },
+  })),
   {
     name: 'resumed-map-toast', viewport: DESKTOP,
     async run(page) {
@@ -347,7 +407,7 @@ const scenarios = [
       if (options.name !== 'not-suggested-empty') await page.click('.exclusion-toggle')
       if (options.name.startsWith('not-suggested')) {
         await page.click('.topbar .saved-entry')
-        await page.waitForSelector('.saved-dialog', { visible: true })
+        await page.waitForSelector('.library-drawer', { visible: true })
         await page.click('#excluded-tab')
       }
     },
@@ -359,7 +419,7 @@ const scenarios = [
       await artistGraph(page)
       await waitForPanel(page)
       await page.click('.topbar .saved-entry')
-      await page.waitForSelector('.saved-dialog', { visible: true })
+      await page.waitForSelector('.library-drawer', { visible: true })
     },
   },
   ...[
@@ -378,7 +438,7 @@ const scenarios = [
       await waitForPanel(page)
       await page.click('.bookmark-toggle')
       await page.click('.topbar .saved-entry')
-      await page.waitForSelector('.saved-dialog', { visible: true })
+      await page.waitForSelector('.library-drawer', { visible: true })
     },
   })),
   {
@@ -445,7 +505,10 @@ const scenarios = [
     name: 'empty',
     viewport: DESKTOP,
     async run(page) {
-      await page.waitForSelector('.hero .search', { visible: true })
+      await page.waitForSelector('.search--start', { visible: true })
+      await page.waitForSelector('.search__map-it.btn--primary')
+      if (await page.$('.resume-card')) throw new Error('fresh start must not offer RESUME')
+      return 'NEW MAP only; MAP IT is the amber primary'
     },
   },
   {
@@ -565,8 +628,8 @@ const scenarios = [
     name: 'taste-profile',
     viewport: DESKTOP,
     async run(page) {
-      await page.waitForSelector('.hero .taste-entry', { visible: true })
-      await page.click('.hero .taste-entry')
+      await page.waitForSelector('.start-header__taste', { visible: true })
+      await page.click('.start-header__taste')
       await page.waitForSelector('.taste-dialog', { visible: true })
       await sleep(300)
     },
