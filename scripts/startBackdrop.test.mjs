@@ -29,10 +29,10 @@ const segments = (d) => {
 }
 const SIZES = [[1, 1], [6, 6], [390, 796], [640, 1200], [1440, 852], [1440, 552], [1060, 852], [3840, 2112]]
 
-test('levels run 0.08 to 1.04 in 0.065 steps, every 4th an index line', () => {
+test('15 levels run 0.08 to 0.99 in 0.065 steps, every 4th an index line', () => {
   assert.equal(CONTOUR_LEVELS.length, 15)
   assert.equal(CONTOUR_LEVELS[0], 0.08)
-  assert.equal(CONTOUR_LEVELS.at(-1), 1.04)
+  assert.equal(CONTOUR_LEVELS.at(-1), 0.99)
   for (let i = 1; i < CONTOUR_LEVELS.length; i++) assert.ok(Math.abs(CONTOUR_LEVELS[i] - CONTOUR_LEVELS[i - 1] - 0.065) < 1e-9)
 })
 

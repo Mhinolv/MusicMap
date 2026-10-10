@@ -10,7 +10,7 @@ const MOBILE_HILLS: readonly Hill[] = [[0.86, 0.66, 0.30, 1], [0.08, 1.02, 0.26,
 /** Grid spacing in px; very large screens use a coarser grid so the sample count stays near 1440x900's. */
 export const CONTOUR_STEP = 6
 const MAX_SAMPLES = 60000
-/** Isoline levels 0.08 to 1.04 in 0.065 steps; every 4th level is an index line. */
+/** 15 isoline levels, 0.08 to 0.99 in 0.065 steps (as the approved mock draws); every 4th level is an index line. */
 export const CONTOUR_LEVELS = Array.from({ length: 15 }, (_, n) => Math.round((0.08 + n * 0.065) * 1000) / 1000)
 
 export type ContourPaths = { minor: string; index: string }
