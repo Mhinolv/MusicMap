@@ -64,7 +64,7 @@ function TasteEvaluationCheck({ kind, itemId, profile, onEdit }: Props) {
         <>
           <div className="taste-check__actions">
             <button className="btn btn--ghost" onClick={onEdit}>Edit taste</button>
-            <button className="btn btn--primary" onClick={check} disabled={loading}>
+            <button className="btn" onClick={check} disabled={loading}>
               {loading ? 'Checking…' : result ? 'Check again' : 'Check my taste'}
             </button>
           </div>
