@@ -122,6 +122,31 @@ async function artistGraph(page) {
 
 const scenarios = [
   ...[
+    { name: 'taste-artist-added', viewport: DESKTOP, kind: 'artist', action: 'like' },
+    { name: 'taste-song-added', viewport: DESKTOP, kind: 'song', action: 'like' },
+    { name: 'taste-song-disliked', viewport: DESKTOP, kind: 'song', action: 'dislike' },
+    { name: 'taste-mobile-added', viewport: MOBILE, userAgent: MOBILE_UA, kind: 'song', action: 'like' },
+    { name: 'taste-full', viewport: DESKTOP, kind: 'artist', action: 'full' },
+  ].map((settings) => ({
+    ...settings,
+    async run(page) {
+      if (settings.action === 'full') {
+        await page.evaluate(() => localStorage.setItem('tunegraph:taste:v1', JSON.stringify({
+          liked_artists: Array.from({ length: 15 }, (_, i) => `Artist ${i}`),
+          liked_tracks: [], liked_genres: [], disliked: [], notes: '',
+        })))
+        await page.reload({ waitUntil: 'networkidle0' })
+      }
+      await search(page, settings.kind, settings.kind === 'artist' ? 'Radiohead' : 'Creep', settings.kind === 'artist' ? 'Radiohead' : 'Creep')
+      await waitForPanel(page)
+      if (settings.viewport === MOBILE) await page.click('.panel__handle')
+      await page.click(settings.action === 'dislike' ? '.taste-toggle__dislike' : '.taste-toggle__like')
+      await page.waitForSelector('.toast__action', { visible: true })
+      await page.waitForFunction((action) => document.querySelector('.toast__action')?.textContent === (action === 'full' ? 'Edit taste' : 'Undo'), {}, settings.action)
+      return settings.action === 'full' ? 'Full taste list with Edit taste action' : 'Panel taste toggle with stored entry and Undo'
+    },
+  })),
+  ...[
     { name: 'steering-unselected', viewport: DESKTOP, selectedTags: 0 },
     { name: 'steering-two', viewport: DESKTOP, selectedTags: 2 },
     { name: 'steering-three', viewport: DESKTOP, selectedTags: 3 },

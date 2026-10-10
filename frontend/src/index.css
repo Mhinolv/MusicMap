@@ -275,6 +275,8 @@ a { color: var(--accent); }
 .panel__empty { margin: 0; color: var(--text-faint); font-size: 13px; font-style: italic; }
 .taste-check { display: grid; gap: 9px; }
 .taste-check h3 { margin-bottom: 0; }
+.taste-toggle { display: grid; gap: 6px; }
+.taste-toggle .panel__hint { overflow-wrap: anywhere; }
 .taste-check__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .taste-check__result {
   display: grid; gap: 2px; border: 1px solid var(--border-strong);

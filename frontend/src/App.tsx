@@ -7,6 +7,8 @@ import { SearchBar, type SearchMode } from './components/SearchBar'
 import { SavedDiscoveries } from './components/SavedDiscoveries'
 import { addBookmark, bookmarkKey, BOOKMARK_FULL_MESSAGE, nodeBookmark, readBookmarks, restoreBookmarks, writeBookmarks, type Bookmark } from './bookmarks'
 import { TastePreferences } from './components/TastePreferences'
+import { emptyTaste, isEmptyTaste, readTaste, writeTaste, toggleTaste, TASTE_LIMIT, type TasteList } from './taste'
+import { TasteToggle } from './components/TasteToggle'
 import { finishSpotifyImport } from './spotifyImport'
 import { artistNode, planPrune, trackNode, useMusicGraph, type ExpandedChild } from './graph/useMusicGraph'
 import { JOURNEY_CAP, journeyContext } from './graph/journey'
@@ -17,18 +19,7 @@ import { clearMap, readMap, saveMap } from './graph/mapSnapshot'
 
 const EXPAND_LIMIT = 7
 
-type Toast = { source?: 'bookmarks' | 'exclusions'; msg: string; action?: { label: string; run: () => void } }
-const TASTE_STORAGE_KEY = 'tunegraph:taste:v1'
-
-function readTaste(): TasteProfile | null {
-  try {
-    const value = JSON.parse(localStorage.getItem(TASTE_STORAGE_KEY) ?? 'null')
-    if (!value || !Array.isArray(value.liked_artists) || !Array.isArray(value.liked_tracks)
-      || !Array.isArray(value.liked_genres) || !Array.isArray(value.disliked) || typeof value.notes !== 'string') return null
-    return value as TasteProfile
-  } catch { return null }
-}
-
+type Toast = { source?: 'bookmarks' | 'exclusions' | 'taste'; msg: string; action?: { label: string; run: () => void } }
 export default function App() {
   const g = useMusicGraph()
   const [savedMap, setSavedMap] = useState(readMap)
@@ -61,6 +52,7 @@ export default function App() {
   const [searchMode, setSearchMode] = useState<SearchMode>('artist')
   const [centerRequest, setCenterRequest] = useState<{ id: string; nonce: number }>()
   const [taste, setTaste] = useState<TasteProfile | null>(readTaste)
+  const tasteRef = useRef(taste)
   const [tasteOpen, setTasteOpen] = useState(false)
   const [bookmarks, setBookmarks] = useState(readBookmarks)
   const bookmarksRef = useRef(bookmarks)
@@ -281,23 +273,50 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [g, selected, prune, tasteOpen, savedOpen, select])
 
+  const updateTaste = (next: TasteProfile | null) => {
+    const profile = next && !isEmptyTaste(next) ? next : null
+    if (!writeTaste(profile)) {
+      showToast({ source: 'taste', msg: "Couldn't save: this browser is blocking local storage." }, 7000)
+      return false
+    }
+    tasteRef.current = profile
+    setTaste(profile)
+    // An editor change supersedes the previous panel undo.
+    setToast((current) => current?.source === 'taste' ? null : current)
+    return true
+  }
   const saveTaste = (next: TasteProfile) => {
-    setTaste(next)
-    try { localStorage.setItem(TASTE_STORAGE_KEY, JSON.stringify(next)) } catch { /* private browsing */ }
-    setTasteOpen(false)
+    if (updateTaste(next)) setTasteOpen(false)
   }
   const clearTaste = () => {
-    setTaste(null)
-    try { localStorage.removeItem(TASTE_STORAGE_KEY) } catch { /* private browsing */ }
-    setTasteOpen(false)
+    if (updateTaste(null)) setTasteOpen(false)
+  }
+  const togglePanelTaste = (list: TasteList, entry: string) => {
+    const previous = tasteRef.current
+    const next = toggleTaste(previous, list, entry)
+    if (next === previous) {
+      showToast({ source: 'taste', msg: `This taste list is full (${TASTE_LIMIT}). Edit taste to make room.`,
+        action: { label: 'Edit taste', run: () => setTasteOpen(true) } }, 7000)
+      return
+    }
+    if (!updateTaste(next)) return
+    const added = !!next?.[list].includes(entry)
+    showToast({ source: 'taste', msg: `${added ? 'Added' : 'Removed'} “${entry}” ${added ? 'to' : 'from'} ${list === 'disliked' ? 'your dislikes' : 'your taste'}.`,
+      action: { label: 'Undo', run: () => {
+        if (tasteRef.current === next) updateTaste(previous)
+      } } }, 7000)
   }
 
   useEffect(() => {
     void finishSpotifyImport(readTaste())
       .then((imported) => {
         if (!imported) return
+        if (!writeTaste(imported)) {
+          showToast({ source: 'taste', msg: "Couldn't save: this browser is blocking local storage." }, 7000)
+          return
+        }
+        tasteRef.current = imported
         setTaste(imported)
-        try { localStorage.setItem(TASTE_STORAGE_KEY, JSON.stringify(imported)) } catch { /* private browsing */ }
         setTasteOpen(true)
         showToast({ msg: 'Spotify music imported. Review and save your preferences.' }, 7000)
       })
@@ -417,6 +436,7 @@ export default function App() {
                 onTags={g.setTags}
                 onOpenArtist={onSelectSearch}
                 taste={taste}
+                tasteActions={<TasteToggle node={selected} profile={taste} onToggle={togglePanelTaste} />}
                 onEditTaste={() => setTasteOpen(true)}
               />
             )}
@@ -471,7 +491,7 @@ export default function App() {
         </div>
       )}
       {savedOpen && <SavedDiscoveries exclusions={exclusions} onRemoveExclusion={(entry) => removeExclusions([entry])} onResetExclusions={() => removeExclusions(exclusionsRef.current)} entries={bookmarks} onOpen={openBookmark} onRemove={(entry) => removeBookmarks([entry])} onClear={() => removeBookmarks(bookmarksRef.current)} onClose={closeSaved} />}
-      {tasteOpen && <TastePreferences profile={taste ?? { liked_artists: [], liked_tracks: [], liked_genres: [], disliked: [], notes: '' }} onSave={saveTaste} onClear={clearTaste} onClose={() => setTasteOpen(false)} />}
+      {tasteOpen && <TastePreferences profile={taste ?? emptyTaste()} onSave={saveTaste} onClear={clearTaste} onClose={() => setTasteOpen(false)} />}
     </div>
   )
 }
