@@ -1,6 +1,7 @@
 /** One-time Spotify PKCE import. Tokens are kept only in this function's memory. */
 
 import { api } from './api'
+import { TASTE_LIMIT } from './taste'
 import type { TasteProfile } from './types'
 
 const PENDING_KEY = 'tunegraph:spotify-pkce'
@@ -50,7 +51,7 @@ function names(items: string[], existing: string[]): string[] {
     if (seen.has(key)) return false
     seen.add(key)
     return true
-  }).slice(0, 15)
+  }).slice(0, TASTE_LIMIT)
 }
 
 async function topItems<T>(token: string, type: 'artists' | 'tracks'): Promise<T[]> {

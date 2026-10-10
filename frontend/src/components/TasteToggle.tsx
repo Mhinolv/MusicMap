@@ -1,5 +1,5 @@
 import type { ArtistNode, TasteProfile } from '../types'
-import { storedTasteEntry, tasteEntry, type TasteList } from '../taste'
+import { storedTasteEntry, tasteEntry, TASTE_LIST_LABELS, type TasteList } from '../taste'
 
 type Props = {
   node: ArtistNode
@@ -22,8 +22,8 @@ export function TasteToggle({ node, profile, onToggle }: Props) {
           {disliked !== undefined ? 'Remove from dislikes' : 'Not my taste'}
         </button>
       </div>
-      {liked !== undefined && <p className="panel__hint">In your taste: {liked}</p>}
-      {disliked !== undefined && <p className="panel__hint">In your dislikes: {disliked}</p>}
+      {liked !== undefined && <p className="panel__hint">In {TASTE_LIST_LABELS[list]}: {liked}</p>}
+      {disliked !== undefined && <p className="panel__hint">In {TASTE_LIST_LABELS.disliked}: {disliked}</p>}
     </div>
   )
 }
