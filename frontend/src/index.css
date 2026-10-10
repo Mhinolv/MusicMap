@@ -679,7 +679,7 @@ a { color: var(--accent); }
 .journey__follow:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Local map continuity on the search hero. */
-.resume-card { padding: 16px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--bg-elev); text-align: left; }
-.resume-card p { margin: 6px 0 12px; color: var(--text-dim); overflow-wrap: anywhere; }
-.resume-card__actions { display: flex; align-items: center; gap: 16px; }
+.resume-card { text-align: left; }
+.resume-card p { margin: 6px 0 0; font-size: 13px; color: var(--text-dim); overflow-wrap: anywhere; }
+.resume-card__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .app--empty { overflow-y: auto; }

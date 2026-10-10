@@ -63,7 +63,7 @@ export default function App() {
       const result = saveMap(g.graph, followJourney)
       if (result === 'too-large' && !warnedMapSize.current) {
         warnedMapSize.current = true
-        showToast({ msg: 'Map too large to resume (maximum 500 nodes or 1 MiB). Your saved map was cleared.' }, 7000)
+        showToast({ msg: 'This map is too large to keep for next time.' }, 7000)
       }
     }
     const timer = window.setTimeout(save, 300)
@@ -84,6 +84,7 @@ export default function App() {
     setSavedMap({ status: 'none' })
     setResumeFit(true)
     setResetKey((k) => k + 1)
+    showToast({ msg: 'Map restored.' }, 4000)
   }
 
   const updateBookmarks = (next: Bookmark[]) => {
@@ -270,6 +271,9 @@ export default function App() {
   const hasGraph = g.nodes.length > 0
   const rootKind = g.graph.rootId ? g.graph.nodes.get(g.graph.rootId)?.kind : undefined
   const searchProps = { onSelect: onSelectSearch, onSelectTrack, mode: searchMode, onModeChange: setSearchMode }
+  const savedGraph = savedMap.status === 'ready' ? savedMap.snapshot.graph : undefined
+  const savedRoot = savedGraph?.nodes.get(savedGraph.rootId!)
+  const savedSongMap = savedRoot?.kind === 'track'
 
   return (
     <div className={`app ${hasGraph ? 'app--graph' : 'app--empty'}`}>
@@ -277,19 +281,21 @@ export default function App() {
         <main className="hero">
           <h1 className="hero__title">Explore music</h1>
           <p className="hero__sub">Start from an artist or a song, then wander outward through who they're connected to.</p>
-          <SearchBar {...searchProps} autoFocus />
           {savedMap.status !== 'none' && (
-            <section className="resume-card" aria-label="Last map">
-              <strong>{savedMap.status === 'ready' ? 'Pick up where you left off' : "Your last map couldn’t be restored"}</strong>
-              <p>{savedMap.status === 'ready'
-                ? `${savedMap.snapshot.graph.nodes.get(savedMap.snapshot.graph.rootId!)?.name} · ${savedMap.snapshot.graph.nodes.size} nodes`
-                : 'The saved map is damaged, unsupported, or too large. Start a new map to keep exploring.'}</p>
+            <section className="taste-import resume-card" aria-label="Resume last map">
+              <div>
+                <strong>{savedMap.status === 'ready' ? 'Pick up where you left off' : "Your last map couldn’t be restored"}</strong>
+                <p>{savedGraph
+                  ? `${savedSongMap ? 'Song' : 'Artist'} map from “${savedRoot?.name}” · ${savedGraph.nodes.size} ${savedSongMap ? 'songs' : 'artists'}${savedGraph.journey.length ? ` · ${savedGraph.journey.length} stops` : ''}`
+                  : 'It was damaged or too large to load.'}</p>
+              </div>
               <div className="resume-card__actions">
                 {savedMap.status === 'ready' && <button className="btn btn--primary" onClick={resume}>Resume</button>}
-                <button className="link-btn" onClick={startFresh}>Start fresh</button>
+                <button className="btn btn--ghost" onClick={startFresh}>Start fresh</button>
               </div>
             </section>
           )}
+          <SearchBar {...searchProps} autoFocus />
           <button className="taste-entry" onClick={() => setTasteOpen(true)}>{taste ? 'Edit your music taste' : 'Add your music taste'}</button>
           {bookmarks.length > 0 && <button className="link-btn saved-entry" onClick={() => setSavedOpen(true)}>Open saved discoveries ({bookmarks.length})</button>}
           <p className="hero__hint">

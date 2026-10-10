@@ -145,14 +145,27 @@ const scenarios = [
     },
   },
   {
+    name: 'resumed-map-toast', viewport: DESKTOP,
+    async run(page) {
+      await artistGraph(page)
+      await page.waitForFunction(() => JSON.parse(localStorage.getItem('tunegraph:map:v1') ?? 'null')?.nodes?.length > 1)
+      await page.reload()
+      await page.waitForSelector('.resume-card .btn--primary', { visible: true })
+      await page.click('.resume-card .btn--primary')
+      await page.waitForFunction(() => document.querySelector('.toast')?.textContent === 'Map restored.')
+      return 'Artist map restored with four-second confirmation toast'
+    },
+  },
+  {
     name: 'resumed-song-map', viewport: DESKTOP,
     async run(page) {
       await search(page, 'song', 'Creep', 'Creep')
       await waitForNodes(page, 2)
       await page.waitForFunction(() => JSON.parse(localStorage.getItem('tunegraph:map:v1') ?? 'null')?.nodes?.length > 1)
       await page.reload()
-      await page.waitForSelector('.resume-card .btn', { visible: true })
-      await page.click('.resume-card .btn')
+      await page.waitForSelector('.resume-card .btn--primary', { visible: true })
+      await page.click('.resume-card .btn--primary')
+      await page.waitForFunction(() => document.querySelector('.toast')?.textContent === 'Map restored.')
       await waitForNodes(page, 2)
       await waitForPanel(page)
       await waitForSettle(page)
