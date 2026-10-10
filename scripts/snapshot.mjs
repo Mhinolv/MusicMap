@@ -172,6 +172,25 @@ const scenarios = [
       return 'Song map restored with selection, trail and fitted view'
     },
   },
+  ...[
+    { name: 'song-not-suggested', viewport: DESKTOP },
+    { name: 'song-not-suggested-mobile', viewport: MOBILE, userAgent: MOBILE_UA },
+    { name: 'not-suggested-list', viewport: DESKTOP },
+    { name: 'not-suggested-list-mobile', viewport: MOBILE, userAgent: MOBILE_UA },
+    { name: 'not-suggested-empty', viewport: DESKTOP },
+  ].map((options) => ({
+    ...options,
+    async run(page) {
+      await search(page, 'song', 'Creep', 'Creep')
+      await waitForPanel(page)
+      if (options.name !== 'not-suggested-empty') await page.click('.exclusion-toggle')
+      if (options.name.startsWith('not-suggested')) {
+        await page.click('.topbar .saved-entry')
+        await page.waitForSelector('.saved-dialog', { visible: true })
+        await page.click('#excluded-tab')
+      }
+    },
+  })),
   {
     name: 'saved-empty',
     viewport: DESKTOP,

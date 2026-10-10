@@ -88,4 +88,5 @@ class TrackSimilarResponse(BaseModel):
     track_id: str
     track: TrackRef | None = None
     tracks: list[SimilarTrack]
+    excluded_count: int = 0
     ranking: TrackRankingContext = Field(default_factory=TrackRankingContext)

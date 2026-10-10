@@ -28,6 +28,7 @@ function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'sav
       edges: [], restore: (value) => restores.push(value) }) },
     './components/SearchBar': { SearchBar },
     './bookmarks': { readBookmarks: () => [] },
+    './exclusions': { readExclusions: () => [] },
   }
   const exports = {}
   runInNewContext(source, {

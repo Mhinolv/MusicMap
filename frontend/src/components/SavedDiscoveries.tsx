@@ -1,7 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { ExcludedSong } from '../exclusions'
 import { bookmarkKey, type Bookmark } from '../bookmarks'
 
 type Props = {
+  exclusions: ExcludedSong[]
+  onRemoveExclusion: (entry: ExcludedSong) => void
+  onResetExclusions: () => void
   entries: Bookmark[]
   onOpen: (entry: Bookmark) => void
   onRemove: (entry: Bookmark) => void
@@ -9,16 +13,19 @@ type Props = {
   onClose: () => void
 }
 
-export function SavedDiscoveries({ entries, onOpen, onRemove, onClear, onClose }: Props) {
+export function SavedDiscoveries({ exclusions, onRemoveExclusion, onResetExclusions, entries, onOpen, onRemove, onClear, onClose }: Props) {
+  const [tab, setTab] = useState<'saved' | 'excluded'>('saved')
   const dialog = useRef<HTMLElement>(null)
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
-    const initial = dialog.current?.querySelector<HTMLButtonElement>('.saved-item') ?? dialog.current?.querySelector<HTMLButtonElement>('button')
+    const initial = dialog.current?.querySelector<HTMLButtonElement>('button.saved-item') ?? dialog.current?.querySelector<HTMLButtonElement>('button')
     initial?.focus()
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); onClose() }
       if (e.key !== 'Tab') return
-      const buttons = [...(dialog.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []), ...document.querySelectorAll<HTMLButtonElement>('.toast__action')]
+      const visibleButtons = [...(dialog.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])]
+        .filter((button) => !button.closest('[hidden]') && button.tabIndex >= 0)
+      const buttons = [...visibleButtons, ...document.querySelectorAll<HTMLButtonElement>('.toast__action')]
       if (!buttons?.length) return
       const first = buttons[0], last = buttons[buttons.length - 1]
       if (!buttons.some((button) => button === document.activeElement)) { e.preventDefault(); first.focus() }
@@ -37,9 +44,21 @@ export function SavedDiscoveries({ entries, onOpen, onRemove, onClear, onClose }
           <button className="icon-btn" onClick={onClose} aria-label="Close saved discoveries">×</button>
         </div>
         <div className="search__mode saved-tabs" role="tablist" aria-label="Discoveries">
-          <button className="is-on" id="saved-tab" role="tab" aria-selected="true" aria-controls="saved-list">Saved ({entries.length})</button>
+          {(['saved', 'excluded'] as const).map((value) => (
+            <button key={value} className={tab === value ? 'is-on' : ''} id={`${value}-tab`} role="tab" aria-selected={tab === value} aria-controls={`${value}-list`} tabIndex={tab === value ? 0 : -1}
+              onClick={() => setTab(value)}
+              onKeyDown={(e) => {
+                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
+                e.preventDefault()
+                const next = e.key === 'Home' ? 'saved' : e.key === 'End' ? 'excluded' : tab === 'saved' ? 'excluded' : 'saved'
+                setTab(next)
+                dialog.current?.querySelector<HTMLButtonElement>(`#${next}-tab`)?.focus()
+              }}>
+              {value === 'saved' ? `Saved (${entries.length})` : `Not suggested (${exclusions.length})`}
+            </button>
+          ))}
         </div>
-        <div id="saved-list" role="tabpanel" aria-labelledby="saved-tab">
+        <div hidden={tab !== 'saved'} id="saved-list" role="tabpanel" aria-labelledby="saved-tab">
           {entries.length ? (
             <ul className="saved-list">
               {entries.map((entry) => (
@@ -53,8 +72,25 @@ export function SavedDiscoveries({ entries, onOpen, onRemove, onClear, onClose }
               ))}
             </ul>
           ) : <p className="panel__empty saved-empty">Nothing saved yet. Use the bookmark on any artist or song panel.</p>}
+          <button className="btn btn--ghost btn--danger" onClick={onClear} disabled={!entries.length}>Clear all</button>
         </div>
-        <button className="btn btn--ghost btn--danger" onClick={onClear} disabled={!entries.length}>Clear all</button>
+        <div hidden={tab !== 'excluded'} id="excluded-list" role="tabpanel" aria-labelledby="excluded-tab">
+          <p className="panel__hint">These songs stay on your map but are excluded from future suggestions. Up to 100, kept in this browser.</p>
+          {exclusions.length ? (
+            <ul className="saved-list">
+              {exclusions.map((entry) => (
+                <li key={entry.item.id}>
+                  <div className="saved-item">
+                    <span className="search__name">♪ {entry.item.name}</span>
+                    <span className="search__sub">{entry.item.artist.name}</span>
+                  </div>
+                  <button className="icon-btn" onClick={() => onRemoveExclusion(entry)} aria-label={`Suggest ${entry.item.name} by ${entry.item.artist.name} again`}>×</button>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="panel__empty saved-empty">No excluded songs. Use “Don't suggest again” on a song panel.</p>}
+          <button className="btn btn--ghost" onClick={onResetExclusions} disabled={!exclusions.length}>Reset all</button>
+        </div>
       </section>
     </div>
   )
