@@ -37,6 +37,7 @@ type Props = {
   journey: string[]
   onSelect: (id?: string) => void
   onExpand: (id: string) => void
+  fitOnMount?: boolean
   resetKey: number
   /** Pan so this node sits in the middle of the view. `nonce` lets the same id be requested twice. */
   centerRequest?: { id: string; nonce: number }
@@ -133,7 +134,7 @@ function computeTiers(focusId: string | undefined, nodes: ArtistNode[], edges: A
   return tiers
 }
 
-export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, journey, onSelect, onExpand, resetKey, centerRequest }: Props) {
+export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, journey, onSelect, onExpand, resetKey, centerRequest, fitOnMount }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
   const simRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null)
   const nodeMapRef = useRef(new Map<string, SimNode>())
@@ -614,6 +615,20 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
       .duration(500)
       .call(zoom.transform, d3.zoomIdentity.translate(width / 2 - cx * k, height / 2 - cy * k).scale(k))
   }
+
+  // Resume reconstructs layout locally, then fits once after the simulation settles.
+  useEffect(() => {
+    if (!fitOnMount) return
+    const sim = simRef.current
+    if (!sim) return
+    sim.on('end.resume', () => {
+      sim.on('end.resume', null)
+      fit()
+    })
+    return () => { sim.on('end.resume', null) }
+    // The request is consumed once per restored map, not on subsequent graph changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitOnMount, resetKey])
 
   return (
     <div className="graph-wrap">

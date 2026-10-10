@@ -11,6 +11,7 @@ import {
 } from '../types'
 
 type Action =
+  | { type: 'restore'; graph: MusicGraph }
   | { type: 'reset'; root: ArtistNode }
   | { type: 'select'; id?: string }
   | { type: 'expand:start'; id: string }
@@ -163,8 +164,10 @@ function prune(state: MusicGraph, id: string, mode: PruneMode, seq: number): Mus
 
 let pruneSeq = 0
 
-function reducer(state: MusicGraph, action: Action): MusicGraph {
+export function musicGraphReducer(state: MusicGraph, action: Action): MusicGraph {
   switch (action.type) {
+    case 'restore':
+      return action.graph
     case 'reset': {
       const nodes = new Map<string, ArtistNode>()
       nodes.set(action.root.id, action.root)
@@ -232,7 +235,7 @@ function reducer(state: MusicGraph, action: Action): MusicGraph {
 }
 
 export function useMusicGraph() {
-  const [graph, dispatch] = useReducer(reducer, empty)
+  const [graph, dispatch] = useReducer(musicGraphReducer, empty)
 
   const nodes = useMemo(() => [...graph.nodes.values()], [graph.nodes])
   const edges = useMemo(() => [...graph.edges.values()], [graph.edges])
@@ -246,6 +249,7 @@ export function useMusicGraph() {
     return d
   }, [graph.edges])
 
+  const restore = useCallback((graph: MusicGraph) => dispatch({ type: 'restore', graph }), [])
   const resetArtist = useCallback((root: ArtistRef) => dispatch({ type: 'reset', root: artistNode(root) }), [])
   const resetTrack = useCallback((root: TrackRef) => dispatch({ type: 'reset', root: trackNode(root) }), [])
   const select = useCallback((id?: string) => dispatch({ type: 'select', id }), [])
@@ -264,6 +268,7 @@ export function useMusicGraph() {
     nodes,
     edges,
     degree,
+    restore,
     resetArtist,
     resetTrack,
     select,
