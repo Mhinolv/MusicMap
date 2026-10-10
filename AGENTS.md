@@ -20,7 +20,7 @@ TuneGraph is an interactive map for discovering music. A listener searches an ar
 | API client and shared types | `frontend/src/api.ts`, `frontend/src/types.ts` |
 | Graph state: expand, prune (`planPrune`), journey | `frontend/src/graph/useMusicGraph.ts` |
 | Force graph rendering, gestures | `frontend/src/components/ForceGraph.tsx` |
-| Side / bottom-sheet panel for artists and songs | `frontend/src/components/ArtistPanel.tsx` |
+| Side / bottom-sheet panel for artists and songs | `frontend/src/components/ArtistPanel.tsx`; phone tabbed sheet (≤640px, #34) `frontend/src/components/MobileSheet.tsx`, `frontend/src/sheet.ts` |
 | Search, journey breadcrumb | `frontend/src/components/SearchBar.tsx`, `frontend/src/components/JourneyTrail.tsx` |
 | Taste profile UI and taste check | `frontend/src/components/TastePreferences.tsx`, `frontend/src/components/TasteCheck.tsx` |
 | Batch taste check for a song expansion's children (#37) | `frontend/src/components/ConnectionsCheck.tsx`, `frontend/src/connections.ts`; backend `POST /api/taste/connections/evaluate` |

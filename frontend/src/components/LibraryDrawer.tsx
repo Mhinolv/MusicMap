@@ -5,10 +5,17 @@ import { savedWhen } from '../startScreen'
 
 export const LIBRARY_DRAWER_ID = 'library-drawer'
 
-type ButtonProps = { count: number; open: boolean; onToggle: () => void; buttonRef?: Ref<HTMLButtonElement>; className?: string }
+type ButtonProps = { count: number; open: boolean; onToggle: () => void; buttonRef?: Ref<HTMLButtonElement>; className?: string; icon?: boolean }
 
 /** Header entry on the start screen and in the map; the badge counts saved + not suggested. */
-export function LibraryButton({ count, open, onToggle, buttonRef, className = '' }: ButtonProps) {
+export function LibraryButton({ count, open, onToggle, buttonRef, className = '', icon = false }: ButtonProps) {
+  // Phone map header (#34): a bookmark glyph whose name carries the count.
+  if (icon) return (
+    <button ref={buttonRef} type="button" className={`library-button library-button--icon ${className}`} aria-expanded={open}
+      aria-controls={open ? LIBRARY_DRAWER_ID : undefined} aria-label={`Library, ${count} ${count === 1 ? 'item' : 'items'}`} onClick={onToggle}>
+      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="miter"><path d="M6 3h12v18l-6-4-6 4z" /></svg>
+    </button>
+  )
   return (
     <button ref={buttonRef} type="button" className={`taste-entry library-button ${className}`} aria-expanded={open}
       aria-controls={open ? LIBRARY_DRAWER_ID : undefined} aria-label={count ? `Library, ${count} saved or not suggested` : 'Library'} onClick={onToggle}>

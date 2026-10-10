@@ -133,6 +133,10 @@ const startScreen = {}
 new Function('exports', ts.transpileModule(readFileSync(new URL('../frontend/src/startScreen.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText)(startScreen)
+const sheet = {}
+new Function('exports', ts.transpileModule(readFileSync(new URL('../frontend/src/sheet.ts', import.meta.url), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS },
+}).outputText)(sheet)
 function panelHarness(initial = null, writable = true) {
   const writes = [], timers = [], updates = []
   const node = { id: 'a', kind: 'artist', name: 'Radiohead' }
@@ -150,6 +154,7 @@ function panelHarness(initial = null, writable = true) {
     './bookmarks': { readBookmarks: () => [], nodeBookmark: () => null },
     './exclusions': { readExclusions: () => [] },
     './startScreen': startScreen,
+    './sheet': sheet,
     './components/ArtistPanel': { ArtistPanel: 'ArtistPanel' },
     './components/TasteToggle': { TasteToggle: 'TasteToggle' },
   }

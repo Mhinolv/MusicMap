@@ -73,22 +73,20 @@ test('left pane scenarios from the #31 design notes exist', () => {
 })
 
 for (const name of ['mobile-song-journey-on']) {
-  test(`${name} selects an SVG leaf and reaches the journey hint`, async () => {
+  // #34: phones have no floating trail; the switch and the stops live in the sheet's JOURNEY tab.
+  test(`${name} turns Follow journey on in the JOURNEY tab, selects an SVG leaf and reaches the journey hint`, async () => {
     let focused = false
     let selected = false
-    let enabled = false
     let hintChecked = false
-    let opacityChecked = false
+    const clicks = []
+    const waits = []
     // SVG elements support DOM focus, but Puppeteer's ElementHandle.focus()
     // rejects them because they are not HTMLElements.
     const svg = { focus() { focused = true } }
     const leaf = { async focus() { throw new Error('Cannot focus non-HTMLElement') } }
     const page = {
-      async waitForSelector() {},
-      async click(selector) {
-        assert.equal(selector, '.journey__follow')
-        enabled = true
-      },
+      async waitForSelector(selector) { waits.push(selector) },
+      async click(selector) { clicks.push(selector) },
       async $(selector) {
         assert.equal(selector, 'g.node:not(.is-root)')
         return leaf
@@ -105,7 +103,7 @@ for (const name of ['mobile-song-journey-on']) {
         },
       },
       async waitForFunction(callback) {
-        assert.ok(enabled && selected)
+        assert.ok(clicks.includes('.sheet .map-nav__follow') && selected)
         const result = runInNewContext(`(${callback.toString()})()`, {
           document: {
             querySelectorAll(selector) {
@@ -113,20 +111,17 @@ for (const name of ['mobile-song-journey-on']) {
               hintChecked = true
               return [{ textContent: 'Next expansion follows your 2-stop journey.' }]
             },
-            querySelector(selector) {
-              assert.equal(selector, '.journey')
-              opacityChecked = true
-              return {}
-            },
           },
-          getComputedStyle: () => ({ opacity: '1' }),
         })
         assert.equal(result, true)
       },
     }
     assert.equal(await scenarios.find((scenario) => scenario.name === name).run(page),
-      'Follow journey on, full-opacity trail and next-expansion hint')
-    assert.ok(hintChecked && opacityChecked)
+      'Follow journey on in the JOURNEY tab; selecting a leaf switched to INSPECTOR with the next-expansion hint')
+    assert.ok(hintChecked)
+    assert.deepEqual(clicks, ['#sheet-tab-journey', '.sheet .map-nav__follow', '#sheet-tab-journey'])
+    assert.ok(waits.includes('.sheet .map-nav__follow[aria-checked="true"]'))
+    assert.ok(waits.includes('#sheet-tab-inspector[aria-selected="true"]'))
   })
 
   test(`${name} reports a missing leaf`, async () => {
@@ -137,6 +132,21 @@ for (const name of ['mobile-song-journey-on']) {
       { message: 'no song leaf' })
   })
 }
+
+test('mobile sheet scenarios from the #34 design notes exist at 390px with a coarse pointer', () => {
+  for (const name of ['steering-mobile', 'song-not-suggested-mobile', 'saved-mobile-panel', 'mobile-song-journey-on',
+    'mobile-on-map-tab', 'mobile-peek', 'mobile-artist-inspector', 'mobile-toast-above-sheet', 'mobile-combined-toast',
+    'not-suggested-list-mobile']) {
+    const scenario = scenarios.find((s) => s.name === name)
+    assert.ok(scenario, name)
+    assert.equal(scenario.viewport, scenarios.find((s) => s.name === 'mobile-peek').viewport, `${name} uses the phone viewport`)
+  }
+  for (const name of ['mobile-on-map-tab', 'mobile-peek', 'mobile-artist-inspector', 'mobile-toast-above-sheet', 'mobile-combined-toast']) {
+    assert.ok(scenarios.find((s) => s.name === name).extraMedia.some((feature) => feature.name === 'pointer' && feature.value === 'coarse'), name)
+  }
+  // The combined toast applies on every breakpoint.
+  assert.equal(scenarios.find((s) => s.name === 'combined-toast').viewport.width, 1440)
+})
 
 // Native touch emulation must trigger coarse pointer independently of narrow width.
 test('constellation coarse pointer uses a touch-enabled desktop viewport', () => {

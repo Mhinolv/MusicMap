@@ -18,6 +18,10 @@ const onMap = {}
 new Function('exports', ts.transpileModule(readFileSync(new URL('../frontend/src/graph/onMap.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText)(onMap)
+const sheet = {}
+new Function('exports', ts.transpileModule(readFileSync(new URL('../frontend/src/sheet.ts', import.meta.url), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS },
+}).outputText)(sheet)
 const graph = (kind = 'artist', count = 2, stops = 2) => ({
   nodes: new Map(Array.from({ length: count }, (_, i) => [String(i), { id: String(i), name: i ? `Node ${i}` : 'Radiohead', kind }])),
   edges: new Map(), rootId: '0', journey: Array.from({ length: stops }, (_, i) => String(i)),
@@ -40,6 +44,7 @@ function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'sav
     './components/LibraryDrawer': { LibraryButton, LibraryDrawer },
     './startScreen': helpers,
     './graph/onMap': onMap,
+    './sheet': sheet,
     './components/MapNavPane': { MapNavPane },
     './bookmarks': { readBookmarks: () => bookmarks },
     './exclusions': { readExclusions: () => exclusions },
