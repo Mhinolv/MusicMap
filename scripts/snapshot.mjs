@@ -62,7 +62,10 @@ async function search(page, mode, query, pick) {
 const nodeCount = (page) => page.$$eval('g.node', (els) => els.length)
 
 async function waitForNodes(page, min, timeout = 15000) {
-  await page.waitForFunction((n) => document.querySelectorAll('g.node').length >= n, { timeout }, min)
+  await page.waitForFunction((n) => document.querySelectorAll('g.node').length >= n
+    && document.querySelector('.star-field .sky-dot')
+    && document.querySelector('g.node .node__hit')
+    && document.querySelector('.journey-path'), { timeout }, min)
 }
 
 /** Polls node positions until the force simulation has effectively stopped moving. */
@@ -121,6 +124,47 @@ async function artistGraph(page) {
 // ---- scenarios ---------------------------------------------------------------------
 
 const scenarios = [
+  {
+    name: 'constellation-dense', viewport: DESKTOP,
+    async run(page) {
+      await artistGraph(page)
+      await page.waitForFunction(() => JSON.parse(localStorage.getItem('tunegraph:map:v1') ?? 'null')?.nodes?.length > 1)
+      await page.evaluate(() => {
+        const map = JSON.parse(localStorage.getItem('tunegraph:map:v1'))
+        const root = map.nodes.find(n => n.id === map.rootId)
+        map.nodes = [root, ...Array.from({ length: 36 }, (_, i) => ({
+          id: `dense-${i}`, name: `Constellation discovery ${i + 1}`, kind: 'artist',
+          expanded: false, parentId: root.id,
+        }))]
+        map.edges = map.nodes.slice(1).map((n, i) => ({ id: `edge-${i}`, source: root.id, target: n.id, similarity: 0.6 + i / 120 }))
+        map.journey = [root.id, 'dense-0', 'dense-1']
+        map.selectedNodeId = 'dense-1'
+        localStorage.setItem('tunegraph:map:v1', JSON.stringify(map))
+      })
+      await page.reload({ waitUntil: 'networkidle0' })
+      await page.waitForSelector('.resume-card .btn--primary')
+      await page.click('.resume-card .btn--primary')
+      await waitForNodes(page, 37)
+      await waitForSettle(page)
+      await page.click('[aria-label="Fit graph to view"]')
+      await waitForSettle(page)
+      await page.waitForFunction(() => document.querySelector('.journey-path')?.getAttribute('d')?.includes('L'))
+      return '37 artist stars, long labels, collision hiding/flips and cyan selected journey stop'
+    },
+  },
+  ...[
+    { name: 'constellation-reduced-motion', extraMedia: [{ name: 'prefers-reduced-motion', value: 'reduce' }] },
+    { name: 'constellation-coarse-pointer', extraMedia: [{ name: 'pointer', value: 'coarse' }] },
+  ].map(settings => ({
+    ...settings, viewport: DESKTOP,
+    async run(page) {
+      await artistGraph(page)
+      await page.waitForSelector('.graph.reduced-glow')
+      await page.waitForFunction(() => !document.querySelector('.star-field .sky-halo')
+        && [...document.querySelectorAll('.node__glow')].every(el => getComputedStyle(el).display === 'none'))
+      return 'Rings retained; node glows and soft-star halos omitted'
+    },
+  })),
   ...[
     { name: 'taste-artist-added', viewport: DESKTOP, kind: 'artist', action: 'like' },
     { name: 'taste-song-added', viewport: DESKTOP, kind: 'song', action: 'like' },
