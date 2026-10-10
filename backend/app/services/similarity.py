@@ -129,12 +129,13 @@ def _cosine(a: dict[str, float], b: dict[str, float]) -> float | None:
 
 
 async def select_similar_tracks(
-    seed_id: str, limit: int = 7, trail: list[str] | None = None,
+    seed_id: str, limit: int = 7, trail: list[str] | None = None, excluded: list[str] | None = None,
 ) -> TrackSimilarResponse:
     """Reusable bounded pool selection. No context preserves the legacy path.
 
     Journey mode fetches 20, scores the entire pool, then slices. Fallbacks score
-    only the original prefix, preserving parent-only membership and ordering.
+    only the eligible prefix, preserving parent-only ordering. Exclusions filter
+    the bounded pool before either path slices; excluded IDs are never cached.
     Last.fm already caches tags and candidates; context-specific results aren't
     cached, preventing cross-journey contamination.
     """
@@ -143,9 +144,12 @@ async def select_similar_tracks(
         stops.append(seed_id)
     reason = "cap_exceeded" if len(stops) > TRAIL_CAP else None
     use_trail = len(stops) > 1 and reason is None
-    track, candidates = await lastfm.get_similar_tracks(seed_id, POOL_SIZE if use_trail else limit)
+    excluded_ids = set(excluded or [])
+    track, candidates = await lastfm.get_similar_tracks(seed_id, POOL_SIZE if use_trail or excluded_ids else limit)
+    excluded_count = sum(c.id in excluded_ids for c in candidates)
+    candidates = [c for c in candidates if c.id not in excluded_ids]
     if not candidates:
-        return TrackSimilarResponse(track_id=seed_id, track=track, tracks=[],
+        return TrackSimilarResponse(track_id=seed_id, track=track, excluded_count=excluded_count, tracks=[],
             ranking=TrackRankingContext(stop_count=len(stops), fallback_reason=reason))
     # Compute the ordinary response first so a timed-out optional lookup never
     # forces another provider request to deliver the fallback.
@@ -171,9 +175,9 @@ async def select_similar_tracks(
         try:
             selected = await asyncio.wait_for(rank_journey(), timeout=JOURNEY_TIMEOUT)
             if selected is not None:
-                return TrackSimilarResponse(track_id=seed_id, track=track, tracks=selected,
+                return TrackSimilarResponse(track_id=seed_id, track=track, excluded_count=excluded_count, tracks=selected,
                     ranking=TrackRankingContext(mode="journey", stop_count=len(stops)))
             ranking.fallback_reason = "missing_tags"
         except TimeoutError:
             ranking.fallback_reason = "timeout"
-    return TrackSimilarResponse(track_id=seed_id, track=track, tracks=parent, ranking=ranking)
+    return TrackSimilarResponse(track_id=seed_id, track=track, excluded_count=excluded_count, tracks=parent, ranking=ranking)
