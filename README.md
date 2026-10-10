@@ -94,7 +94,8 @@ in this browser's local storage. Selecting an artist or song exposes **Check my 
 and the selected item's metadata through the backend to TypeSafe's JEV API. Checks happen only when clicked. One check asks
 Jev two questions in a single `/systemone` call: a five-level fit Score (Conflicts with your dislikes, Unlikely,
 Mixed signals, Likely, Strong fit) and whether there is comparable evidence at all. Weak evidence shows
-"Not enough information" and a split Score shows "Uncertain estimate" instead of a fit band. The gates
+"Not enough information" with no fit band; a split Score shows its leaning band as tentative ("Leaning: Likely fit",
+outlined pips) and never shows the confidence. The gates
 (`EVIDENCE_MIN`, `CONFIDENCE_MIN` in `backend/app/services/jev.py`) are provisional. Results are cached in
 memory for 15 minutes and the whole check has a 5-second server deadline. The result is an experimental
 judgment, not a calibrated probability or the graph's similarity score. With `TUNEGRAPH_MOCK=1`, fixed fixtures

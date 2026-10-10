@@ -87,6 +87,8 @@ test('bands reuse the #36 vocabulary; unknown has no band', () => {
   assert.equal(c.connectionBand(result('a', 'fit', 0)).key, 'conflict')
   assert.equal(c.connectionBand(result('a', 'insufficient_evidence')).label, 'Not enough information')
   assert.equal(c.connectionBand(result('a', 'uncertain')).label, 'Uncertain estimate')
+  assert.deepEqual(c.connectionBand(result('a', 'uncertain', 3)),
+    { key: 'likely', label: 'Likely fit', tone: 'uncertain', pips: 4, tentative: true })
   assert.equal(c.connectionBand(result('a', 'unknown')), null)
 })
 
@@ -144,4 +146,16 @@ test('summary counts visible rows only and never shows a percent', () => {
   assert.equal(summary, "Checked 4 songs: 2 likely or strong fit, 1 not enough information. 1 song couldn't be checked.")
   assert.doesNotMatch(summary, /%/)
   assert.equal(c.connectionsSummary(items.slice(0, 1), results), 'Checked 1 song: 1 likely or strong fit, 0 not enough information.')
+})
+
+test('summary counts tentative leans on their own, never as likely or strong (#51)', () => {
+  const items = ['a', 'b', 'c', 'd'].map((id) => ({ id, name: id, artist: '' }))
+  const results = {
+    a: result('a', 'fit', 4), b: result('b', 'uncertain', 4), c: result('c', 'uncertain', 3), d: result('d', 'uncertain'),
+  }
+  const summary = c.connectionsSummary(items, results)
+  assert.equal(summary, 'Checked 4 songs: 1 likely or strong fit, 2 tentative, 0 not enough information.')
+  assert.doesNotMatch(summary, /%/)
+  assert.equal(c.connectionsSummary(items.slice(1, 2), results), 'Checked 1 song: 0 likely or strong fit, 1 tentative, 0 not enough information.')
+  assert.doesNotMatch(c.connectionsSummary(items.slice(0, 1), results), /tentative/, 'no clause when there are none')
 })

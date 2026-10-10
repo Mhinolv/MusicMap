@@ -110,10 +110,13 @@ export function ConnectionsCheck({ items, profile, onSelect, onEdit }: Props) {
               {pendingIds.has(item.id) ? (
                 <span className="connections__label connections__label--pending"><span className="spinner spinner--xs" aria-hidden="true" /> Checking…</span>
               ) : result && band ? (
-                <span className={`connections__label fit--${band.key} fit-tone--${band.tone}`}>
+                <span className={`connections__label fit--${band.key} fit-tone--${band.tone}${band.tentative ? ' is-tentative' : ''}`}>
                   <span className="fit-band">
                     {band.key === 'conflict' && <ConflictIcon />}
-                    <span className="fit-band__label">{band.label}</span>
+                    <span className="fit-band__label">
+                      {band.tentative && <span className="fit-band__prefix">Leaning: </span>}
+                      {band.label}
+                    </span>
                     {band.pips > 0 && <span className="fit-pips" aria-hidden="true">
                       {Array.from({ length: FIT_PIPS }, (_, i) => <i key={i} className={i < band.pips ? 'is-on' : undefined} />)}
                     </span>}

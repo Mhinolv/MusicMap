@@ -90,7 +90,8 @@ export type TasteProfile = {
   notes: string
 }
 
-/** `fit` carries a Score level; the other outcomes deliberately carry none. */
+/** `fit` carries a Score level, `uncertain` a tentative (leaning) one (#51);
+ *  `insufficient_evidence` deliberately carries none. */
 export type TasteOutcome = 'fit' | 'insufficient_evidence' | 'uncertain'
 
 /** `/api/taste/evaluate` v2. There is no enjoyment probability to display. */
@@ -99,9 +100,11 @@ export type TasteEvaluation = {
   kind: 'artist' | 'track'
   item_id: string
   outcome: TasteOutcome
-  /** 0 = conflicts with your dislikes … 4 = strong fit; null unless outcome is `fit`. */
+  /** 0 = conflicts with your dislikes … 4 = strong fit; null for `insufficient_evidence`. */
   level: number | null
   score: number | null
+  /** 0–1, only for `uncertain`. Never displayed; every uncertain result shares one style. */
+  confidence?: number | null
   model?: string | null
   rubric_version: string
   tags: string[]
@@ -117,6 +120,7 @@ export type TasteConnectionResult = {
   outcome: TasteConnectionOutcome
   level: number | null
   score: number | null
+  confidence?: number | null
 }
 
 /** `/api/taste/connections/evaluate` v1: one result per requested song, in request order. */

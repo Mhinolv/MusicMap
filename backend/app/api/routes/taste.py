@@ -48,6 +48,7 @@ async def _evaluate(request: TasteEvaluationRequest) -> TasteEvaluationResponse:
         outcome=judgment.outcome,
         level=level,
         score=judgment.score if level is not None else None,
+        confidence=judgment.confidence if judgment.outcome == "uncertain" else None,
         model=judgment.model,
         rubric_version=jev.RUBRIC_VERSION,
         tags=tags,
@@ -86,6 +87,7 @@ async def _evaluate_connections(request: TasteConnectionsRequest) -> TasteConnec
         results.append(TasteConnectionResult(
             item_id=item_id, outcome=judgment.outcome, level=level,
             score=judgment.score if level is not None else None,
+            confidence=judgment.confidence if judgment.outcome == "uncertain" else None,
         ))
     return TasteConnectionsResponse(
         results=results,
