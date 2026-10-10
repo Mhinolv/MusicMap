@@ -365,6 +365,34 @@ const scenarios = [
       return 'Start screen with the library drawer open on Saved'
     },
   })),
+  // #46: the static Contour backdrop behind each start-screen state.
+  ...[
+    { name: 'start-desktop', viewport: DESKTOP },
+    { name: 'start-resume', viewport: DESKTOP, fixture: 'resume' },
+    { name: 'start-library', viewport: DESKTOP, fixture: 'library' },
+    { name: 'start-mobile', viewport: MOBILE, userAgent: MOBILE_UA },
+    { name: 'start-short', viewport: { width: 1440, height: 600, deviceScaleFactor: 1 } },
+  ].map((options) => ({
+    ...options,
+    async run(page) {
+      if (options.fixture === 'resume') await resumeFixture(page, { stops: 2 })
+      if (options.fixture === 'library') {
+        await libraryFixture(page)
+        await page.click('.start-header .library-button')
+        await page.waitForSelector('.library-drawer', { visible: true })
+      }
+      await page.waitForSelector('.search--start', { visible: true })
+      await page.waitForFunction(() => (document.querySelector('.start-backdrop .contour-index')?.getAttribute('d') ?? '').length > 0)
+      const backdrop = await page.$eval('.start-backdrop', (svg) => ({
+        hidden: svg.getAttribute('aria-hidden'), pointer: getComputedStyle(svg).pointerEvents,
+        dots: svg.querySelectorAll('circle').length, top: Math.round(svg.getBoundingClientRect().top),
+        kb: Math.round([...svg.querySelectorAll('path')].reduce((n, p) => n + (p.getAttribute('d') ?? '').length, 0) / 1024),
+      }))
+      if (backdrop.hidden !== 'true' || backdrop.pointer !== 'none' || backdrop.dots) throw new Error(`backdrop must be decorative contours only: ${JSON.stringify(backdrop)}`)
+      if (await page.$('.start-sky')) throw new Error('old star sky must be gone')
+      return `Contour backdrop below the header (top ${backdrop.top}px), ${backdrop.kb} KB of path data`
+    },
+  })),
   {
     name: 'resumed-map-toast', viewport: DESKTOP,
     async run(page) {
