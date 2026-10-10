@@ -74,6 +74,28 @@ test('with the library open above 860px the column centres in the width left of 
   assert.equal(finalValue('.start--library', 'margin-left', '(max-width: 860px)'), 'auto')
 })
 
+test('intro copy sits on a --bg knockout in Studio Sky text tokens, smaller on phones (#62)', () => {
+  assert.equal(finalValue('.start-intro', 'display'), 'flex')
+  assert.equal(finalValue('.start-intro', 'flex-direction'), 'column')
+  assert.equal(finalValue('.start-intro', 'align-items'), 'flex-start', 'knockout hugs the text instead of the full column')
+  for (const selector of ['.start-intro__title', '.start-intro__text']) {
+    assert.equal(finalValue(selector, 'margin'), '0')
+    assert.equal(finalValue(selector, 'background'), 'var(--bg)', `${selector} never sits directly on contour lines`)
+    assert.equal(finalValue(selector, 'box-shadow'), '0 0 0 6px var(--bg)')
+  }
+  assert.equal(finalValue('.start-intro__title', 'color'), 'var(--text)')
+  assert.equal(finalValue('.start-intro__title', 'text-transform'), 'uppercase')
+  assert.equal(finalValue('.start-intro__title', 'font'), '700 34px/1.05 var(--font-label)')
+  assert.equal(finalValue('.start-intro__text', 'color'), 'var(--muted)')
+  assert.equal(finalValue('.start-intro__text', 'max-width'), '64ch')
+  const media = '(max-width: 640px)'
+  assert.equal(finalValue('.start-intro__title', 'font-size', media), '24px')
+  assert.equal(finalValue('.start-intro__text', 'font-size', media), '12px')
+  assert.equal(finalValue('.start-intro', 'margin-bottom', media), '-8px')
+  assert.ok(!all.some((r) => r.selectors.some((s) => s.startsWith('.start-intro')) && /amber|cyan|sky/.test(Object.values(r.decls).join(' '))),
+    'no amber, cyan or sky accents')
+})
+
 test('phones (640px and below) keep the top-anchored column (#53 owner decision)', () => {
   const media = '(max-width: 640px)'
   for (const selector of ['.start', '.start--library']) {
