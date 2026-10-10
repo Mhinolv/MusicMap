@@ -14,13 +14,17 @@ const helpers = {}
 new Function('exports', ts.transpileModule(readFileSync(new URL('../frontend/src/startScreen.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText)(helpers)
+const onMap = {}
+new Function('exports', ts.transpileModule(readFileSync(new URL('../frontend/src/graph/onMap.ts', import.meta.url), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS },
+}).outputText)(onMap)
 const graph = (kind = 'artist', count = 2, stops = 2) => ({
   nodes: new Map(Array.from({ length: count }, (_, i) => [String(i), { id: String(i), name: i ? `Node ${i}` : 'Radiohead', kind }])),
   edges: new Map(), rootId: '0', journey: Array.from({ length: stops }, (_, i) => String(i)),
 })
 function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'saved', { bookmarks = [], exclusions = [] } = {}) {
   const effects = [], updates = [], timers = [], restores = []
-  const SearchBar = () => null, StartScreen = () => null, LibraryButton = () => null, LibraryDrawer = () => null
+  const SearchBar = () => null, StartScreen = () => null, LibraryButton = () => null, LibraryDrawer = () => null, MapNavPane = () => null
   const mocks = {
     react: {
       useState: (initial) => [typeof initial === 'function' ? initial() : initial, (value) => updates.push(value)],
@@ -29,11 +33,14 @@ function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'sav
     },
     './graph/mapSnapshot': { readMap: () => savedMap, clearMap() {}, saveMap: () => saveResult },
     './graph/useMusicGraph': { useMusicGraph: () => ({ graph: activeGraph, nodes: [...activeGraph.nodes.values()],
-      edges: [], undo: () => restores.push('undo'), restore: (value) => restores.push(value) }) },
+      edges: [], undo: () => restores.push('undo'), restore: (value) => restores.push(value),
+      select: (id) => restores.push(['select', id]), prune: (id, mode) => restores.push(['prune', id, mode]) }) },
     './components/SearchBar': { SearchBar },
     './components/StartScreen': { StartScreen },
     './components/LibraryDrawer': { LibraryButton, LibraryDrawer },
     './startScreen': helpers,
+    './graph/onMap': onMap,
+    './components/MapNavPane': { MapNavPane },
     './bookmarks': { readBookmarks: () => bookmarks },
     './exclusions': { readExclusions: () => exclusions },
   }
@@ -52,7 +59,7 @@ function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'sav
     for (const child of [element.props?.children].flat(Infinity)) visit(child)
   }
   visit(tree)
-  return { elements, updates, timers, restores, effects, SearchBar, LibraryButton, LibraryDrawer,
+  return { elements, updates, timers, restores, effects, SearchBar, LibraryButton, LibraryDrawer, MapNavPane,
     start: elements.find((el) => el.type === StartScreen) }
 }
 const content = (element) => [element.props?.children].flat(Infinity).map((child) =>
@@ -140,5 +147,28 @@ test('header Undo is guarded without history and restores the graph with history
     assert.equal(undo.props['aria-disabled'], !available)
     undo.props.onClick()
     assert.deepEqual(app.restores, available ? ['undo'] : [])
+  }
+})
+
+// #31 owner decision: ON MAP lists every node as soon as a search loads, in both modes.
+test('left pane lists every non-root node, counts the root, and wires jump, follow and collapse', () => {
+  for (const kind of ['artist', 'track']) for (const count of [1, 9]) {
+    const app = render({ status: 'none' }, graph(kind, count, 1))
+    const pane = app.elements.find((el) => el.type === app.MapNavPane)
+    assert.equal(pane.props.className, 'map-nav')
+    assert.equal(pane.props.songMode, kind === 'track')
+    assert.equal(pane.props.count, count)
+    assert.deepEqual(pane.props.rows.map((row) => row.id), Array.from({ length: count - 1 }, (_, i) => String(i + 1)))
+    // Song maps only list expanded stops; this fixture's root is not expanded yet.
+    assert.deepEqual(pane.props.stops.map((n) => n.id), kind === 'track' ? [] : ['0'])
+    if (count > 1) {
+      pane.props.onJump('3')
+      assert.deepEqual(app.restores.at(-1), ['select', '3'])
+      assert.equal(app.updates.at(-1).id, '3', 'jump also centres the node')
+    }
+    pane.props.onCollapse('0')
+    assert.deepEqual(app.restores.at(-1), ['prune', '0', 'collapse'])
+    pane.props.onFollowJourney()
+    assert.equal(app.updates.at(-1)(false), true)
   }
 })
