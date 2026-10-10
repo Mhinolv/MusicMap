@@ -184,7 +184,7 @@ const scenarios = [
     async run(page) {
       if (settings.action === 'full') {
         await page.evaluate(() => localStorage.setItem('tunegraph:taste:v1', JSON.stringify({
-          liked_artists: Array.from({ length: 15 }, (_, i) => `Artist ${i}`),
+          liked_artists: Array.from({ length: 50 }, (_, i) => `Artist ${i}`),
           liked_tracks: [], liked_genres: [], disliked: [], notes: '',
         })))
         await page.reload({ waitUntil: 'networkidle0' })
@@ -198,6 +198,31 @@ const scenarios = [
       return settings.action === 'full' ? 'Full taste list with Edit taste action' : 'Panel taste toggle with stored entry and Undo'
     },
   })),
+  ...['artist', 'song'].flatMap((kind) => ['taste', 'dislikes'].map((target) => ({
+    name: `taste-${kind}-moved-to-${target}`,
+    viewport: DESKTOP,
+    async run(page) {
+      await search(page, kind, kind === 'artist' ? 'Radiohead' : 'Creep', kind === 'artist' ? 'Radiohead' : 'Creep')
+      await waitForPanel(page)
+      const first = target === 'taste' ? '.taste-toggle__dislike' : '.taste-toggle__like'
+      const second = target === 'taste' ? '.taste-toggle__like' : '.taste-toggle__dislike'
+      await page.click(first)
+      await page.waitForSelector('.taste-toggle .panel__hint', { visible: true })
+      await page.click(second)
+      const likedLabel = kind === 'artist' ? 'liked bands' : 'liked songs'
+      const destination = target === 'taste' ? likedLabel : 'dislikes'
+      const source = target === 'taste' ? 'dislikes' : likedLabel
+      await page.waitForFunction(({ source, destination }) => {
+        const hints = document.querySelectorAll('.taste-toggle .panel__hint')
+        const toast = document.querySelector('.toast')?.textContent ?? ''
+        const entry = hints[0]?.textContent?.slice(`In ${destination}: `.length)
+        return hints.length === 1 && hints[0].textContent.startsWith(`In ${destination}: `)
+          && toast.includes(`Moved “${entry}” from ${source} to ${destination}.`)
+          && document.querySelector('.toast__action')?.textContent === 'Undo'
+      }, {}, { source, destination })
+      return `Moved to ${target} with one stored hint and Undo`
+    },
+  }))),
   ...[
     { name: 'steering-unselected', viewport: DESKTOP, selectedTags: 0 },
     { name: 'steering-two', viewport: DESKTOP, selectedTags: 2 },

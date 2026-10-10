@@ -7,7 +7,7 @@ import { SearchBar, type SearchMode } from './components/SearchBar'
 import { SavedDiscoveries } from './components/SavedDiscoveries'
 import { addBookmark, bookmarkKey, BOOKMARK_FULL_MESSAGE, nodeBookmark, readBookmarks, restoreBookmarks, writeBookmarks, type Bookmark } from './bookmarks'
 import { TastePreferences } from './components/TastePreferences'
-import { emptyTaste, isEmptyTaste, readTaste, writeTaste, toggleTaste, TASTE_LIMIT, type TasteList } from './taste'
+import { emptyTaste, isEmptyTaste, readTaste, writeTaste, toggleTaste, storedTasteEntry, TASTE_LIMIT, TASTE_LIST_LABELS, type TasteList } from './taste'
 import { TasteToggle } from './components/TasteToggle'
 import { finishSpotifyImport } from './spotifyImport'
 import { artistNode, planPrune, trackNode, useMusicGraph, type ExpandedChild } from './graph/useMusicGraph'
@@ -295,13 +295,18 @@ export default function App() {
     const previous = tasteRef.current
     const next = toggleTaste(previous, list, entry)
     if (next === previous) {
-      showToast({ source: 'taste', msg: `This taste list is full (${TASTE_LIMIT}). Edit taste to make room.`,
+      showToast({ source: 'taste', msg: `Your ${TASTE_LIST_LABELS[list]} list is full (${TASTE_LIMIT}).`,
         action: { label: 'Edit taste', run: () => setTasteOpen(true) } }, 7000)
       return
     }
     if (!updateTaste(next)) return
-    const added = !!next?.[list].includes(entry)
-    showToast({ source: 'taste', msg: `${added ? 'Added' : 'Removed'} “${entry}” ${added ? 'to' : 'from'} ${list === 'disliked' ? 'your dislikes' : 'your taste'}.`,
+    const added = storedTasteEntry(next, list, entry) !== undefined
+    const opposite: TasteList[] = list === 'disliked' ? ['liked_artists', 'liked_tracks'] : ['disliked']
+    const sources = added ? opposite.filter((other) => storedTasteEntry(previous, other, entry) !== undefined) : []
+    const msg = sources.length
+      ? `Moved “${entry}” from ${sources.map((source) => TASTE_LIST_LABELS[source]).join(' and ')} to ${TASTE_LIST_LABELS[list]}.`
+      : `${added ? 'Added' : 'Removed'} “${entry}” ${added ? 'to' : 'from'} ${TASTE_LIST_LABELS[list]}.`
+    showToast({ source: 'taste', msg,
       action: { label: 'Undo', run: () => {
         if (tasteRef.current === next) updateTaste(previous)
       } } }, 7000)

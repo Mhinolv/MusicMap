@@ -8,10 +8,10 @@ Preference = Annotated[str, StringConstraints(strip_whitespace=True, min_length=
 
 
 class TasteProfile(BaseModel):
-    liked_artists: list[Preference] = Field(default_factory=list, max_length=15)
-    liked_tracks: list[Preference] = Field(default_factory=list, max_length=15)
-    liked_genres: list[Preference] = Field(default_factory=list, max_length=15)
-    disliked: list[Preference] = Field(default_factory=list, max_length=15)
+    liked_artists: list[Preference] = Field(default_factory=list, max_length=50)
+    liked_tracks: list[Preference] = Field(default_factory=list, max_length=50)
+    liked_genres: list[Preference] = Field(default_factory=list, max_length=50)
+    disliked: list[Preference] = Field(default_factory=list, max_length=50)
     notes: str = Field(default="", max_length=500)
 
     @model_validator(mode="after")
