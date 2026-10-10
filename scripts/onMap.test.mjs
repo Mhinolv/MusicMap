@@ -2,7 +2,7 @@
 // Run: node --test scripts/onMap.test.mjs
 import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
@@ -14,6 +14,8 @@ execFileSync(process.execPath, [join(root, 'frontend/node_modules/typescript/bin
   join(root, 'frontend/src/graph/onMap.ts'), join(root, 'frontend/src/graph/useMusicGraph.ts'), '--outDir', output, '--target', 'es2023',
   '--module', 'esnext', '--moduleResolution', 'bundler', '--skipLibCheck', '--strict'], { cwd: root })
 writeFileSync(join(output, 'package.json'), '{"type":"module"}')
+// The compiled hook imports react; resolve it from the frontend's node_modules.
+symlinkSync(join(root, 'frontend/node_modules'), join(output, 'node_modules'), 'dir')
 const hookFile = join(output, 'graph/useMusicGraph.js')
 writeFileSync(hookFile, readFileSync(hookFile, 'utf8').replace("'../types'", "'../types.js'"))
 const { musicGraphReducer, artistNode, trackNode } = await import(pathToFileURL(hookFile).href)
