@@ -723,7 +723,14 @@ const scenarios = [
     { name: 'taste-check-song-unlikely', kind: 'song', profile: { liked_genres: ['grunge'], disliked: ['90s', 'rock'] }, expect: 'Unlikely fit' },
     { name: 'taste-check-song-conflict', kind: 'song', profile: { liked_genres: ['jazz'], disliked: ['grunge'] }, expect: 'Conflicts with your dislikes' },
     { name: 'taste-check-song-insufficient', kind: 'song', profile: { liked_genres: ['jazz'] }, expect: 'Not enough information' },
-    { name: 'taste-check-song-uncertain', kind: 'song', profile: { liked_genres: ['grunge'], disliked: ['90s'] }, expect: 'Uncertain estimate' },
+    // #51: the mock split fixture leans Mixed (level 2) and carries the Simulated badge.
+    { name: 'taste-check-song-uncertain', kind: 'song', profile: { liked_genres: ['grunge'], disliked: ['90s'] }, expect: "The model's answer was split, so this is a tentative lean, not a firm fit." },
+    // #51 tentative levels the fixtures can't reach: `reply` answers the check with that result.
+    { name: 'taste-check-song-tentative-likely', kind: 'song', profile: { liked_genres: ['grunge'] }, reply: { outcome: 'uncertain', level: 3, score: 3.2, confidence: 0.2 }, expect: "The model's answer was split, so this is a tentative lean, not a firm fit." },
+    { name: 'taste-check-song-tentative-conflict', kind: 'song', profile: { liked_genres: ['jazz'], disliked: ['grunge'] }, reply: { outcome: 'uncertain', level: 0, score: 0.3, confidence: 0.3 }, expect: "The model's answer was split, so this is a tentative lean, not a firm fit." },
+    { name: 'taste-check-song-tentative-strong', kind: 'song', profile: { liked_genres: ['grunge', '90s'] }, reply: { outcome: 'uncertain', level: 4, score: 3.8, confidence: 0.1 }, expect: "The model's answer was split, so this is a tentative lean, not a firm fit." },
+    { name: 'taste-check-song-uncertain-fallback', kind: 'song', profile: { liked_genres: ['grunge'] }, reply: { outcome: 'uncertain', level: null, score: null, confidence: 0.1 }, expect: 'Uncertain estimate' },
+    { name: 'taste-check-mobile-tentative-mixed', kind: 'song', viewport: MOBILE, userAgent: MOBILE_UA, profile: { liked_genres: ['grunge'], disliked: ['90s'] }, expect: "The model's answer was split, so this is a tentative lean, not a firm fit." },
     { name: 'taste-check-artist-strong', kind: 'artist', profile: { liked_artists: ['Radiohead'], liked_genres: ['art rock'] }, expect: 'Strong fit' },
     { name: 'taste-check-timeout', kind: 'song', profile: { liked_genres: ['grunge'] }, respond: 504, expect: 'JEV took too long to answer. Try again.' },
     { name: 'taste-check-loading', kind: 'song', profile: { liked_genres: ['grunge'] }, hang: true, expect: 'JEV is checking (up to 5 seconds).' },
@@ -737,10 +744,14 @@ const scenarios = [
         liked_artists: [], liked_tracks: [], liked_genres: [], disliked: [], notes: '', ...profile,
       })), settings.profile)
       await page.reload({ waitUntil: 'networkidle0' })
-      if (settings.respond || settings.hang) {
+      if (settings.respond || settings.hang || settings.reply) {
         await page.setRequestInterception(true)
         page.on('request', (request) => {
           if (!request.url().includes('/api/taste/evaluate')) return request.continue()
+          if (settings.reply) {
+            return request.respond({ status: 200, contentType: 'application/json',
+              body: JSON.stringify(tasteReply(JSON.parse(request.postData()), settings.reply)) })
+          }
           if (settings.respond) {
             return request.respond({ status: settings.respond, contentType: 'application/json',
               body: JSON.stringify({ error: 'timed out', provider: 'jev' }) })
@@ -769,6 +780,8 @@ const scenarios = [
     { name: 'connections-pending', click: true, hang: true, expect: 'Checking…' },
     { name: 'connections-mixed-simulated', click: true, expect: "Couldn't check" },
     { name: 'connections-error', click: true, respond: 504, expect: 'JEV took too long to answer. Try again.' },
+    // #51: the second row is a tentative Likely (ring pips, "Leaning:"), counted on its own.
+    { name: 'connections-tentative', click: true, replyTentative: true, expect: 'Leaning:' },
     // Its own notes give it fresh cache keys: the backend still holds the desktop scenario's
     // answers, which would make this a one-song retry that the fixture answers.
     { name: 'connections-mobile', click: true, viewport: MOBILE, userAgent: MOBILE_UA,
@@ -784,10 +797,14 @@ const scenarios = [
         })), profile)
         await page.reload({ waitUntil: 'networkidle0' })
       }
-      if (settings.respond || settings.hang) {
+      if (settings.respond || settings.hang || settings.replyTentative) {
         await page.setRequestInterception(true)
         page.on('request', (request) => {
           if (!request.url().includes('/api/taste/connections/evaluate')) return request.continue()
+          if (settings.replyTentative) {
+            return request.respond({ status: 200, contentType: 'application/json',
+              body: JSON.stringify(tentativeConnections(JSON.parse(request.postData()))) })
+          }
           if (settings.respond) {
             return request.respond({ status: settings.respond, contentType: 'application/json',
               body: JSON.stringify({ error: 'timed out', provider: 'jev' }) })
@@ -848,6 +865,25 @@ const scenarios = [
     },
   },
 ]
+
+// #51: stubbed taste replies (declarations, so the scenario list above can use them).
+// Creep's mock tags, as the real mock backend returns them.
+function tasteReply(request, result) {
+  return {
+    version: 2, kind: request.kind, item_id: request.item_id, model: 'mock-fixture', rubric_version: 'snapshot',
+    tags: ['alternative', '90s', 'rock', 'alternative rock', 'grunge'], simulated: true, ...result,
+  }
+}
+
+function tentativeConnections(request) {
+  const firm = [{ level: 4, score: 3.8 }, { level: 0, score: 0.2 }, { level: 3, score: 3.1 }]
+  return {
+    version: 1, model: 'mock-fixture', rubric_version: 'snapshot', simulated: true,
+    results: request.item_ids.map((item_id, i) => i === 1
+      ? { item_id, outcome: 'uncertain', level: 3, score: 3.2, confidence: 0.2 }
+      : { item_id, outcome: 'fit', confidence: null, ...firm[i % firm.length] }),
+  }
+}
 
 // ---- runner ------------------------------------------------------------------------
 

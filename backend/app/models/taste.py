@@ -31,16 +31,20 @@ TasteOutcome = Literal["fit", "insufficient_evidence", "uncertain"]
 
 
 class TasteEvaluationResponse(BaseModel):
-    """Version 2: a fit level (0 = conflicts with dislikes … 4 = strong fit) or an
-    uncertainty outcome. There is deliberately no enjoyment probability."""
+    """Version 2: a fit level (0 = conflicts with dislikes … 4 = strong fit), a tentative
+    level for an uncertain estimate, or no level when evidence is missing. There is
+    deliberately no enjoyment probability."""
 
     version: Literal[2] = 2
     kind: Literal["artist", "track"]
     item_id: str
     outcome: TasteOutcome
-    # Rounded Score level and the raw fractional Score; both null unless outcome == "fit".
+    # Rounded Score level and the raw fractional Score; for "uncertain" they are a tentative
+    # lean (#51). Both null for "insufficient_evidence".
     level: int | None = Field(default=None, ge=0, le=4)
     score: float | None = Field(default=None, ge=0, le=4, allow_inf_nan=False)
+    # Score confidence (0-1), only for "uncertain". For styling only: never shown as a number.
+    confidence: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
     model: str | None = None
     rubric_version: str
     tags: list[str] = Field(default_factory=list)
@@ -48,16 +52,22 @@ class TasteEvaluationResponse(BaseModel):
     simulated: bool = False
 
     @model_validator(mode="after")
-    def level_only_for_fit(self) -> "TasteEvaluationResponse":
-        _check_level(self.outcome, self.level, self.score)
+    def level_only_when_scored(self) -> "TasteEvaluationResponse":
+        _check_level(self.outcome, self.level, self.score, self.confidence)
         return self
 
 
-def _check_level(outcome: str, level: int | None, score: float | None) -> None:
-    if (outcome == "fit") != (level is not None):
-        raise ValueError("level is required for fit outcomes and absent otherwise")
-    if outcome != "fit" and score is not None:
-        raise ValueError("score is only returned for fit outcomes")
+SCORED_OUTCOMES = ("fit", "uncertain")
+
+
+def _check_level(outcome: str, level: int | None, score: float | None, confidence: float | None) -> None:
+    scored = outcome in SCORED_OUTCOMES
+    if scored != (level is not None):
+        raise ValueError("level is required for fit and uncertain outcomes and absent otherwise")
+    if not scored and score is not None:
+        raise ValueError("score is only returned for fit and uncertain outcomes")
+    if (outcome == "uncertain") != (confidence is not None):
+        raise ValueError("confidence is required for uncertain outcomes and absent otherwise")
 
 
 ItemId = Annotated[str, StringConstraints(min_length=1, max_length=250)]
@@ -85,10 +95,11 @@ class TasteConnectionResult(BaseModel):
     outcome: ConnectionOutcome
     level: int | None = Field(default=None, ge=0, le=4)
     score: float | None = Field(default=None, ge=0, le=4, allow_inf_nan=False)
+    confidence: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
 
     @model_validator(mode="after")
-    def level_only_for_fit(self) -> "TasteConnectionResult":
-        _check_level(self.outcome, self.level, self.score)
+    def level_only_when_scored(self) -> "TasteConnectionResult":
+        _check_level(self.outcome, self.level, self.score, self.confidence)
         return self
 
 

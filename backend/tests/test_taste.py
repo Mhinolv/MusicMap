@@ -109,11 +109,15 @@ async def test_tags_are_capped_at_twelve(monkeypatch):
     assert len(target["tags"]) == len(tags) == 12
 
 
-async def test_uncertain_outcomes_hide_score_and_level(client, monkeypatch):
+async def test_uncertain_returns_tentative_level_and_insufficient_hides_it(client, monkeypatch):
+    # #51: a split Score keeps its leaning level, raw score and confidence; missing
+    # evidence still carries none of them (#36).
     artist_id, _ = await ids(client)
-    for judgment, outcome in (
-        (jev.TasteJudgment(score=3.9, evidence=0.2, confidence=0.9, model=None), "insufficient_evidence"),
-        (jev.TasteJudgment(score=3.9, evidence=0.9, confidence=0.1, model=None), "uncertain"),
+    for judgment, expected in (
+        (jev.TasteJudgment(score=3.9, evidence=0.2, confidence=0.9, model=None), ("insufficient_evidence", None, None, None)),
+        (jev.TasteJudgment(score=3.9, evidence=0.9, confidence=0.1, model=None), ("uncertain", 4, 3.9, 0.1)),
+        (jev.TasteJudgment(score=0.2, evidence=0.9, confidence=0.0, model=None), ("uncertain", 0, 0.2, 0.0)),
+        (jev.TasteJudgment(score=3.1, evidence=0.9, confidence=0.8, model=None), ("fit", 3, 3.1, None)),
     ):
         async def judge(profile, target, judgment=judgment):
             return judgment
@@ -123,7 +127,8 @@ async def test_uncertain_outcomes_hide_score_and_level(client, monkeypatch):
             "kind": "artist", "item_id": artist_id, "profile": {"liked_genres": ["rock"]},
         })
         body = response.json()
-        assert (body["outcome"], body["level"], body["score"]) == (outcome, None, None)
+        assert (body["outcome"], body["level"], body["score"], body["confidence"]) == expected
+        assert "percent" not in body and "probability" not in body
 
 
 async def test_empty_positive_profile_is_rejected(client):
@@ -146,9 +151,14 @@ async def test_spotify_pkce_config_exposes_only_client_id(client, monkeypatch):
 def test_response_model_rejects_inconsistent_outcomes():
     base = {"kind": "artist", "item_id": "x", "rubric_version": "v"}
     TasteEvaluationResponse(**base, outcome="fit", level=0, score=0.2)
-    TasteEvaluationResponse(**base, outcome="uncertain")
-    for bad in ({"outcome": "fit"}, {"outcome": "uncertain", "level": 2},
+    TasteEvaluationResponse(**base, outcome="uncertain", level=2, score=2.0, confidence=0.0)
+    TasteEvaluationResponse(**base, outcome="insufficient_evidence")
+    for bad in ({"outcome": "fit"}, {"outcome": "uncertain"}, {"outcome": "uncertain", "confidence": 0.2},
+                {"outcome": "uncertain", "level": 2}, {"outcome": "uncertain", "level": 2, "confidence": 1.5},
+                {"outcome": "uncertain", "level": 2, "confidence": float("nan")},
+                {"outcome": "fit", "level": 2, "confidence": 0.9},
                 {"outcome": "insufficient_evidence", "score": 1.0},
+                {"outcome": "insufficient_evidence", "level": 2}, {"outcome": "insufficient_evidence", "confidence": 0.2},
                 {"outcome": "fit", "level": 5}, {"outcome": "fit", "level": 2, "score": float("nan")}):
         with pytest.raises(ValidationError):
             TasteEvaluationResponse(**base, **bad)
@@ -239,7 +249,7 @@ async def test_jev_adapter_rejects_non_json_body(monkeypatch, live_jev):
 def test_uncertainty_gates(evidence, confidence, outcome):
     judgment = jev.TasteJudgment(score=3.0, evidence=evidence, confidence=confidence, model=None)
     assert judgment.outcome == outcome
-    assert (judgment.level is None) == (outcome != "fit")
+    assert (judgment.level is None) == (outcome == "insufficient_evidence")
 
 
 @pytest.mark.parametrize("score, level", [
@@ -470,7 +480,8 @@ SONG_FIXTURES = [
     ({"liked_genres": ["grunge"], "disliked": ["90s", "rock"]}, "fit", 1),
     ({"liked_genres": ["jazz"], "disliked": ["Grunge"]}, "fit", 0),
     ({"liked_genres": ["jazz"]}, "insufficient_evidence", None),
-    ({"liked_genres": ["grunge"], "disliked": ["90s"]}, "uncertain", None),
+    # Flat distribution: derived confidence 0, tentative level from score 2.0 (#51).
+    ({"liked_genres": ["grunge"], "disliked": ["90s"]}, "uncertain", 2),
 ]
 
 
@@ -484,6 +495,8 @@ async def test_mock_mode_returns_fixtures_without_key_or_network(client, monkeyp
     assert response.status_code == 200
     body = response.json()
     assert (body["outcome"], body["level"]) == (outcome, level)
+    assert (body["score"] is None) == (outcome == "insufficient_evidence")
+    assert body["confidence"] == (pytest.approx(0) if outcome == "uncertain" else None)
     assert body["simulated"] is True
     assert body["model"] == jev.MOCK_MODEL
 
@@ -651,7 +664,7 @@ async def test_batch_uses_server_metadata_not_edge_tags(client, monkeypatch):
 
     monkeypatch.setattr(jev, "judge_fits", judge)
     body = (await check_connections(client, CONNECTION_IDS[:1])).json()
-    assert body["results"] == [{"item_id": CONNECTION_IDS[0], "outcome": "unknown", "level": None, "score": None}]
+    assert body["results"] == [{"item_id": CONNECTION_IDS[0], "outcome": "unknown", "level": None, "score": None, "confidence": None}]
     assert captured == [{CONNECTION_IDS[0]: {
         "kind": "song", "title": "Teardrop", "artist": "Massive Attack", "album": "Mezzanine",
         "tags": ["trip-hop", "electronic", "downtempo", "90s"],
@@ -849,11 +862,31 @@ async def test_artist_and_similarity_endpoints_are_unchanged_by_batch(client):
 
 @pytest.mark.parametrize("bad", [
     {"outcome": "unknown", "level": 2}, {"outcome": "fit"}, {"outcome": "unknown", "score": 1.0},
-    {"outcome": "fit", "level": 5},
+    {"outcome": "fit", "level": 5}, {"outcome": "uncertain"}, {"outcome": "uncertain", "level": 2},
+    {"outcome": "unknown", "confidence": 0.1}, {"outcome": "insufficient_evidence", "level": 1},
 ])
 def test_connection_result_model_rejects_inconsistent_outcomes(bad):
     with pytest.raises(ValidationError):
         TasteConnectionResult(item_id="x", **bad)
+
+
+async def test_batch_uncertain_rows_carry_tentative_level(client, monkeypatch):
+    # #51: connection rows use the same contract as a single check.
+    judgments = {
+        CONNECTION_IDS[0]: jev.TasteJudgment(score=3.2, evidence=0.9, confidence=0.2, model="jev-test"),
+        CONNECTION_IDS[1]: jev.TasteJudgment(score=3.2, evidence=0.1, confidence=0.2, model="jev-test"),
+    }
+
+    async def judge_fits(profile, targets):
+        return {item_id: judgments[item_id] for item_id in targets}
+
+    monkeypatch.setattr(jev, "judge_fits", judge_fits)
+    response = await check_connections(client, CONNECTION_IDS[:2])
+    assert response.status_code == 200
+    assert response.json()["results"] == [
+        {"item_id": CONNECTION_IDS[0], "outcome": "uncertain", "level": 3, "score": 3.2, "confidence": 0.2},
+        {"item_id": CONNECTION_IDS[1], "outcome": "insufficient_evidence", "level": None, "score": None, "confidence": None},
+    ]
 
 
 # ---- batch cache helper ------------------------------------------------------------

@@ -18,7 +18,7 @@ const scenarios = runInNewContext(
     DESKTOP: { width: 1440, height: 900, deviceScaleFactor: 1 }, MOBILE: {}, MOBILE_UA: '',
     artistGraph: async () => {},
     search: async () => {}, waitForNodes: async () => {},
-    waitForPanel: async () => {}, waitForSettle: async () => {},
+    waitForPanel: async () => {}, waitForSettle: async () => {}, sleep: async () => {},
     expandTopRow: async (page) => page.click('expandTopRow'),
   },
 )
@@ -37,6 +37,33 @@ test('desktop song-journey-on drives the left pane, not the hidden floating trai
   assert.deepEqual(clicks, ['.map-nav__follow[aria-checked="false"]', 'expandTopRow'])
   assert.ok(waits.includes('.map-nav__follow[aria-checked="true"]'))
   assert.equal(scenarios.find((scenario) => scenario.name === 'song-journey-on').viewport.width, 1440)
+})
+
+test('#51 tentative taste scenarios exist and stub well-formed replies', async () => {
+  for (const name of ['taste-check-song-uncertain', 'taste-check-song-tentative-likely', 'taste-check-song-tentative-conflict',
+    'taste-check-song-tentative-strong', 'taste-check-song-strong', 'taste-check-song-insufficient',
+    'taste-check-song-uncertain-fallback', 'taste-check-mobile-tentative-mixed', 'connections-tentative']) {
+    assert.ok(scenarios.some((scenario) => scenario.name === name), name)
+  }
+  const handlers = []
+  const responses = []
+  const page = {
+    async evaluate() {}, async reload() {}, async setRequestInterception() {},
+    on(_, handler) { handlers.push(handler) },
+    async click() {}, async waitForSelector() {}, async waitForFunction() {}, async $eval() {}, async $$eval() { return 7 },
+  }
+  const request = (url, body) => ({ url: () => url, postData: () => JSON.stringify(body), continue() {}, respond(r) { responses.push(r) } })
+  const likely = scenarios.find((scenario) => scenario.name === 'taste-check-song-tentative-likely')
+  await likely.run(page)
+  handlers.pop()(request('/api/taste/evaluate', { kind: 'track', item_id: 'creep', profile: {} }))
+  const body = JSON.parse(responses.pop().body)
+  assert.deepEqual([body.outcome, body.level, body.item_id, body.kind], ['uncertain', 3, 'creep', 'track'])
+  assert.ok(body.tags.includes('grunge'), 'shared tag with the liked genre')
+  await scenarios.find((scenario) => scenario.name === 'connections-tentative').run(page)
+  handlers.pop()(request('/api/taste/connections/evaluate', { item_ids: ['a', 'b', 'c', 'd', 'e'], profile: {} }))
+  const batch = JSON.parse(responses.pop().body)
+  assert.deepEqual(batch.results.map((r) => [r.item_id, r.outcome, r.level]),
+    [['a', 'fit', 4], ['b', 'uncertain', 3], ['c', 'fit', 3], ['d', 'fit', 4], ['e', 'fit', 0]])
 })
 
 test('left pane scenarios from the #31 design notes exist', () => {

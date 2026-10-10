@@ -45,8 +45,11 @@ export function connectionsSummary(items: ConnectionItem[], results: Record<stri
   if (!shown.length) return null
   const bands = shown.map(connectionBand)
   const unknown = bands.filter((band) => band === null).length
-  const fits = bands.filter((band) => band?.key === 'likely' || band?.key === 'strong').length
+  // Tentative leans (#51) are never counted as likely or strong; they get their own clause.
+  const fits = bands.filter((band) => !band?.tentative && (band?.key === 'likely' || band?.key === 'strong')).length
+  const tentative = bands.filter((band) => band?.tentative).length
   const thin = bands.filter((band) => band?.key === 'insufficient').length
-  const summary = `Checked ${songs(shown.length - unknown)}: ${fits} likely or strong fit, ${thin} not enough information.`
+  const leaning = tentative ? ` ${tentative} tentative,` : ''
+  const summary = `Checked ${songs(shown.length - unknown)}: ${fits} likely or strong fit,${leaning} ${thin} not enough information.`
   return unknown ? `${summary} ${songs(unknown)} couldn't be checked.` : summary
 }
