@@ -1,0 +1,4047 @@
+{
+  "description": "Synthetic-only local measurements; macOS results are not Vercel benchmarks.",
+  "runs": {
+    "cold": {
+      "environment": {
+        "python": "3.12.11",
+        "platform": "macOS-15.7.9-arm64-arm-64bit",
+        "librosa": "1.0.0",
+        "numpy": "2.5.3"
+      },
+      "duration_seconds": 30,
+      "sample_rate": 8000,
+      "features": [
+        "rms",
+        "centroid_over_nyquist",
+        "zero_crossing_rate",
+        "onset_strength_over_20"
+      ],
+      "vectors": {
+        "low": [
+          0.21212586760520935,
+          0.027650730553749638,
+          0.02739788779317697,
+          0.0013314679265022278
+        ],
+        "low_quiet": [
+          0.07070900499820709,
+          0.032910930928049885,
+          0.032393140325159914,
+          0.0013177764602005481
+        ],
+        "mid": [
+          0.21212637424468994,
+          0.11003239212942448,
+          0.1096758811966951,
+          0.0001982588553801179
+        ],
+        "mid_loud": [
+          0.4242473840713501,
+          0.12016375352616691,
+          0.11958934401652452,
+          9.388660546392203e-05
+        ],
+        "high": [
+          0.2121259868144989,
+          0.39996885717554786,
+          0.39889767124200426,
+          2.3264803530764768e-06
+        ],
+        "high_quiet": [
+          0.07071007043123245,
+          0.44995145581272045,
+          0.44846706756396587,
+          1.503020575910341e-06
+        ],
+        "slow_pulse": [
+          0.05655751749873161,
+          0.13790168744275957,
+          0.04431386593816631,
+          0.04177175760269165
+        ],
+        "fast_pulse": [
+          0.11997619271278381,
+          0.0635442066767238,
+          0.054797857809168446,
+          0.08279297351837159
+        ],
+        "noise": [
+          0.11547106504440308,
+          0.500048524339076,
+          0.497984408315565,
+          0.12234232425689698
+        ],
+        "silence": null
+      },
+      "failure_checks": {
+        "missing_unknown": true,
+        "corrupt_unknown": true,
+        "silence_unknown": true,
+        "cold_warm_equal": true
+      },
+      "metrics": {
+        "import_seconds": 0.20160299993585795,
+        "first_extraction_seconds": 3.840565000078641,
+        "warm_median_seconds": 0.00967652106191963,
+        "warm_max_seconds": 0.010353042045608163,
+        "warm_batch_seconds": 0.08860466827172786,
+        "peak_rss_bytes": 296763392,
+        "installed_environment_bytes": 327138216
+      },
+      "comparisons": [
+        {
+          "seed": "low",
+          "weight": 0.0,
+          "baseline": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "silence",
+            "slow_pulse"
+          ],
+          "selected": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "silence",
+            "slow_pulse"
+          ],
+          "baseline_scores": {
+            "low_quiet": 0.9339999999999998,
+            "mid": 0.578,
+            "mid_loud": 0.5419999999999999,
+            "high": 0.506,
+            "high_quiet": 0.47,
+            "slow_pulse": 0.354,
+            "fast_pulse": 0.318,
+            "noise": 0.282,
+            "silence": 0.4099999999999999
+          },
+          "experimental_scores": {
+            "low_quiet": 0.9339999999999998,
+            "mid": 0.578,
+            "mid_loud": 0.5419999999999999,
+            "high": 0.506,
+            "high_quiet": 0.47,
+            "slow_pulse": 0.354,
+            "fast_pulse": 0.318,
+            "noise": 0.282,
+            "silence": 0.4099999999999999
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "low",
+          "weight": 0.2,
+          "baseline": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "silence",
+            "slow_pulse"
+          ],
+          "selected": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low_quiet": 0.9339999999999998,
+            "mid": 0.578,
+            "mid_loud": 0.5419999999999999,
+            "high": 0.506,
+            "high_quiet": 0.47,
+            "slow_pulse": 0.354,
+            "fast_pulse": 0.318,
+            "noise": 0.282,
+            "silence": 0.4099999999999999
+          },
+          "experimental_scores": {
+            "low_quiet": 0.9330397205278638,
+            "mid": 0.6507562503781926,
+            "mid_loud": 0.60868916031614,
+            "high": 0.5522039314082613,
+            "high_quiet": 0.5147107388522182,
+            "slow_pulse": 0.46363514569553615,
+            "fast_pulse": 0.44129784771072267,
+            "noise": 0.3571458454819216,
+            "silence": 0.4099999999999999
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "low",
+          "weight": 0.4,
+          "baseline": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "silence",
+            "slow_pulse"
+          ],
+          "selected": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "slow_pulse",
+            "fast_pulse",
+            "high_quiet"
+          ],
+          "baseline_scores": {
+            "low_quiet": 0.9339999999999998,
+            "mid": 0.578,
+            "mid_loud": 0.5419999999999999,
+            "high": 0.506,
+            "high_quiet": 0.47,
+            "slow_pulse": 0.354,
+            "fast_pulse": 0.318,
+            "noise": 0.282,
+            "silence": 0.4099999999999999
+          },
+          "experimental_scores": {
+            "low_quiet": 0.9320794410557276,
+            "mid": 0.7235125007563852,
+            "mid_loud": 0.6753783206322799,
+            "high": 0.5984078628165224,
+            "high_quiet": 0.5594214777044363,
+            "slow_pulse": 0.5732702913910723,
+            "fast_pulse": 0.5645956954214453,
+            "noise": 0.4322916909638431,
+            "silence": 0.4099999999999999
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "low",
+          "weight": 1.0,
+          "baseline": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "silence",
+            "slow_pulse"
+          ],
+          "selected": [
+            "mid",
+            "fast_pulse",
+            "low_quiet",
+            "slow_pulse",
+            "mid_loud",
+            "high",
+            "high_quiet"
+          ],
+          "baseline_scores": {
+            "low_quiet": 0.9339999999999998,
+            "mid": 0.578,
+            "mid_loud": 0.5419999999999999,
+            "high": 0.506,
+            "high_quiet": 0.47,
+            "slow_pulse": 0.354,
+            "fast_pulse": 0.318,
+            "noise": 0.282,
+            "silence": 0.4099999999999999
+          },
+          "experimental_scores": {
+            "low_quiet": 0.9291986026393192,
+            "mid": 0.9417812518909631,
+            "mid_loud": 0.8754458015806996,
+            "high": 0.7370196570413061,
+            "high_quiet": 0.6935536942610908,
+            "slow_pulse": 0.9021757284776807,
+            "fast_pulse": 0.9344892385536131,
+            "noise": 0.6577292274096079,
+            "silence": 0.4099999999999999
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "low_quiet",
+          "weight": 0.0,
+          "baseline": [
+            "silence",
+            "low",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse"
+          ],
+          "selected": [
+            "silence",
+            "low",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.9339999999999998,
+            "mid": 0.5419999999999999,
+            "mid_loud": 0.506,
+            "high": 0.47,
+            "high_quiet": 0.43399999999999994,
+            "slow_pulse": 0.318,
+            "fast_pulse": 0.282,
+            "noise": 0.24599999999999994,
+            "silence": 0.95
+          },
+          "experimental_scores": {
+            "low": 0.9339999999999998,
+            "mid": 0.5419999999999999,
+            "mid_loud": 0.506,
+            "high": 0.47,
+            "high_quiet": 0.43399999999999994,
+            "slow_pulse": 0.318,
+            "fast_pulse": 0.282,
+            "noise": 0.24599999999999994,
+            "silence": 0.95
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "low_quiet",
+          "weight": 0.2,
+          "baseline": [
+            "silence",
+            "low",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse"
+          ],
+          "selected": [
+            "silence",
+            "low",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.9339999999999998,
+            "mid": 0.5419999999999999,
+            "mid_loud": 0.506,
+            "high": 0.47,
+            "high_quiet": 0.43399999999999994,
+            "slow_pulse": 0.318,
+            "fast_pulse": 0.282,
+            "noise": 0.24599999999999994,
+            "silence": 0.95
+          },
+          "experimental_scores": {
+            "low": 0.9330397205278638,
+            "mid": 0.6157337000308638,
+            "mid_loud": 0.567355759271476,
+            "high": 0.5222359241167145,
+            "high_quiet": 0.4882897254376702,
+            "slow_pulse": 0.44299738984205966,
+            "fast_pulse": 0.41535020367538766,
+            "noise": 0.3295955847287001,
+            "silence": 0.95
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "low_quiet",
+          "weight": 0.4,
+          "baseline": [
+            "silence",
+            "low",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse"
+          ],
+          "selected": [
+            "silence",
+            "low",
+            "mid",
+            "mid_loud",
+            "high",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.9339999999999998,
+            "mid": 0.5419999999999999,
+            "mid_loud": 0.506,
+            "high": 0.47,
+            "high_quiet": 0.43399999999999994,
+            "slow_pulse": 0.318,
+            "fast_pulse": 0.282,
+            "noise": 0.24599999999999994,
+            "silence": 0.95
+          },
+          "experimental_scores": {
+            "low": 0.9320794410557276,
+            "mid": 0.6894674000617276,
+            "mid_loud": 0.6287115185429518,
+            "high": 0.5744718482334289,
+            "high_quiet": 0.5425794508753404,
+            "slow_pulse": 0.5679947796841193,
+            "fast_pulse": 0.5487004073507753,
+            "noise": 0.4131911694574002,
+            "silence": 0.95
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "low_quiet",
+          "weight": 1.0,
+          "baseline": [
+            "silence",
+            "low",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse"
+          ],
+          "selected": [
+            "silence",
+            "fast_pulse",
+            "slow_pulse",
+            "low",
+            "mid",
+            "mid_loud",
+            "high"
+          ],
+          "baseline_scores": {
+            "low": 0.9339999999999998,
+            "mid": 0.5419999999999999,
+            "mid_loud": 0.506,
+            "high": 0.47,
+            "high_quiet": 0.43399999999999994,
+            "slow_pulse": 0.318,
+            "fast_pulse": 0.282,
+            "noise": 0.24599999999999994,
+            "silence": 0.95
+          },
+          "experimental_scores": {
+            "low": 0.9291986026393192,
+            "mid": 0.9106685001543191,
+            "mid_loud": 0.8127787963573795,
+            "high": 0.7311796205835723,
+            "high_quiet": 0.7054486271883511,
+            "slow_pulse": 0.9429869492102981,
+            "fast_pulse": 0.9487510183769383,
+            "noise": 0.6639779236435006,
+            "silence": 0.95
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "mid",
+          "weight": 0.0,
+          "baseline": [
+            "silence",
+            "mid_loud",
+            "low",
+            "noise",
+            "low_quiet",
+            "high",
+            "high_quiet"
+          ],
+          "selected": [
+            "silence",
+            "mid_loud",
+            "low",
+            "noise",
+            "low_quiet",
+            "high",
+            "high_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.578,
+            "low_quiet": 0.5419999999999999,
+            "mid_loud": 0.7899999999999998,
+            "high": 0.43399999999999994,
+            "high_quiet": 0.398,
+            "slow_pulse": 0.282,
+            "fast_pulse": 0.24599999999999994,
+            "noise": 0.57,
+            "silence": 0.8899999999999999
+          },
+          "experimental_scores": {
+            "low": 0.578,
+            "low_quiet": 0.5419999999999999,
+            "mid_loud": 0.7899999999999998,
+            "high": 0.43399999999999994,
+            "high_quiet": 0.398,
+            "slow_pulse": 0.282,
+            "fast_pulse": 0.24599999999999994,
+            "noise": 0.57,
+            "silence": 0.8899999999999999
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "mid",
+          "weight": 0.2,
+          "baseline": [
+            "silence",
+            "mid_loud",
+            "low",
+            "noise",
+            "low_quiet",
+            "high",
+            "high_quiet"
+          ],
+          "selected": [
+            "silence",
+            "mid_loud",
+            "low",
+            "low_quiet",
+            "noise",
+            "high",
+            "high_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.578,
+            "low_quiet": 0.5419999999999999,
+            "mid_loud": 0.7899999999999998,
+            "high": 0.43399999999999994,
+            "high_quiet": 0.398,
+            "slow_pulse": 0.282,
+            "fast_pulse": 0.24599999999999994,
+            "noise": 0.57,
+            "silence": 0.8899999999999999
+          },
+          "experimental_scores": {
+            "low": 0.6507562503781926,
+            "low_quiet": 0.6157337000308638,
+            "mid_loud": 0.8107405891586148,
+            "high": 0.5062472911774935,
+            "high_quiet": 0.46836770567797337,
+            "slow_pulse": 0.4079991717106111,
+            "fast_pulse": 0.38248696688879996,
+            "noise": 0.5988023149833478,
+            "silence": 0.8899999999999999
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "mid",
+          "weight": 0.4,
+          "baseline": [
+            "silence",
+            "mid_loud",
+            "low",
+            "noise",
+            "low_quiet",
+            "high",
+            "high_quiet"
+          ],
+          "selected": [
+            "silence",
+            "mid_loud",
+            "low",
+            "low_quiet",
+            "noise",
+            "high",
+            "high_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.578,
+            "low_quiet": 0.5419999999999999,
+            "mid_loud": 0.7899999999999998,
+            "high": 0.43399999999999994,
+            "high_quiet": 0.398,
+            "slow_pulse": 0.282,
+            "fast_pulse": 0.24599999999999994,
+            "noise": 0.57,
+            "silence": 0.8899999999999999
+          },
+          "experimental_scores": {
+            "low": 0.7235125007563852,
+            "low_quiet": 0.6894674000617276,
+            "mid_loud": 0.8314811783172298,
+            "high": 0.578494582354987,
+            "high_quiet": 0.5387354113559467,
+            "slow_pulse": 0.5339983434212222,
+            "fast_pulse": 0.5189739337775999,
+            "noise": 0.6276046299666956,
+            "silence": 0.8899999999999999
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "mid",
+          "weight": 1.0,
+          "baseline": [
+            "silence",
+            "mid_loud",
+            "low",
+            "noise",
+            "low_quiet",
+            "high",
+            "high_quiet"
+          ],
+          "selected": [
+            "low",
+            "fast_pulse",
+            "slow_pulse",
+            "low_quiet",
+            "mid_loud",
+            "silence",
+            "high"
+          ],
+          "baseline_scores": {
+            "low": 0.578,
+            "low_quiet": 0.5419999999999999,
+            "mid_loud": 0.7899999999999998,
+            "high": 0.43399999999999994,
+            "high_quiet": 0.398,
+            "slow_pulse": 0.282,
+            "fast_pulse": 0.24599999999999994,
+            "noise": 0.57,
+            "silence": 0.8899999999999999
+          },
+          "experimental_scores": {
+            "low": 0.9417812518909631,
+            "low_quiet": 0.9106685001543191,
+            "mid_loud": 0.8937029457930746,
+            "high": 0.7952364558874673,
+            "high_quiet": 0.7498385283898668,
+            "slow_pulse": 0.9119958585530555,
+            "fast_pulse": 0.9284348344439999,
+            "noise": 0.7140115749167392,
+            "silence": 0.8899999999999999
+          },
+          "membership_changed": true,
+          "replaced": 2,
+          "order_changed": true
+        },
+        {
+          "seed": "mid_loud",
+          "weight": 0.0,
+          "baseline": [
+            "silence",
+            "mid",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet",
+            "high"
+          ],
+          "selected": [
+            "silence",
+            "mid",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet",
+            "high"
+          ],
+          "baseline_scores": {
+            "low": 0.5419999999999999,
+            "low_quiet": 0.506,
+            "mid": 0.7899999999999998,
+            "high": 0.398,
+            "high_quiet": 0.362,
+            "slow_pulse": 0.24599999999999994,
+            "fast_pulse": 0.57,
+            "noise": 0.5339999999999999,
+            "silence": 0.83
+          },
+          "experimental_scores": {
+            "low": 0.5419999999999999,
+            "low_quiet": 0.506,
+            "mid": 0.7899999999999998,
+            "high": 0.398,
+            "high_quiet": 0.362,
+            "slow_pulse": 0.24599999999999994,
+            "fast_pulse": 0.57,
+            "noise": 0.5339999999999999,
+            "silence": 0.83
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "mid_loud",
+          "weight": 0.2,
+          "baseline": [
+            "silence",
+            "mid",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet",
+            "high"
+          ],
+          "selected": [
+            "silence",
+            "mid",
+            "fast_pulse",
+            "low",
+            "low_quiet",
+            "noise",
+            "high"
+          ],
+          "baseline_scores": {
+            "low": 0.5419999999999999,
+            "low_quiet": 0.506,
+            "mid": 0.7899999999999998,
+            "high": 0.398,
+            "high_quiet": 0.362,
+            "slow_pulse": 0.24599999999999994,
+            "fast_pulse": 0.57,
+            "noise": 0.5339999999999999,
+            "silence": 0.83
+          },
+          "experimental_scores": {
+            "low": 0.60868916031614,
+            "low_quiet": 0.567355759271476,
+            "mid": 0.8107405891586148,
+            "high": 0.47353358346789975,
+            "high_quiet": 0.4311270039851053,
+            "slow_pulse": 0.35899604322156126,
+            "fast_pulse": 0.6233160885698507,
+            "noise": 0.5641299786363205,
+            "silence": 0.83
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "mid_loud",
+          "weight": 0.4,
+          "baseline": [
+            "silence",
+            "mid",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet",
+            "high"
+          ],
+          "selected": [
+            "mid",
+            "silence",
+            "fast_pulse",
+            "low",
+            "low_quiet",
+            "noise",
+            "high"
+          ],
+          "baseline_scores": {
+            "low": 0.5419999999999999,
+            "low_quiet": 0.506,
+            "mid": 0.7899999999999998,
+            "high": 0.398,
+            "high_quiet": 0.362,
+            "slow_pulse": 0.24599999999999994,
+            "fast_pulse": 0.57,
+            "noise": 0.5339999999999999,
+            "silence": 0.83
+          },
+          "experimental_scores": {
+            "low": 0.6753783206322799,
+            "low_quiet": 0.6287115185429518,
+            "mid": 0.8314811783172298,
+            "high": 0.5490671669357995,
+            "high_quiet": 0.5002540079702106,
+            "slow_pulse": 0.4719920864431225,
+            "fast_pulse": 0.6766321771397015,
+            "noise": 0.594259957272641,
+            "silence": 0.83
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "mid_loud",
+          "weight": 1.0,
+          "baseline": [
+            "silence",
+            "mid",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet",
+            "high"
+          ],
+          "selected": [
+            "mid",
+            "low",
+            "fast_pulse",
+            "silence",
+            "low_quiet",
+            "slow_pulse",
+            "high"
+          ],
+          "baseline_scores": {
+            "low": 0.5419999999999999,
+            "low_quiet": 0.506,
+            "mid": 0.7899999999999998,
+            "high": 0.398,
+            "high_quiet": 0.362,
+            "slow_pulse": 0.24599999999999994,
+            "fast_pulse": 0.57,
+            "noise": 0.5339999999999999,
+            "silence": 0.83
+          },
+          "experimental_scores": {
+            "low": 0.8754458015806996,
+            "low_quiet": 0.8127787963573795,
+            "mid": 0.8937029457930746,
+            "high": 0.7756679173394987,
+            "high_quiet": 0.7076350199255264,
+            "slow_pulse": 0.8109802161078064,
+            "fast_pulse": 0.8365804428492536,
+            "noise": 0.6846498931816025,
+            "silence": 0.83
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "high",
+          "weight": 0.0,
+          "baseline": [
+            "silence",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "selected": [
+            "silence",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.506,
+            "low_quiet": 0.47,
+            "mid": 0.43399999999999994,
+            "mid_loud": 0.398,
+            "high_quiet": 0.6459999999999999,
+            "slow_pulse": 0.57,
+            "fast_pulse": 0.5339999999999999,
+            "noise": 0.49799999999999994,
+            "silence": 0.77
+          },
+          "experimental_scores": {
+            "low": 0.506,
+            "low_quiet": 0.47,
+            "mid": 0.43399999999999994,
+            "mid_loud": 0.398,
+            "high_quiet": 0.6459999999999999,
+            "slow_pulse": 0.57,
+            "fast_pulse": 0.5339999999999999,
+            "noise": 0.49799999999999994,
+            "silence": 0.77
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "high",
+          "weight": 0.2,
+          "baseline": [
+            "silence",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "selected": [
+            "silence",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse",
+            "noise",
+            "low",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.506,
+            "low_quiet": 0.47,
+            "mid": 0.43399999999999994,
+            "mid_loud": 0.398,
+            "high_quiet": 0.6459999999999999,
+            "slow_pulse": 0.57,
+            "fast_pulse": 0.5339999999999999,
+            "noise": 0.49799999999999994,
+            "silence": 0.77
+          },
+          "experimental_scores": {
+            "low": 0.5522039314082613,
+            "low_quiet": 0.5222359241167145,
+            "mid": 0.5062472911774935,
+            "mid_loud": 0.47353358346789975,
+            "high_quiet": 0.7010032134199877,
+            "slow_pulse": 0.6090580027632996,
+            "fast_pulse": 0.5775077367331964,
+            "noise": 0.5773896762990677,
+            "silence": 0.77
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "high",
+          "weight": 0.4,
+          "baseline": [
+            "silence",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "selected": [
+            "silence",
+            "high_quiet",
+            "noise",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "mid"
+          ],
+          "baseline_scores": {
+            "low": 0.506,
+            "low_quiet": 0.47,
+            "mid": 0.43399999999999994,
+            "mid_loud": 0.398,
+            "high_quiet": 0.6459999999999999,
+            "slow_pulse": 0.57,
+            "fast_pulse": 0.5339999999999999,
+            "noise": 0.49799999999999994,
+            "silence": 0.77
+          },
+          "experimental_scores": {
+            "low": 0.5984078628165224,
+            "low_quiet": 0.5744718482334289,
+            "mid": 0.578494582354987,
+            "mid_loud": 0.5490671669357995,
+            "high_quiet": 0.7560064268399755,
+            "slow_pulse": 0.6481160055265992,
+            "fast_pulse": 0.6210154734663931,
+            "noise": 0.6567793525981354,
+            "silence": 0.77
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "high",
+          "weight": 1.0,
+          "baseline": [
+            "silence",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "selected": [
+            "high_quiet",
+            "noise",
+            "mid",
+            "mid_loud",
+            "silence",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.506,
+            "low_quiet": 0.47,
+            "mid": 0.43399999999999994,
+            "mid_loud": 0.398,
+            "high_quiet": 0.6459999999999999,
+            "slow_pulse": 0.57,
+            "fast_pulse": 0.5339999999999999,
+            "noise": 0.49799999999999994,
+            "silence": 0.77
+          },
+          "experimental_scores": {
+            "low": 0.7370196570413061,
+            "low_quiet": 0.7311796205835723,
+            "mid": 0.7952364558874673,
+            "mid_loud": 0.7756679173394987,
+            "high_quiet": 0.9210160670999388,
+            "slow_pulse": 0.765290013816498,
+            "fast_pulse": 0.7515386836659826,
+            "noise": 0.8949483814953386,
+            "silence": 0.77
+          },
+          "membership_changed": true,
+          "replaced": 2,
+          "order_changed": true
+        },
+        {
+          "seed": "high_quiet",
+          "weight": 0.0,
+          "baseline": [
+            "silence",
+            "high",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "selected": [
+            "silence",
+            "high",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.47,
+            "low_quiet": 0.43399999999999994,
+            "mid": 0.398,
+            "mid_loud": 0.362,
+            "high": 0.6459999999999999,
+            "slow_pulse": 0.5339999999999999,
+            "fast_pulse": 0.49799999999999994,
+            "noise": 0.46199999999999997,
+            "silence": 0.71
+          },
+          "experimental_scores": {
+            "low": 0.47,
+            "low_quiet": 0.43399999999999994,
+            "mid": 0.398,
+            "mid_loud": 0.362,
+            "high": 0.6459999999999999,
+            "slow_pulse": 0.5339999999999999,
+            "fast_pulse": 0.49799999999999994,
+            "noise": 0.46199999999999997,
+            "silence": 0.71
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "high_quiet",
+          "weight": 0.2,
+          "baseline": [
+            "silence",
+            "high",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "selected": [
+            "silence",
+            "high",
+            "slow_pulse",
+            "noise",
+            "fast_pulse",
+            "low",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.47,
+            "low_quiet": 0.43399999999999994,
+            "mid": 0.398,
+            "mid_loud": 0.362,
+            "high": 0.6459999999999999,
+            "slow_pulse": 0.5339999999999999,
+            "fast_pulse": 0.49799999999999994,
+            "noise": 0.46199999999999997,
+            "silence": 0.71
+          },
+          "experimental_scores": {
+            "low": 0.5147107388522182,
+            "low_quiet": 0.4882897254376702,
+            "mid": 0.46836770567797337,
+            "mid_loud": 0.4311270039851053,
+            "high": 0.7010032134199877,
+            "slow_pulse": 0.5759496422211032,
+            "fast_pulse": 0.5424028940671339,
+            "noise": 0.5547903725605328,
+            "silence": 0.71
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "high_quiet",
+          "weight": 0.4,
+          "baseline": [
+            "silence",
+            "high",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "selected": [
+            "high",
+            "silence",
+            "noise",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.47,
+            "low_quiet": 0.43399999999999994,
+            "mid": 0.398,
+            "mid_loud": 0.362,
+            "high": 0.6459999999999999,
+            "slow_pulse": 0.5339999999999999,
+            "fast_pulse": 0.49799999999999994,
+            "noise": 0.46199999999999997,
+            "silence": 0.71
+          },
+          "experimental_scores": {
+            "low": 0.5594214777044363,
+            "low_quiet": 0.5425794508753404,
+            "mid": 0.5387354113559467,
+            "mid_loud": 0.5002540079702106,
+            "high": 0.7560064268399755,
+            "slow_pulse": 0.6178992844422064,
+            "fast_pulse": 0.5868057881342678,
+            "noise": 0.6475807451210656,
+            "silence": 0.71
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "high_quiet",
+          "weight": 1.0,
+          "baseline": [
+            "silence",
+            "high",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "selected": [
+            "noise",
+            "high",
+            "mid",
+            "slow_pulse",
+            "fast_pulse",
+            "silence",
+            "mid_loud"
+          ],
+          "baseline_scores": {
+            "low": 0.47,
+            "low_quiet": 0.43399999999999994,
+            "mid": 0.398,
+            "mid_loud": 0.362,
+            "high": 0.6459999999999999,
+            "slow_pulse": 0.5339999999999999,
+            "fast_pulse": 0.49799999999999994,
+            "noise": 0.46199999999999997,
+            "silence": 0.71
+          },
+          "experimental_scores": {
+            "low": 0.6935536942610908,
+            "low_quiet": 0.7054486271883511,
+            "mid": 0.7498385283898668,
+            "mid_loud": 0.7076350199255264,
+            "high": 0.9210160670999388,
+            "slow_pulse": 0.7437482111055163,
+            "fast_pulse": 0.7200144703356695,
+            "noise": 0.9259518628026638,
+            "silence": 0.71
+          },
+          "membership_changed": true,
+          "replaced": 2,
+          "order_changed": true
+        },
+        {
+          "seed": "slow_pulse",
+          "weight": 0.0,
+          "baseline": [
+            "fast_pulse",
+            "silence",
+            "high",
+            "high_quiet",
+            "noise",
+            "low",
+            "low_quiet"
+          ],
+          "selected": [
+            "fast_pulse",
+            "silence",
+            "high",
+            "high_quiet",
+            "noise",
+            "low",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.354,
+            "low_quiet": 0.318,
+            "mid": 0.282,
+            "mid_loud": 0.24599999999999994,
+            "high": 0.57,
+            "high_quiet": 0.5339999999999999,
+            "fast_pulse": 0.7819999999999999,
+            "noise": 0.426,
+            "silence": 0.6499999999999999
+          },
+          "experimental_scores": {
+            "low": 0.354,
+            "low_quiet": 0.318,
+            "mid": 0.282,
+            "mid_loud": 0.24599999999999994,
+            "high": 0.57,
+            "high_quiet": 0.5339999999999999,
+            "fast_pulse": 0.7819999999999999,
+            "noise": 0.426,
+            "silence": 0.6499999999999999
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "slow_pulse",
+          "weight": 0.2,
+          "baseline": [
+            "fast_pulse",
+            "silence",
+            "high",
+            "high_quiet",
+            "noise",
+            "low",
+            "low_quiet"
+          ],
+          "selected": [
+            "fast_pulse",
+            "silence",
+            "high",
+            "high_quiet",
+            "noise",
+            "low",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.354,
+            "low_quiet": 0.318,
+            "mid": 0.282,
+            "mid_loud": 0.24599999999999994,
+            "high": 0.57,
+            "high_quiet": 0.5339999999999999,
+            "fast_pulse": 0.7819999999999999,
+            "noise": 0.426,
+            "silence": 0.6499999999999999
+          },
+          "experimental_scores": {
+            "low": 0.46363514569553615,
+            "low_quiet": 0.44299738984205966,
+            "mid": 0.4079991717106111,
+            "mid_loud": 0.35899604322156126,
+            "high": 0.6090580027632996,
+            "high_quiet": 0.5759496422211032,
+            "fast_pulse": 0.8149493579759111,
+            "noise": 0.4818992602091955,
+            "silence": 0.6499999999999999
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "slow_pulse",
+          "weight": 0.4,
+          "baseline": [
+            "fast_pulse",
+            "silence",
+            "high",
+            "high_quiet",
+            "noise",
+            "low",
+            "low_quiet"
+          ],
+          "selected": [
+            "fast_pulse",
+            "silence",
+            "high",
+            "high_quiet",
+            "low",
+            "low_quiet",
+            "noise"
+          ],
+          "baseline_scores": {
+            "low": 0.354,
+            "low_quiet": 0.318,
+            "mid": 0.282,
+            "mid_loud": 0.24599999999999994,
+            "high": 0.57,
+            "high_quiet": 0.5339999999999999,
+            "fast_pulse": 0.7819999999999999,
+            "noise": 0.426,
+            "silence": 0.6499999999999999
+          },
+          "experimental_scores": {
+            "low": 0.5732702913910723,
+            "low_quiet": 0.5679947796841193,
+            "mid": 0.5339983434212222,
+            "mid_loud": 0.4719920864431225,
+            "high": 0.6481160055265992,
+            "high_quiet": 0.6178992844422064,
+            "fast_pulse": 0.8478987159518221,
+            "noise": 0.537798520418391,
+            "silence": 0.6499999999999999
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "slow_pulse",
+          "weight": 1.0,
+          "baseline": [
+            "fast_pulse",
+            "silence",
+            "high",
+            "high_quiet",
+            "noise",
+            "low",
+            "low_quiet"
+          ],
+          "selected": [
+            "fast_pulse",
+            "low_quiet",
+            "mid",
+            "low",
+            "mid_loud",
+            "high",
+            "high_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.354,
+            "low_quiet": 0.318,
+            "mid": 0.282,
+            "mid_loud": 0.24599999999999994,
+            "high": 0.57,
+            "high_quiet": 0.5339999999999999,
+            "fast_pulse": 0.7819999999999999,
+            "noise": 0.426,
+            "silence": 0.6499999999999999
+          },
+          "experimental_scores": {
+            "low": 0.9021757284776807,
+            "low_quiet": 0.9429869492102981,
+            "mid": 0.9119958585530555,
+            "mid_loud": 0.8109802161078064,
+            "high": 0.765290013816498,
+            "high_quiet": 0.7437482111055163,
+            "fast_pulse": 0.9467467898795554,
+            "noise": 0.7054963010459775,
+            "silence": 0.6499999999999999
+          },
+          "membership_changed": true,
+          "replaced": 2,
+          "order_changed": true
+        },
+        {
+          "seed": "fast_pulse",
+          "weight": 0.0,
+          "baseline": [
+            "slow_pulse",
+            "silence",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "noise",
+            "low"
+          ],
+          "selected": [
+            "slow_pulse",
+            "silence",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "noise",
+            "low"
+          ],
+          "baseline_scores": {
+            "low": 0.318,
+            "low_quiet": 0.282,
+            "mid": 0.24599999999999994,
+            "mid_loud": 0.57,
+            "high": 0.5339999999999999,
+            "high_quiet": 0.49799999999999994,
+            "slow_pulse": 0.7819999999999999,
+            "noise": 0.38999999999999996,
+            "silence": 0.59
+          },
+          "experimental_scores": {
+            "low": 0.318,
+            "low_quiet": 0.282,
+            "mid": 0.24599999999999994,
+            "mid_loud": 0.57,
+            "high": 0.5339999999999999,
+            "high_quiet": 0.49799999999999994,
+            "slow_pulse": 0.7819999999999999,
+            "noise": 0.38999999999999996,
+            "silence": 0.59
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "fast_pulse",
+          "weight": 0.2,
+          "baseline": [
+            "slow_pulse",
+            "silence",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "noise",
+            "low"
+          ],
+          "selected": [
+            "slow_pulse",
+            "mid_loud",
+            "silence",
+            "high",
+            "high_quiet",
+            "noise",
+            "low"
+          ],
+          "baseline_scores": {
+            "low": 0.318,
+            "low_quiet": 0.282,
+            "mid": 0.24599999999999994,
+            "mid_loud": 0.57,
+            "high": 0.5339999999999999,
+            "high_quiet": 0.49799999999999994,
+            "slow_pulse": 0.7819999999999999,
+            "noise": 0.38999999999999996,
+            "silence": 0.59
+          },
+          "experimental_scores": {
+            "low": 0.44129784771072267,
+            "low_quiet": 0.41535020367538766,
+            "mid": 0.38248696688879996,
+            "mid_loud": 0.6233160885698507,
+            "high": 0.5775077367331964,
+            "high_quiet": 0.5424028940671339,
+            "slow_pulse": 0.8149493579759111,
+            "noise": 0.4496674414766423,
+            "silence": 0.59
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "fast_pulse",
+          "weight": 0.4,
+          "baseline": [
+            "slow_pulse",
+            "silence",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "noise",
+            "low"
+          ],
+          "selected": [
+            "slow_pulse",
+            "mid_loud",
+            "high",
+            "silence",
+            "high_quiet",
+            "low",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.318,
+            "low_quiet": 0.282,
+            "mid": 0.24599999999999994,
+            "mid_loud": 0.57,
+            "high": 0.5339999999999999,
+            "high_quiet": 0.49799999999999994,
+            "slow_pulse": 0.7819999999999999,
+            "noise": 0.38999999999999996,
+            "silence": 0.59
+          },
+          "experimental_scores": {
+            "low": 0.5645956954214453,
+            "low_quiet": 0.5487004073507753,
+            "mid": 0.5189739337775999,
+            "mid_loud": 0.6766321771397015,
+            "high": 0.6210154734663931,
+            "high_quiet": 0.5868057881342678,
+            "slow_pulse": 0.8478987159518221,
+            "noise": 0.5093348829532844,
+            "silence": 0.59
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "fast_pulse",
+          "weight": 1.0,
+          "baseline": [
+            "slow_pulse",
+            "silence",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "noise",
+            "low"
+          ],
+          "selected": [
+            "low_quiet",
+            "slow_pulse",
+            "low",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.318,
+            "low_quiet": 0.282,
+            "mid": 0.24599999999999994,
+            "mid_loud": 0.57,
+            "high": 0.5339999999999999,
+            "high_quiet": 0.49799999999999994,
+            "slow_pulse": 0.7819999999999999,
+            "noise": 0.38999999999999996,
+            "silence": 0.59
+          },
+          "experimental_scores": {
+            "low": 0.9344892385536131,
+            "low_quiet": 0.9487510183769383,
+            "mid": 0.9284348344439999,
+            "mid_loud": 0.8365804428492536,
+            "high": 0.7515386836659826,
+            "high_quiet": 0.7200144703356695,
+            "slow_pulse": 0.9467467898795554,
+            "noise": 0.6883372073832112,
+            "silence": 0.59
+          },
+          "membership_changed": true,
+          "replaced": 2,
+          "order_changed": true
+        },
+        {
+          "seed": "noise",
+          "weight": 0.0,
+          "baseline": [
+            "mid",
+            "mid_loud",
+            "silence",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "selected": [
+            "mid",
+            "mid_loud",
+            "silence",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.282,
+            "low_quiet": 0.24599999999999994,
+            "mid": 0.57,
+            "mid_loud": 0.5339999999999999,
+            "high": 0.49799999999999994,
+            "high_quiet": 0.46199999999999997,
+            "slow_pulse": 0.426,
+            "fast_pulse": 0.38999999999999996,
+            "silence": 0.53
+          },
+          "experimental_scores": {
+            "low": 0.282,
+            "low_quiet": 0.24599999999999994,
+            "mid": 0.57,
+            "mid_loud": 0.5339999999999999,
+            "high": 0.49799999999999994,
+            "high_quiet": 0.46199999999999997,
+            "slow_pulse": 0.426,
+            "fast_pulse": 0.38999999999999996,
+            "silence": 0.53
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "noise",
+          "weight": 0.2,
+          "baseline": [
+            "mid",
+            "mid_loud",
+            "silence",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "selected": [
+            "mid",
+            "high",
+            "mid_loud",
+            "high_quiet",
+            "silence",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.282,
+            "low_quiet": 0.24599999999999994,
+            "mid": 0.57,
+            "mid_loud": 0.5339999999999999,
+            "high": 0.49799999999999994,
+            "high_quiet": 0.46199999999999997,
+            "slow_pulse": 0.426,
+            "fast_pulse": 0.38999999999999996,
+            "silence": 0.53
+          },
+          "experimental_scores": {
+            "low": 0.3571458454819216,
+            "low_quiet": 0.3295955847287001,
+            "mid": 0.5988023149833478,
+            "mid_loud": 0.5641299786363205,
+            "high": 0.5773896762990677,
+            "high_quiet": 0.5547903725605328,
+            "slow_pulse": 0.4818992602091955,
+            "fast_pulse": 0.4496674414766423,
+            "silence": 0.53
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "noise",
+          "weight": 0.4,
+          "baseline": [
+            "mid",
+            "mid_loud",
+            "silence",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "selected": [
+            "high",
+            "high_quiet",
+            "mid",
+            "mid_loud",
+            "slow_pulse",
+            "silence",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.282,
+            "low_quiet": 0.24599999999999994,
+            "mid": 0.57,
+            "mid_loud": 0.5339999999999999,
+            "high": 0.49799999999999994,
+            "high_quiet": 0.46199999999999997,
+            "slow_pulse": 0.426,
+            "fast_pulse": 0.38999999999999996,
+            "silence": 0.53
+          },
+          "experimental_scores": {
+            "low": 0.4322916909638431,
+            "low_quiet": 0.4131911694574002,
+            "mid": 0.6276046299666956,
+            "mid_loud": 0.594259957272641,
+            "high": 0.6567793525981354,
+            "high_quiet": 0.6475807451210656,
+            "slow_pulse": 0.537798520418391,
+            "fast_pulse": 0.5093348829532844,
+            "silence": 0.53
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "noise",
+          "weight": 1.0,
+          "baseline": [
+            "mid",
+            "mid_loud",
+            "silence",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "selected": [
+            "high_quiet",
+            "high",
+            "mid",
+            "slow_pulse",
+            "fast_pulse",
+            "mid_loud",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.282,
+            "low_quiet": 0.24599999999999994,
+            "mid": 0.57,
+            "mid_loud": 0.5339999999999999,
+            "high": 0.49799999999999994,
+            "high_quiet": 0.46199999999999997,
+            "slow_pulse": 0.426,
+            "fast_pulse": 0.38999999999999996,
+            "silence": 0.53
+          },
+          "experimental_scores": {
+            "low": 0.6577292274096079,
+            "low_quiet": 0.6639779236435006,
+            "mid": 0.7140115749167392,
+            "mid_loud": 0.6846498931816025,
+            "high": 0.8949483814953386,
+            "high_quiet": 0.9259518628026638,
+            "slow_pulse": 0.7054963010459775,
+            "fast_pulse": 0.6883372073832112,
+            "silence": 0.53
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "silence",
+          "weight": 0.0,
+          "baseline": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "selected": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.4099999999999999,
+            "low_quiet": 0.95,
+            "mid": 0.8899999999999999,
+            "mid_loud": 0.83,
+            "high": 0.77,
+            "high_quiet": 0.71,
+            "slow_pulse": 0.6499999999999999,
+            "fast_pulse": 0.59,
+            "noise": 0.53
+          },
+          "experimental_scores": {
+            "low": 0.4099999999999999,
+            "low_quiet": 0.95,
+            "mid": 0.8899999999999999,
+            "mid_loud": 0.83,
+            "high": 0.77,
+            "high_quiet": 0.71,
+            "slow_pulse": 0.6499999999999999,
+            "fast_pulse": 0.59,
+            "noise": 0.53
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "silence",
+          "weight": 0.2,
+          "baseline": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "selected": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.4099999999999999,
+            "low_quiet": 0.95,
+            "mid": 0.8899999999999999,
+            "mid_loud": 0.83,
+            "high": 0.77,
+            "high_quiet": 0.71,
+            "slow_pulse": 0.6499999999999999,
+            "fast_pulse": 0.59,
+            "noise": 0.53
+          },
+          "experimental_scores": {
+            "low": 0.4099999999999999,
+            "low_quiet": 0.95,
+            "mid": 0.8899999999999999,
+            "mid_loud": 0.83,
+            "high": 0.77,
+            "high_quiet": 0.71,
+            "slow_pulse": 0.6499999999999999,
+            "fast_pulse": 0.59,
+            "noise": 0.53
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "silence",
+          "weight": 0.4,
+          "baseline": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "selected": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.4099999999999999,
+            "low_quiet": 0.95,
+            "mid": 0.8899999999999999,
+            "mid_loud": 0.83,
+            "high": 0.77,
+            "high_quiet": 0.71,
+            "slow_pulse": 0.6499999999999999,
+            "fast_pulse": 0.59,
+            "noise": 0.53
+          },
+          "experimental_scores": {
+            "low": 0.4099999999999999,
+            "low_quiet": 0.95,
+            "mid": 0.8899999999999999,
+            "mid_loud": 0.83,
+            "high": 0.77,
+            "high_quiet": 0.71,
+            "slow_pulse": 0.6499999999999999,
+            "fast_pulse": 0.59,
+            "noise": 0.53
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "silence",
+          "weight": 1.0,
+          "baseline": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "selected": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.4099999999999999,
+            "low_quiet": 0.95,
+            "mid": 0.8899999999999999,
+            "mid_loud": 0.83,
+            "high": 0.77,
+            "high_quiet": 0.71,
+            "slow_pulse": 0.6499999999999999,
+            "fast_pulse": 0.59,
+            "noise": 0.53
+          },
+          "experimental_scores": {
+            "low": 0.4099999999999999,
+            "low_quiet": 0.95,
+            "mid": 0.8899999999999999,
+            "mid_loud": 0.83,
+            "high": 0.77,
+            "high_quiet": 0.71,
+            "slow_pulse": 0.6499999999999999,
+            "fast_pulse": 0.59,
+            "noise": 0.53
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        }
+      ],
+      "membership": {
+        "0.0": {
+          "expansions": 10,
+          "changed": 0,
+          "share_changed": 0.0
+        },
+        "0.2": {
+          "expansions": 10,
+          "changed": 1,
+          "share_changed": 0.1
+        },
+        "0.4": {
+          "expansions": 10,
+          "changed": 4,
+          "share_changed": 0.4
+        },
+        "1.0": {
+          "expansions": 10,
+          "changed": 9,
+          "share_changed": 0.9
+        }
+      }
+    },
+    "cached": {
+      "environment": {
+        "python": "3.12.11",
+        "platform": "macOS-15.7.9-arm64-arm-64bit",
+        "librosa": "1.0.0",
+        "numpy": "2.5.3"
+      },
+      "duration_seconds": 30,
+      "sample_rate": 8000,
+      "features": [
+        "rms",
+        "centroid_over_nyquist",
+        "zero_crossing_rate",
+        "onset_strength_over_20"
+      ],
+      "vectors": {
+        "low": [
+          0.21212586760520935,
+          0.027650730553749638,
+          0.02739788779317697,
+          0.0013314679265022278
+        ],
+        "low_quiet": [
+          0.07070900499820709,
+          0.032910930928049885,
+          0.032393140325159914,
+          0.0013177764602005481
+        ],
+        "mid": [
+          0.21212637424468994,
+          0.11003239212942448,
+          0.1096758811966951,
+          0.0001982588553801179
+        ],
+        "mid_loud": [
+          0.4242473840713501,
+          0.12016375352616691,
+          0.11958934401652452,
+          9.388660546392203e-05
+        ],
+        "high": [
+          0.2121259868144989,
+          0.39996885717554786,
+          0.39889767124200426,
+          2.3264803530764768e-06
+        ],
+        "high_quiet": [
+          0.07071007043123245,
+          0.44995145581272045,
+          0.44846706756396587,
+          1.503020575910341e-06
+        ],
+        "slow_pulse": [
+          0.05655751749873161,
+          0.13790168744275957,
+          0.04431386593816631,
+          0.04177175760269165
+        ],
+        "fast_pulse": [
+          0.11997619271278381,
+          0.0635442066767238,
+          0.054797857809168446,
+          0.08279297351837159
+        ],
+        "noise": [
+          0.11547106504440308,
+          0.500048524339076,
+          0.497984408315565,
+          0.12234232425689698
+        ],
+        "silence": null
+      },
+      "failure_checks": {
+        "missing_unknown": true,
+        "corrupt_unknown": true,
+        "silence_unknown": true,
+        "cold_warm_equal": true
+      },
+      "metrics": {
+        "import_seconds": 0.0433420839253813,
+        "first_extraction_seconds": 1.0228750419337302,
+        "warm_median_seconds": 0.011217604507692158,
+        "warm_max_seconds": 0.011667583952657878,
+        "warm_batch_seconds": 0.10156587802339345,
+        "peak_rss_bytes": 287260672,
+        "installed_environment_bytes": 327138216
+      },
+      "comparisons": [
+        {
+          "seed": "low",
+          "weight": 0.0,
+          "baseline": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "silence",
+            "slow_pulse"
+          ],
+          "selected": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "silence",
+            "slow_pulse"
+          ],
+          "baseline_scores": {
+            "low_quiet": 0.9339999999999998,
+            "mid": 0.578,
+            "mid_loud": 0.5419999999999999,
+            "high": 0.506,
+            "high_quiet": 0.47,
+            "slow_pulse": 0.354,
+            "fast_pulse": 0.318,
+            "noise": 0.282,
+            "silence": 0.4099999999999999
+          },
+          "experimental_scores": {
+            "low_quiet": 0.9339999999999998,
+            "mid": 0.578,
+            "mid_loud": 0.5419999999999999,
+            "high": 0.506,
+            "high_quiet": 0.47,
+            "slow_pulse": 0.354,
+            "fast_pulse": 0.318,
+            "noise": 0.282,
+            "silence": 0.4099999999999999
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "low",
+          "weight": 0.2,
+          "baseline": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "silence",
+            "slow_pulse"
+          ],
+          "selected": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low_quiet": 0.9339999999999998,
+            "mid": 0.578,
+            "mid_loud": 0.5419999999999999,
+            "high": 0.506,
+            "high_quiet": 0.47,
+            "slow_pulse": 0.354,
+            "fast_pulse": 0.318,
+            "noise": 0.282,
+            "silence": 0.4099999999999999
+          },
+          "experimental_scores": {
+            "low_quiet": 0.9330397205278638,
+            "mid": 0.6507562503781926,
+            "mid_loud": 0.60868916031614,
+            "high": 0.5522039314082613,
+            "high_quiet": 0.5147107388522182,
+            "slow_pulse": 0.46363514569553615,
+            "fast_pulse": 0.44129784771072267,
+            "noise": 0.3571458454819216,
+            "silence": 0.4099999999999999
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "low",
+          "weight": 0.4,
+          "baseline": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "silence",
+            "slow_pulse"
+          ],
+          "selected": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "slow_pulse",
+            "fast_pulse",
+            "high_quiet"
+          ],
+          "baseline_scores": {
+            "low_quiet": 0.9339999999999998,
+            "mid": 0.578,
+            "mid_loud": 0.5419999999999999,
+            "high": 0.506,
+            "high_quiet": 0.47,
+            "slow_pulse": 0.354,
+            "fast_pulse": 0.318,
+            "noise": 0.282,
+            "silence": 0.4099999999999999
+          },
+          "experimental_scores": {
+            "low_quiet": 0.9320794410557276,
+            "mid": 0.7235125007563852,
+            "mid_loud": 0.6753783206322799,
+            "high": 0.5984078628165224,
+            "high_quiet": 0.5594214777044363,
+            "slow_pulse": 0.5732702913910723,
+            "fast_pulse": 0.5645956954214453,
+            "noise": 0.4322916909638431,
+            "silence": 0.4099999999999999
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "low",
+          "weight": 1.0,
+          "baseline": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "silence",
+            "slow_pulse"
+          ],
+          "selected": [
+            "mid",
+            "fast_pulse",
+            "low_quiet",
+            "slow_pulse",
+            "mid_loud",
+            "high",
+            "high_quiet"
+          ],
+          "baseline_scores": {
+            "low_quiet": 0.9339999999999998,
+            "mid": 0.578,
+            "mid_loud": 0.5419999999999999,
+            "high": 0.506,
+            "high_quiet": 0.47,
+            "slow_pulse": 0.354,
+            "fast_pulse": 0.318,
+            "noise": 0.282,
+            "silence": 0.4099999999999999
+          },
+          "experimental_scores": {
+            "low_quiet": 0.9291986026393192,
+            "mid": 0.9417812518909631,
+            "mid_loud": 0.8754458015806996,
+            "high": 0.7370196570413061,
+            "high_quiet": 0.6935536942610908,
+            "slow_pulse": 0.9021757284776807,
+            "fast_pulse": 0.9344892385536131,
+            "noise": 0.6577292274096079,
+            "silence": 0.4099999999999999
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "low_quiet",
+          "weight": 0.0,
+          "baseline": [
+            "silence",
+            "low",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse"
+          ],
+          "selected": [
+            "silence",
+            "low",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.9339999999999998,
+            "mid": 0.5419999999999999,
+            "mid_loud": 0.506,
+            "high": 0.47,
+            "high_quiet": 0.43399999999999994,
+            "slow_pulse": 0.318,
+            "fast_pulse": 0.282,
+            "noise": 0.24599999999999994,
+            "silence": 0.95
+          },
+          "experimental_scores": {
+            "low": 0.9339999999999998,
+            "mid": 0.5419999999999999,
+            "mid_loud": 0.506,
+            "high": 0.47,
+            "high_quiet": 0.43399999999999994,
+            "slow_pulse": 0.318,
+            "fast_pulse": 0.282,
+            "noise": 0.24599999999999994,
+            "silence": 0.95
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "low_quiet",
+          "weight": 0.2,
+          "baseline": [
+            "silence",
+            "low",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse"
+          ],
+          "selected": [
+            "silence",
+            "low",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.9339999999999998,
+            "mid": 0.5419999999999999,
+            "mid_loud": 0.506,
+            "high": 0.47,
+            "high_quiet": 0.43399999999999994,
+            "slow_pulse": 0.318,
+            "fast_pulse": 0.282,
+            "noise": 0.24599999999999994,
+            "silence": 0.95
+          },
+          "experimental_scores": {
+            "low": 0.9330397205278638,
+            "mid": 0.6157337000308638,
+            "mid_loud": 0.567355759271476,
+            "high": 0.5222359241167145,
+            "high_quiet": 0.4882897254376702,
+            "slow_pulse": 0.44299738984205966,
+            "fast_pulse": 0.41535020367538766,
+            "noise": 0.3295955847287001,
+            "silence": 0.95
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "low_quiet",
+          "weight": 0.4,
+          "baseline": [
+            "silence",
+            "low",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse"
+          ],
+          "selected": [
+            "silence",
+            "low",
+            "mid",
+            "mid_loud",
+            "high",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.9339999999999998,
+            "mid": 0.5419999999999999,
+            "mid_loud": 0.506,
+            "high": 0.47,
+            "high_quiet": 0.43399999999999994,
+            "slow_pulse": 0.318,
+            "fast_pulse": 0.282,
+            "noise": 0.24599999999999994,
+            "silence": 0.95
+          },
+          "experimental_scores": {
+            "low": 0.9320794410557276,
+            "mid": 0.6894674000617276,
+            "mid_loud": 0.6287115185429518,
+            "high": 0.5744718482334289,
+            "high_quiet": 0.5425794508753404,
+            "slow_pulse": 0.5679947796841193,
+            "fast_pulse": 0.5487004073507753,
+            "noise": 0.4131911694574002,
+            "silence": 0.95
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "low_quiet",
+          "weight": 1.0,
+          "baseline": [
+            "silence",
+            "low",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse"
+          ],
+          "selected": [
+            "silence",
+            "fast_pulse",
+            "slow_pulse",
+            "low",
+            "mid",
+            "mid_loud",
+            "high"
+          ],
+          "baseline_scores": {
+            "low": 0.9339999999999998,
+            "mid": 0.5419999999999999,
+            "mid_loud": 0.506,
+            "high": 0.47,
+            "high_quiet": 0.43399999999999994,
+            "slow_pulse": 0.318,
+            "fast_pulse": 0.282,
+            "noise": 0.24599999999999994,
+            "silence": 0.95
+          },
+          "experimental_scores": {
+            "low": 0.9291986026393192,
+            "mid": 0.9106685001543191,
+            "mid_loud": 0.8127787963573795,
+            "high": 0.7311796205835723,
+            "high_quiet": 0.7054486271883511,
+            "slow_pulse": 0.9429869492102981,
+            "fast_pulse": 0.9487510183769383,
+            "noise": 0.6639779236435006,
+            "silence": 0.95
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "mid",
+          "weight": 0.0,
+          "baseline": [
+            "silence",
+            "mid_loud",
+            "low",
+            "noise",
+            "low_quiet",
+            "high",
+            "high_quiet"
+          ],
+          "selected": [
+            "silence",
+            "mid_loud",
+            "low",
+            "noise",
+            "low_quiet",
+            "high",
+            "high_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.578,
+            "low_quiet": 0.5419999999999999,
+            "mid_loud": 0.7899999999999998,
+            "high": 0.43399999999999994,
+            "high_quiet": 0.398,
+            "slow_pulse": 0.282,
+            "fast_pulse": 0.24599999999999994,
+            "noise": 0.57,
+            "silence": 0.8899999999999999
+          },
+          "experimental_scores": {
+            "low": 0.578,
+            "low_quiet": 0.5419999999999999,
+            "mid_loud": 0.7899999999999998,
+            "high": 0.43399999999999994,
+            "high_quiet": 0.398,
+            "slow_pulse": 0.282,
+            "fast_pulse": 0.24599999999999994,
+            "noise": 0.57,
+            "silence": 0.8899999999999999
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "mid",
+          "weight": 0.2,
+          "baseline": [
+            "silence",
+            "mid_loud",
+            "low",
+            "noise",
+            "low_quiet",
+            "high",
+            "high_quiet"
+          ],
+          "selected": [
+            "silence",
+            "mid_loud",
+            "low",
+            "low_quiet",
+            "noise",
+            "high",
+            "high_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.578,
+            "low_quiet": 0.5419999999999999,
+            "mid_loud": 0.7899999999999998,
+            "high": 0.43399999999999994,
+            "high_quiet": 0.398,
+            "slow_pulse": 0.282,
+            "fast_pulse": 0.24599999999999994,
+            "noise": 0.57,
+            "silence": 0.8899999999999999
+          },
+          "experimental_scores": {
+            "low": 0.6507562503781926,
+            "low_quiet": 0.6157337000308638,
+            "mid_loud": 0.8107405891586148,
+            "high": 0.5062472911774935,
+            "high_quiet": 0.46836770567797337,
+            "slow_pulse": 0.4079991717106111,
+            "fast_pulse": 0.38248696688879996,
+            "noise": 0.5988023149833478,
+            "silence": 0.8899999999999999
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "mid",
+          "weight": 0.4,
+          "baseline": [
+            "silence",
+            "mid_loud",
+            "low",
+            "noise",
+            "low_quiet",
+            "high",
+            "high_quiet"
+          ],
+          "selected": [
+            "silence",
+            "mid_loud",
+            "low",
+            "low_quiet",
+            "noise",
+            "high",
+            "high_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.578,
+            "low_quiet": 0.5419999999999999,
+            "mid_loud": 0.7899999999999998,
+            "high": 0.43399999999999994,
+            "high_quiet": 0.398,
+            "slow_pulse": 0.282,
+            "fast_pulse": 0.24599999999999994,
+            "noise": 0.57,
+            "silence": 0.8899999999999999
+          },
+          "experimental_scores": {
+            "low": 0.7235125007563852,
+            "low_quiet": 0.6894674000617276,
+            "mid_loud": 0.8314811783172298,
+            "high": 0.578494582354987,
+            "high_quiet": 0.5387354113559467,
+            "slow_pulse": 0.5339983434212222,
+            "fast_pulse": 0.5189739337775999,
+            "noise": 0.6276046299666956,
+            "silence": 0.8899999999999999
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "mid",
+          "weight": 1.0,
+          "baseline": [
+            "silence",
+            "mid_loud",
+            "low",
+            "noise",
+            "low_quiet",
+            "high",
+            "high_quiet"
+          ],
+          "selected": [
+            "low",
+            "fast_pulse",
+            "slow_pulse",
+            "low_quiet",
+            "mid_loud",
+            "silence",
+            "high"
+          ],
+          "baseline_scores": {
+            "low": 0.578,
+            "low_quiet": 0.5419999999999999,
+            "mid_loud": 0.7899999999999998,
+            "high": 0.43399999999999994,
+            "high_quiet": 0.398,
+            "slow_pulse": 0.282,
+            "fast_pulse": 0.24599999999999994,
+            "noise": 0.57,
+            "silence": 0.8899999999999999
+          },
+          "experimental_scores": {
+            "low": 0.9417812518909631,
+            "low_quiet": 0.9106685001543191,
+            "mid_loud": 0.8937029457930746,
+            "high": 0.7952364558874673,
+            "high_quiet": 0.7498385283898668,
+            "slow_pulse": 0.9119958585530555,
+            "fast_pulse": 0.9284348344439999,
+            "noise": 0.7140115749167392,
+            "silence": 0.8899999999999999
+          },
+          "membership_changed": true,
+          "replaced": 2,
+          "order_changed": true
+        },
+        {
+          "seed": "mid_loud",
+          "weight": 0.0,
+          "baseline": [
+            "silence",
+            "mid",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet",
+            "high"
+          ],
+          "selected": [
+            "silence",
+            "mid",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet",
+            "high"
+          ],
+          "baseline_scores": {
+            "low": 0.5419999999999999,
+            "low_quiet": 0.506,
+            "mid": 0.7899999999999998,
+            "high": 0.398,
+            "high_quiet": 0.362,
+            "slow_pulse": 0.24599999999999994,
+            "fast_pulse": 0.57,
+            "noise": 0.5339999999999999,
+            "silence": 0.83
+          },
+          "experimental_scores": {
+            "low": 0.5419999999999999,
+            "low_quiet": 0.506,
+            "mid": 0.7899999999999998,
+            "high": 0.398,
+            "high_quiet": 0.362,
+            "slow_pulse": 0.24599999999999994,
+            "fast_pulse": 0.57,
+            "noise": 0.5339999999999999,
+            "silence": 0.83
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "mid_loud",
+          "weight": 0.2,
+          "baseline": [
+            "silence",
+            "mid",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet",
+            "high"
+          ],
+          "selected": [
+            "silence",
+            "mid",
+            "fast_pulse",
+            "low",
+            "low_quiet",
+            "noise",
+            "high"
+          ],
+          "baseline_scores": {
+            "low": 0.5419999999999999,
+            "low_quiet": 0.506,
+            "mid": 0.7899999999999998,
+            "high": 0.398,
+            "high_quiet": 0.362,
+            "slow_pulse": 0.24599999999999994,
+            "fast_pulse": 0.57,
+            "noise": 0.5339999999999999,
+            "silence": 0.83
+          },
+          "experimental_scores": {
+            "low": 0.60868916031614,
+            "low_quiet": 0.567355759271476,
+            "mid": 0.8107405891586148,
+            "high": 0.47353358346789975,
+            "high_quiet": 0.4311270039851053,
+            "slow_pulse": 0.35899604322156126,
+            "fast_pulse": 0.6233160885698507,
+            "noise": 0.5641299786363205,
+            "silence": 0.83
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "mid_loud",
+          "weight": 0.4,
+          "baseline": [
+            "silence",
+            "mid",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet",
+            "high"
+          ],
+          "selected": [
+            "mid",
+            "silence",
+            "fast_pulse",
+            "low",
+            "low_quiet",
+            "noise",
+            "high"
+          ],
+          "baseline_scores": {
+            "low": 0.5419999999999999,
+            "low_quiet": 0.506,
+            "mid": 0.7899999999999998,
+            "high": 0.398,
+            "high_quiet": 0.362,
+            "slow_pulse": 0.24599999999999994,
+            "fast_pulse": 0.57,
+            "noise": 0.5339999999999999,
+            "silence": 0.83
+          },
+          "experimental_scores": {
+            "low": 0.6753783206322799,
+            "low_quiet": 0.6287115185429518,
+            "mid": 0.8314811783172298,
+            "high": 0.5490671669357995,
+            "high_quiet": 0.5002540079702106,
+            "slow_pulse": 0.4719920864431225,
+            "fast_pulse": 0.6766321771397015,
+            "noise": 0.594259957272641,
+            "silence": 0.83
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "mid_loud",
+          "weight": 1.0,
+          "baseline": [
+            "silence",
+            "mid",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet",
+            "high"
+          ],
+          "selected": [
+            "mid",
+            "low",
+            "fast_pulse",
+            "silence",
+            "low_quiet",
+            "slow_pulse",
+            "high"
+          ],
+          "baseline_scores": {
+            "low": 0.5419999999999999,
+            "low_quiet": 0.506,
+            "mid": 0.7899999999999998,
+            "high": 0.398,
+            "high_quiet": 0.362,
+            "slow_pulse": 0.24599999999999994,
+            "fast_pulse": 0.57,
+            "noise": 0.5339999999999999,
+            "silence": 0.83
+          },
+          "experimental_scores": {
+            "low": 0.8754458015806996,
+            "low_quiet": 0.8127787963573795,
+            "mid": 0.8937029457930746,
+            "high": 0.7756679173394987,
+            "high_quiet": 0.7076350199255264,
+            "slow_pulse": 0.8109802161078064,
+            "fast_pulse": 0.8365804428492536,
+            "noise": 0.6846498931816025,
+            "silence": 0.83
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "high",
+          "weight": 0.0,
+          "baseline": [
+            "silence",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "selected": [
+            "silence",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.506,
+            "low_quiet": 0.47,
+            "mid": 0.43399999999999994,
+            "mid_loud": 0.398,
+            "high_quiet": 0.6459999999999999,
+            "slow_pulse": 0.57,
+            "fast_pulse": 0.5339999999999999,
+            "noise": 0.49799999999999994,
+            "silence": 0.77
+          },
+          "experimental_scores": {
+            "low": 0.506,
+            "low_quiet": 0.47,
+            "mid": 0.43399999999999994,
+            "mid_loud": 0.398,
+            "high_quiet": 0.6459999999999999,
+            "slow_pulse": 0.57,
+            "fast_pulse": 0.5339999999999999,
+            "noise": 0.49799999999999994,
+            "silence": 0.77
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "high",
+          "weight": 0.2,
+          "baseline": [
+            "silence",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "selected": [
+            "silence",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse",
+            "noise",
+            "low",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.506,
+            "low_quiet": 0.47,
+            "mid": 0.43399999999999994,
+            "mid_loud": 0.398,
+            "high_quiet": 0.6459999999999999,
+            "slow_pulse": 0.57,
+            "fast_pulse": 0.5339999999999999,
+            "noise": 0.49799999999999994,
+            "silence": 0.77
+          },
+          "experimental_scores": {
+            "low": 0.5522039314082613,
+            "low_quiet": 0.5222359241167145,
+            "mid": 0.5062472911774935,
+            "mid_loud": 0.47353358346789975,
+            "high_quiet": 0.7010032134199877,
+            "slow_pulse": 0.6090580027632996,
+            "fast_pulse": 0.5775077367331964,
+            "noise": 0.5773896762990677,
+            "silence": 0.77
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "high",
+          "weight": 0.4,
+          "baseline": [
+            "silence",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "selected": [
+            "silence",
+            "high_quiet",
+            "noise",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "mid"
+          ],
+          "baseline_scores": {
+            "low": 0.506,
+            "low_quiet": 0.47,
+            "mid": 0.43399999999999994,
+            "mid_loud": 0.398,
+            "high_quiet": 0.6459999999999999,
+            "slow_pulse": 0.57,
+            "fast_pulse": 0.5339999999999999,
+            "noise": 0.49799999999999994,
+            "silence": 0.77
+          },
+          "experimental_scores": {
+            "low": 0.5984078628165224,
+            "low_quiet": 0.5744718482334289,
+            "mid": 0.578494582354987,
+            "mid_loud": 0.5490671669357995,
+            "high_quiet": 0.7560064268399755,
+            "slow_pulse": 0.6481160055265992,
+            "fast_pulse": 0.6210154734663931,
+            "noise": 0.6567793525981354,
+            "silence": 0.77
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "high",
+          "weight": 1.0,
+          "baseline": [
+            "silence",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "selected": [
+            "high_quiet",
+            "noise",
+            "mid",
+            "mid_loud",
+            "silence",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.506,
+            "low_quiet": 0.47,
+            "mid": 0.43399999999999994,
+            "mid_loud": 0.398,
+            "high_quiet": 0.6459999999999999,
+            "slow_pulse": 0.57,
+            "fast_pulse": 0.5339999999999999,
+            "noise": 0.49799999999999994,
+            "silence": 0.77
+          },
+          "experimental_scores": {
+            "low": 0.7370196570413061,
+            "low_quiet": 0.7311796205835723,
+            "mid": 0.7952364558874673,
+            "mid_loud": 0.7756679173394987,
+            "high_quiet": 0.9210160670999388,
+            "slow_pulse": 0.765290013816498,
+            "fast_pulse": 0.7515386836659826,
+            "noise": 0.8949483814953386,
+            "silence": 0.77
+          },
+          "membership_changed": true,
+          "replaced": 2,
+          "order_changed": true
+        },
+        {
+          "seed": "high_quiet",
+          "weight": 0.0,
+          "baseline": [
+            "silence",
+            "high",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "selected": [
+            "silence",
+            "high",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.47,
+            "low_quiet": 0.43399999999999994,
+            "mid": 0.398,
+            "mid_loud": 0.362,
+            "high": 0.6459999999999999,
+            "slow_pulse": 0.5339999999999999,
+            "fast_pulse": 0.49799999999999994,
+            "noise": 0.46199999999999997,
+            "silence": 0.71
+          },
+          "experimental_scores": {
+            "low": 0.47,
+            "low_quiet": 0.43399999999999994,
+            "mid": 0.398,
+            "mid_loud": 0.362,
+            "high": 0.6459999999999999,
+            "slow_pulse": 0.5339999999999999,
+            "fast_pulse": 0.49799999999999994,
+            "noise": 0.46199999999999997,
+            "silence": 0.71
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "high_quiet",
+          "weight": 0.2,
+          "baseline": [
+            "silence",
+            "high",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "selected": [
+            "silence",
+            "high",
+            "slow_pulse",
+            "noise",
+            "fast_pulse",
+            "low",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.47,
+            "low_quiet": 0.43399999999999994,
+            "mid": 0.398,
+            "mid_loud": 0.362,
+            "high": 0.6459999999999999,
+            "slow_pulse": 0.5339999999999999,
+            "fast_pulse": 0.49799999999999994,
+            "noise": 0.46199999999999997,
+            "silence": 0.71
+          },
+          "experimental_scores": {
+            "low": 0.5147107388522182,
+            "low_quiet": 0.4882897254376702,
+            "mid": 0.46836770567797337,
+            "mid_loud": 0.4311270039851053,
+            "high": 0.7010032134199877,
+            "slow_pulse": 0.5759496422211032,
+            "fast_pulse": 0.5424028940671339,
+            "noise": 0.5547903725605328,
+            "silence": 0.71
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "high_quiet",
+          "weight": 0.4,
+          "baseline": [
+            "silence",
+            "high",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "selected": [
+            "high",
+            "silence",
+            "noise",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.47,
+            "low_quiet": 0.43399999999999994,
+            "mid": 0.398,
+            "mid_loud": 0.362,
+            "high": 0.6459999999999999,
+            "slow_pulse": 0.5339999999999999,
+            "fast_pulse": 0.49799999999999994,
+            "noise": 0.46199999999999997,
+            "silence": 0.71
+          },
+          "experimental_scores": {
+            "low": 0.5594214777044363,
+            "low_quiet": 0.5425794508753404,
+            "mid": 0.5387354113559467,
+            "mid_loud": 0.5002540079702106,
+            "high": 0.7560064268399755,
+            "slow_pulse": 0.6178992844422064,
+            "fast_pulse": 0.5868057881342678,
+            "noise": 0.6475807451210656,
+            "silence": 0.71
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "high_quiet",
+          "weight": 1.0,
+          "baseline": [
+            "silence",
+            "high",
+            "slow_pulse",
+            "fast_pulse",
+            "low",
+            "noise",
+            "low_quiet"
+          ],
+          "selected": [
+            "noise",
+            "high",
+            "mid",
+            "slow_pulse",
+            "fast_pulse",
+            "silence",
+            "mid_loud"
+          ],
+          "baseline_scores": {
+            "low": 0.47,
+            "low_quiet": 0.43399999999999994,
+            "mid": 0.398,
+            "mid_loud": 0.362,
+            "high": 0.6459999999999999,
+            "slow_pulse": 0.5339999999999999,
+            "fast_pulse": 0.49799999999999994,
+            "noise": 0.46199999999999997,
+            "silence": 0.71
+          },
+          "experimental_scores": {
+            "low": 0.6935536942610908,
+            "low_quiet": 0.7054486271883511,
+            "mid": 0.7498385283898668,
+            "mid_loud": 0.7076350199255264,
+            "high": 0.9210160670999388,
+            "slow_pulse": 0.7437482111055163,
+            "fast_pulse": 0.7200144703356695,
+            "noise": 0.9259518628026638,
+            "silence": 0.71
+          },
+          "membership_changed": true,
+          "replaced": 2,
+          "order_changed": true
+        },
+        {
+          "seed": "slow_pulse",
+          "weight": 0.0,
+          "baseline": [
+            "fast_pulse",
+            "silence",
+            "high",
+            "high_quiet",
+            "noise",
+            "low",
+            "low_quiet"
+          ],
+          "selected": [
+            "fast_pulse",
+            "silence",
+            "high",
+            "high_quiet",
+            "noise",
+            "low",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.354,
+            "low_quiet": 0.318,
+            "mid": 0.282,
+            "mid_loud": 0.24599999999999994,
+            "high": 0.57,
+            "high_quiet": 0.5339999999999999,
+            "fast_pulse": 0.7819999999999999,
+            "noise": 0.426,
+            "silence": 0.6499999999999999
+          },
+          "experimental_scores": {
+            "low": 0.354,
+            "low_quiet": 0.318,
+            "mid": 0.282,
+            "mid_loud": 0.24599999999999994,
+            "high": 0.57,
+            "high_quiet": 0.5339999999999999,
+            "fast_pulse": 0.7819999999999999,
+            "noise": 0.426,
+            "silence": 0.6499999999999999
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "slow_pulse",
+          "weight": 0.2,
+          "baseline": [
+            "fast_pulse",
+            "silence",
+            "high",
+            "high_quiet",
+            "noise",
+            "low",
+            "low_quiet"
+          ],
+          "selected": [
+            "fast_pulse",
+            "silence",
+            "high",
+            "high_quiet",
+            "noise",
+            "low",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.354,
+            "low_quiet": 0.318,
+            "mid": 0.282,
+            "mid_loud": 0.24599999999999994,
+            "high": 0.57,
+            "high_quiet": 0.5339999999999999,
+            "fast_pulse": 0.7819999999999999,
+            "noise": 0.426,
+            "silence": 0.6499999999999999
+          },
+          "experimental_scores": {
+            "low": 0.46363514569553615,
+            "low_quiet": 0.44299738984205966,
+            "mid": 0.4079991717106111,
+            "mid_loud": 0.35899604322156126,
+            "high": 0.6090580027632996,
+            "high_quiet": 0.5759496422211032,
+            "fast_pulse": 0.8149493579759111,
+            "noise": 0.4818992602091955,
+            "silence": 0.6499999999999999
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "slow_pulse",
+          "weight": 0.4,
+          "baseline": [
+            "fast_pulse",
+            "silence",
+            "high",
+            "high_quiet",
+            "noise",
+            "low",
+            "low_quiet"
+          ],
+          "selected": [
+            "fast_pulse",
+            "silence",
+            "high",
+            "high_quiet",
+            "low",
+            "low_quiet",
+            "noise"
+          ],
+          "baseline_scores": {
+            "low": 0.354,
+            "low_quiet": 0.318,
+            "mid": 0.282,
+            "mid_loud": 0.24599999999999994,
+            "high": 0.57,
+            "high_quiet": 0.5339999999999999,
+            "fast_pulse": 0.7819999999999999,
+            "noise": 0.426,
+            "silence": 0.6499999999999999
+          },
+          "experimental_scores": {
+            "low": 0.5732702913910723,
+            "low_quiet": 0.5679947796841193,
+            "mid": 0.5339983434212222,
+            "mid_loud": 0.4719920864431225,
+            "high": 0.6481160055265992,
+            "high_quiet": 0.6178992844422064,
+            "fast_pulse": 0.8478987159518221,
+            "noise": 0.537798520418391,
+            "silence": 0.6499999999999999
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "slow_pulse",
+          "weight": 1.0,
+          "baseline": [
+            "fast_pulse",
+            "silence",
+            "high",
+            "high_quiet",
+            "noise",
+            "low",
+            "low_quiet"
+          ],
+          "selected": [
+            "fast_pulse",
+            "low_quiet",
+            "mid",
+            "low",
+            "mid_loud",
+            "high",
+            "high_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.354,
+            "low_quiet": 0.318,
+            "mid": 0.282,
+            "mid_loud": 0.24599999999999994,
+            "high": 0.57,
+            "high_quiet": 0.5339999999999999,
+            "fast_pulse": 0.7819999999999999,
+            "noise": 0.426,
+            "silence": 0.6499999999999999
+          },
+          "experimental_scores": {
+            "low": 0.9021757284776807,
+            "low_quiet": 0.9429869492102981,
+            "mid": 0.9119958585530555,
+            "mid_loud": 0.8109802161078064,
+            "high": 0.765290013816498,
+            "high_quiet": 0.7437482111055163,
+            "fast_pulse": 0.9467467898795554,
+            "noise": 0.7054963010459775,
+            "silence": 0.6499999999999999
+          },
+          "membership_changed": true,
+          "replaced": 2,
+          "order_changed": true
+        },
+        {
+          "seed": "fast_pulse",
+          "weight": 0.0,
+          "baseline": [
+            "slow_pulse",
+            "silence",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "noise",
+            "low"
+          ],
+          "selected": [
+            "slow_pulse",
+            "silence",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "noise",
+            "low"
+          ],
+          "baseline_scores": {
+            "low": 0.318,
+            "low_quiet": 0.282,
+            "mid": 0.24599999999999994,
+            "mid_loud": 0.57,
+            "high": 0.5339999999999999,
+            "high_quiet": 0.49799999999999994,
+            "slow_pulse": 0.7819999999999999,
+            "noise": 0.38999999999999996,
+            "silence": 0.59
+          },
+          "experimental_scores": {
+            "low": 0.318,
+            "low_quiet": 0.282,
+            "mid": 0.24599999999999994,
+            "mid_loud": 0.57,
+            "high": 0.5339999999999999,
+            "high_quiet": 0.49799999999999994,
+            "slow_pulse": 0.7819999999999999,
+            "noise": 0.38999999999999996,
+            "silence": 0.59
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "fast_pulse",
+          "weight": 0.2,
+          "baseline": [
+            "slow_pulse",
+            "silence",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "noise",
+            "low"
+          ],
+          "selected": [
+            "slow_pulse",
+            "mid_loud",
+            "silence",
+            "high",
+            "high_quiet",
+            "noise",
+            "low"
+          ],
+          "baseline_scores": {
+            "low": 0.318,
+            "low_quiet": 0.282,
+            "mid": 0.24599999999999994,
+            "mid_loud": 0.57,
+            "high": 0.5339999999999999,
+            "high_quiet": 0.49799999999999994,
+            "slow_pulse": 0.7819999999999999,
+            "noise": 0.38999999999999996,
+            "silence": 0.59
+          },
+          "experimental_scores": {
+            "low": 0.44129784771072267,
+            "low_quiet": 0.41535020367538766,
+            "mid": 0.38248696688879996,
+            "mid_loud": 0.6233160885698507,
+            "high": 0.5775077367331964,
+            "high_quiet": 0.5424028940671339,
+            "slow_pulse": 0.8149493579759111,
+            "noise": 0.4496674414766423,
+            "silence": 0.59
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "fast_pulse",
+          "weight": 0.4,
+          "baseline": [
+            "slow_pulse",
+            "silence",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "noise",
+            "low"
+          ],
+          "selected": [
+            "slow_pulse",
+            "mid_loud",
+            "high",
+            "silence",
+            "high_quiet",
+            "low",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.318,
+            "low_quiet": 0.282,
+            "mid": 0.24599999999999994,
+            "mid_loud": 0.57,
+            "high": 0.5339999999999999,
+            "high_quiet": 0.49799999999999994,
+            "slow_pulse": 0.7819999999999999,
+            "noise": 0.38999999999999996,
+            "silence": 0.59
+          },
+          "experimental_scores": {
+            "low": 0.5645956954214453,
+            "low_quiet": 0.5487004073507753,
+            "mid": 0.5189739337775999,
+            "mid_loud": 0.6766321771397015,
+            "high": 0.6210154734663931,
+            "high_quiet": 0.5868057881342678,
+            "slow_pulse": 0.8478987159518221,
+            "noise": 0.5093348829532844,
+            "silence": 0.59
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "fast_pulse",
+          "weight": 1.0,
+          "baseline": [
+            "slow_pulse",
+            "silence",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "noise",
+            "low"
+          ],
+          "selected": [
+            "low_quiet",
+            "slow_pulse",
+            "low",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.318,
+            "low_quiet": 0.282,
+            "mid": 0.24599999999999994,
+            "mid_loud": 0.57,
+            "high": 0.5339999999999999,
+            "high_quiet": 0.49799999999999994,
+            "slow_pulse": 0.7819999999999999,
+            "noise": 0.38999999999999996,
+            "silence": 0.59
+          },
+          "experimental_scores": {
+            "low": 0.9344892385536131,
+            "low_quiet": 0.9487510183769383,
+            "mid": 0.9284348344439999,
+            "mid_loud": 0.8365804428492536,
+            "high": 0.7515386836659826,
+            "high_quiet": 0.7200144703356695,
+            "slow_pulse": 0.9467467898795554,
+            "noise": 0.6883372073832112,
+            "silence": 0.59
+          },
+          "membership_changed": true,
+          "replaced": 2,
+          "order_changed": true
+        },
+        {
+          "seed": "noise",
+          "weight": 0.0,
+          "baseline": [
+            "mid",
+            "mid_loud",
+            "silence",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "selected": [
+            "mid",
+            "mid_loud",
+            "silence",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.282,
+            "low_quiet": 0.24599999999999994,
+            "mid": 0.57,
+            "mid_loud": 0.5339999999999999,
+            "high": 0.49799999999999994,
+            "high_quiet": 0.46199999999999997,
+            "slow_pulse": 0.426,
+            "fast_pulse": 0.38999999999999996,
+            "silence": 0.53
+          },
+          "experimental_scores": {
+            "low": 0.282,
+            "low_quiet": 0.24599999999999994,
+            "mid": 0.57,
+            "mid_loud": 0.5339999999999999,
+            "high": 0.49799999999999994,
+            "high_quiet": 0.46199999999999997,
+            "slow_pulse": 0.426,
+            "fast_pulse": 0.38999999999999996,
+            "silence": 0.53
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "noise",
+          "weight": 0.2,
+          "baseline": [
+            "mid",
+            "mid_loud",
+            "silence",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "selected": [
+            "mid",
+            "high",
+            "mid_loud",
+            "high_quiet",
+            "silence",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.282,
+            "low_quiet": 0.24599999999999994,
+            "mid": 0.57,
+            "mid_loud": 0.5339999999999999,
+            "high": 0.49799999999999994,
+            "high_quiet": 0.46199999999999997,
+            "slow_pulse": 0.426,
+            "fast_pulse": 0.38999999999999996,
+            "silence": 0.53
+          },
+          "experimental_scores": {
+            "low": 0.3571458454819216,
+            "low_quiet": 0.3295955847287001,
+            "mid": 0.5988023149833478,
+            "mid_loud": 0.5641299786363205,
+            "high": 0.5773896762990677,
+            "high_quiet": 0.5547903725605328,
+            "slow_pulse": 0.4818992602091955,
+            "fast_pulse": 0.4496674414766423,
+            "silence": 0.53
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "noise",
+          "weight": 0.4,
+          "baseline": [
+            "mid",
+            "mid_loud",
+            "silence",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "selected": [
+            "high",
+            "high_quiet",
+            "mid",
+            "mid_loud",
+            "slow_pulse",
+            "silence",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.282,
+            "low_quiet": 0.24599999999999994,
+            "mid": 0.57,
+            "mid_loud": 0.5339999999999999,
+            "high": 0.49799999999999994,
+            "high_quiet": 0.46199999999999997,
+            "slow_pulse": 0.426,
+            "fast_pulse": 0.38999999999999996,
+            "silence": 0.53
+          },
+          "experimental_scores": {
+            "low": 0.4322916909638431,
+            "low_quiet": 0.4131911694574002,
+            "mid": 0.6276046299666956,
+            "mid_loud": 0.594259957272641,
+            "high": 0.6567793525981354,
+            "high_quiet": 0.6475807451210656,
+            "slow_pulse": 0.537798520418391,
+            "fast_pulse": 0.5093348829532844,
+            "silence": 0.53
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": true
+        },
+        {
+          "seed": "noise",
+          "weight": 1.0,
+          "baseline": [
+            "mid",
+            "mid_loud",
+            "silence",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "selected": [
+            "high_quiet",
+            "high",
+            "mid",
+            "slow_pulse",
+            "fast_pulse",
+            "mid_loud",
+            "low_quiet"
+          ],
+          "baseline_scores": {
+            "low": 0.282,
+            "low_quiet": 0.24599999999999994,
+            "mid": 0.57,
+            "mid_loud": 0.5339999999999999,
+            "high": 0.49799999999999994,
+            "high_quiet": 0.46199999999999997,
+            "slow_pulse": 0.426,
+            "fast_pulse": 0.38999999999999996,
+            "silence": 0.53
+          },
+          "experimental_scores": {
+            "low": 0.6577292274096079,
+            "low_quiet": 0.6639779236435006,
+            "mid": 0.7140115749167392,
+            "mid_loud": 0.6846498931816025,
+            "high": 0.8949483814953386,
+            "high_quiet": 0.9259518628026638,
+            "slow_pulse": 0.7054963010459775,
+            "fast_pulse": 0.6883372073832112,
+            "silence": 0.53
+          },
+          "membership_changed": true,
+          "replaced": 1,
+          "order_changed": true
+        },
+        {
+          "seed": "silence",
+          "weight": 0.0,
+          "baseline": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "selected": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.4099999999999999,
+            "low_quiet": 0.95,
+            "mid": 0.8899999999999999,
+            "mid_loud": 0.83,
+            "high": 0.77,
+            "high_quiet": 0.71,
+            "slow_pulse": 0.6499999999999999,
+            "fast_pulse": 0.59,
+            "noise": 0.53
+          },
+          "experimental_scores": {
+            "low": 0.4099999999999999,
+            "low_quiet": 0.95,
+            "mid": 0.8899999999999999,
+            "mid_loud": 0.83,
+            "high": 0.77,
+            "high_quiet": 0.71,
+            "slow_pulse": 0.6499999999999999,
+            "fast_pulse": 0.59,
+            "noise": 0.53
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "silence",
+          "weight": 0.2,
+          "baseline": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "selected": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.4099999999999999,
+            "low_quiet": 0.95,
+            "mid": 0.8899999999999999,
+            "mid_loud": 0.83,
+            "high": 0.77,
+            "high_quiet": 0.71,
+            "slow_pulse": 0.6499999999999999,
+            "fast_pulse": 0.59,
+            "noise": 0.53
+          },
+          "experimental_scores": {
+            "low": 0.4099999999999999,
+            "low_quiet": 0.95,
+            "mid": 0.8899999999999999,
+            "mid_loud": 0.83,
+            "high": 0.77,
+            "high_quiet": 0.71,
+            "slow_pulse": 0.6499999999999999,
+            "fast_pulse": 0.59,
+            "noise": 0.53
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "silence",
+          "weight": 0.4,
+          "baseline": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "selected": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.4099999999999999,
+            "low_quiet": 0.95,
+            "mid": 0.8899999999999999,
+            "mid_loud": 0.83,
+            "high": 0.77,
+            "high_quiet": 0.71,
+            "slow_pulse": 0.6499999999999999,
+            "fast_pulse": 0.59,
+            "noise": 0.53
+          },
+          "experimental_scores": {
+            "low": 0.4099999999999999,
+            "low_quiet": 0.95,
+            "mid": 0.8899999999999999,
+            "mid_loud": 0.83,
+            "high": 0.77,
+            "high_quiet": 0.71,
+            "slow_pulse": 0.6499999999999999,
+            "fast_pulse": 0.59,
+            "noise": 0.53
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        },
+        {
+          "seed": "silence",
+          "weight": 1.0,
+          "baseline": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "selected": [
+            "low_quiet",
+            "mid",
+            "mid_loud",
+            "high",
+            "high_quiet",
+            "slow_pulse",
+            "fast_pulse"
+          ],
+          "baseline_scores": {
+            "low": 0.4099999999999999,
+            "low_quiet": 0.95,
+            "mid": 0.8899999999999999,
+            "mid_loud": 0.83,
+            "high": 0.77,
+            "high_quiet": 0.71,
+            "slow_pulse": 0.6499999999999999,
+            "fast_pulse": 0.59,
+            "noise": 0.53
+          },
+          "experimental_scores": {
+            "low": 0.4099999999999999,
+            "low_quiet": 0.95,
+            "mid": 0.8899999999999999,
+            "mid_loud": 0.83,
+            "high": 0.77,
+            "high_quiet": 0.71,
+            "slow_pulse": 0.6499999999999999,
+            "fast_pulse": 0.59,
+            "noise": 0.53
+          },
+          "membership_changed": false,
+          "replaced": 0,
+          "order_changed": false
+        }
+      ],
+      "membership": {
+        "0.0": {
+          "expansions": 10,
+          "changed": 0,
+          "share_changed": 0.0
+        },
+        "0.2": {
+          "expansions": 10,
+          "changed": 1,
+          "share_changed": 0.1
+        },
+        "0.4": {
+          "expansions": 10,
+          "changed": 4,
+          "share_changed": 0.4
+        },
+        "1.0": {
+          "expansions": 10,
+          "changed": 9,
+          "share_changed": 0.9
+        }
+      }
+    }
+  },
+  "installed_packages": [
+    "annotated-doc==0.0.5",
+    "annotated-types==0.8.0",
+    "anyio==4.15.0",
+    "certifi==2026.7.22",
+    "cffi==2.1.1",
+    "charset-normalizer==3.5.2",
+    "click==8.5.0",
+    "cloudpickle==3.1.2",
+    "cryptography==50.0.1",
+    "decorator==5.3.1",
+    "fastapi==0.141.1",
+    "h11==0.16.0",
+    "httpcore==1.0.9",
+    "httptools==0.8.0",
+    "httpx==0.28.1",
+    "idna==3.19",
+    "iniconfig==2.3.0",
+    "joblib==1.6.0",
+    "lazy-loader==0.6",
+    "librosa==1.0.0",
+    "llvmlite==0.50.0",
+    "msgpack==1.2.3",
+    "narwhals==2.27.1",
+    "numba==0.68.0",
+    "numpy==2.5.3",
+    "packaging==26.3",
+    "pip==25.0.1",
+    "platformdirs==4.12.4",
+    "pluggy==1.6.0",
+    "pooch==1.9.0",
+    "pycparser==3.0",
+    "pydantic==2.13.5",
+    "pydantic-settings==2.15.0",
+    "pydantic_core==2.46.5",
+    "Pygments==2.21.0",
+    "PyJWT==2.13.0",
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "python-dotenv==1.2.3",
+    "PyYAML==6.0.3",
+    "requests==2.34.2",
+    "scikit-learn==1.9.1",
+    "scipy==1.18.1",
+    "setuptools==84.0.0",
+    "soundfile==0.14.0",
+    "soxr==1.1.0",
+    "starlette==1.6.0",
+    "threadpoolctl==3.7.0",
+    "typing-inspection==0.4.4",
+    "typing_extensions==4.16.0",
+    "urllib3==2.8.0",
+    "uvicorn==0.52.4",
+    "uvloop==0.22.1",
+    "watchfiles==1.2.0",
+    "websockets==17.1",
+    "wheel==0.48.0"
+  ]
+}
