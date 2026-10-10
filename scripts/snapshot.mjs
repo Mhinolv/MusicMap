@@ -121,6 +121,44 @@ async function artistGraph(page) {
 // ---- scenarios ---------------------------------------------------------------------
 
 const scenarios = [
+  ...[
+    { name: 'resume-map', viewport: DESKTOP },
+    { name: 'resume-map-mobile', viewport: MOBILE, userAgent: MOBILE_UA },
+  ].map((options) => ({
+    ...options,
+    async run(page) {
+      await artistGraph(page)
+      await waitForSettle(page)
+      await page.waitForFunction(() => JSON.parse(localStorage.getItem('tunegraph:map:v1') ?? 'null')?.nodes?.length > 1)
+      await page.reload()
+      await page.waitForSelector('.resume-card', { visible: true })
+      return 'Last map available; search retains initial focus'
+    },
+  })),
+  {
+    name: 'resume-invalid', viewport: DESKTOP,
+    async run(page) {
+      await page.evaluate(() => localStorage.setItem('tunegraph:map:v1', '{broken'))
+      await page.reload()
+      await page.waitForSelector('.resume-card', { visible: true })
+      return 'Corrupt snapshot offers Start fresh only'
+    },
+  },
+  {
+    name: 'resumed-song-map', viewport: DESKTOP,
+    async run(page) {
+      await search(page, 'song', 'Creep', 'Creep')
+      await waitForNodes(page, 2)
+      await page.waitForFunction(() => JSON.parse(localStorage.getItem('tunegraph:map:v1') ?? 'null')?.nodes?.length > 1)
+      await page.reload()
+      await page.waitForSelector('.resume-card .btn', { visible: true })
+      await page.click('.resume-card .btn')
+      await waitForNodes(page, 2)
+      await waitForPanel(page)
+      await waitForSettle(page)
+      return 'Song map restored with selection, trail and fitted view'
+    },
+  },
   {
     name: 'saved-empty',
     viewport: DESKTOP,
