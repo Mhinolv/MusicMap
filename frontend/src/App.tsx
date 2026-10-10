@@ -11,10 +11,11 @@ import { finishSpotifyImport } from './spotifyImport'
 import { artistNode, planPrune, trackNode, useMusicGraph, type ExpandedChild } from './graph/useMusicGraph'
 import { JOURNEY_CAP, journeyContext } from './graph/journey'
 import type { ArtistRef, PruneMode, TasteProfile, TrackRankingContext, TrackRef } from './types'
+import { addExclusion, EXCLUSION_FULL_MESSAGE, readExclusions, restoreExclusions, writeExclusions, type ExcludedSong } from './exclusions'
 
 const EXPAND_LIMIT = 7
 
-type Toast = { source?: 'bookmarks'; msg: string; action?: { label: string; run: () => void } }
+type Toast = { source?: 'bookmarks' | 'exclusions'; msg: string; action?: { label: string; run: () => void } }
 const TASTE_STORAGE_KEY = 'tunegraph:taste:v1'
 
 function readTaste(): TasteProfile | null {
@@ -38,6 +39,8 @@ export default function App() {
   const [tasteOpen, setTasteOpen] = useState(false)
   const [bookmarks, setBookmarks] = useState(readBookmarks)
   const bookmarksRef = useRef(bookmarks)
+  const [exclusions, setExclusions] = useState(readExclusions)
+  const exclusionsRef = useRef(exclusions)
   const [savedOpen, setSavedOpen] = useState(false)
   const closeSaved = useCallback(() => setSavedOpen(false), [])
   const inflight = useRef(new Set<string>())
@@ -69,6 +72,27 @@ export default function App() {
     } } }, 7000)
   }
 
+  const updateExclusions = (next: ExcludedSong[]) => {
+    if (!writeExclusions(next)) {
+      showToast({ source: 'exclusions', msg: "Couldn't save: this browser is blocking local storage." }, 7000)
+      return false
+    }
+    exclusionsRef.current = next
+    setExclusions(next)
+    return true
+  }
+  const restoreExcluded = (removed: ExcludedSong[]) => {
+    const next = restoreExclusions(exclusionsRef.current, removed)
+    if (next === exclusionsRef.current) showToast({ source: 'exclusions', msg: EXCLUSION_FULL_MESSAGE }, 7000)
+    else updateExclusions(next)
+  }
+  const removeExclusions = (removed: ExcludedSong[]) => {
+    const ids = new Set(removed.map((entry) => entry.item.id))
+    if (!updateExclusions(exclusionsRef.current.filter((entry) => !ids.has(entry.item.id)))) return
+    showToast({ source: 'exclusions', msg: removed.length === 1 ? `Will suggest “${removed[0].item.name}” again.` : 'Reset not suggested songs.',
+      action: { label: 'Undo', run: () => restoreExcluded(removed) } }, 7000)
+  }
+
   const expand = useCallback(
     async (id: string) => {
       if (inflight.current.has(id)) return
@@ -84,15 +108,21 @@ export default function App() {
         if (node.kind === 'track') {
           const trail = followJourney ? journeyContext(g.graph.journey, g.graph.nodes, id) : undefined
           const overCap = !!trail && trail.length > JOURNEY_CAP
-          const result = await api.trackSimilar(id, EXPAND_LIMIT, undefined, overCap ? undefined : trail)
+          const result = await api.trackSimilar(id, EXPAND_LIMIT, undefined, overCap ? undefined : trail, exclusionsRef.current.map((entry) => entry.item.id))
           if (epoch !== mapEpoch.current) return
           ranking = overCap ? { mode: 'parent', stop_count: trail.length, fallback_reason: 'cap_exceeded' } : result.ranking
-          children = result.tracks.map((t) => ({
+          // Honor exclusions changed while the request was in flight, too.
+          const excludedIds = new Set(exclusionsRef.current.map((entry) => entry.item.id))
+          const tracks = result.tracks.filter((track) => !excludedIds.has(track.id))
+          children = tracks.map((t) => ({
             node: trackNode(t, id),
             similarity: t.similarity ?? undefined,
             sharedTags: t.shared_tags?.length ? t.shared_tags : undefined,
           }))
-          if (ranking.fallback_reason) showToast({ msg: ranking.fallback_reason === 'cap_exceeded'
+          if (children.length < EXPAND_LIMIT && (result.excluded_count > 0 || tracks.length < result.tracks.length)) {
+            showToast({ msg: children.length ? `Only ${children.length} connections remain after not suggested songs were excluded.` : 'No connections remain after not suggested songs were excluded. Manage them in Saved → Not suggested.' }, 7000)
+          } else if (!children.length) showToast({ msg: `No known connections for ${node.name}.` })
+          else if (ranking.fallback_reason) showToast({ msg: ranking.fallback_reason === 'cap_exceeded'
             ? 'Journey is over 50 stops, so this expansion used only this song.'
             : "Couldn't follow the whole journey this time; ranked by this song." })
         } else {
@@ -100,7 +130,7 @@ export default function App() {
         }
         if (epoch !== mapEpoch.current) return
         g.expandSuccess(id, children, ranking)
-        if (children.length === 0) showToast({ msg: `No known connections for ${node.name}.` })
+        if (children.length === 0 && node.kind !== 'track') showToast({ msg: `No known connections for ${node.name}.` })
       } catch (err) {
         const msg =
           err instanceof ApiError && err.status === 429
@@ -174,7 +204,7 @@ export default function App() {
       } else if (e.key === 'z' && (e.metaKey || e.ctrlKey) && !typing && g.graph.undo) {
         e.preventDefault()
         g.undo()
-        setToast((current) => current?.source === 'bookmarks' ? current : null)
+        setToast((current) => current?.source ? current : null)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -226,6 +256,17 @@ export default function App() {
     updateBookmarks(next)
   }
 
+  const toggleExclusion = () => {
+    if (selectedBookmark?.kind !== 'track') return
+    const existing = exclusionsRef.current.find((entry) => entry.item.id === selectedBookmark.item.id)
+    if (existing) return removeExclusions([existing])
+    const next = addExclusion(exclusionsRef.current, selectedBookmark)
+    if (next === exclusionsRef.current) return showToast({ source: 'exclusions', msg: EXCLUSION_FULL_MESSAGE }, 7000)
+    if (!updateExclusions(next)) return
+    showToast({ source: 'exclusions', msg: `Won't suggest “${selectedBookmark.item.name}” again. It stays on this map.`,
+      action: { label: 'Undo', run: () => updateExclusions(exclusionsRef.current.filter((entry) => entry.item.id !== selectedBookmark.item.id)) } }, 7000)
+  }
+
   const hasGraph = g.nodes.length > 0
   const rootKind = g.graph.rootId ? g.graph.nodes.get(g.graph.rootId)?.kind : undefined
   const searchProps = { onSelect: onSelectSearch, onSelectTrack, mode: searchMode, onModeChange: setSearchMode }
@@ -238,7 +279,7 @@ export default function App() {
           <p className="hero__sub">Start from an artist or a song, then wander outward through who they're connected to.</p>
           <SearchBar {...searchProps} autoFocus />
           <button className="taste-entry" onClick={() => setTasteOpen(true)}>{taste ? 'Edit your music taste' : 'Add your music taste'}</button>
-          {bookmarks.length > 0 && <button className="link-btn saved-entry" onClick={() => setSavedOpen(true)}>Open saved discoveries ({bookmarks.length})</button>}
+          {(bookmarks.length > 0 || exclusions.length > 0) && <button className="link-btn saved-entry" onClick={() => setSavedOpen(true)}>Open saved discoveries ({bookmarks.length})</button>}
           <p className="hero__hint">
             {searchMode === 'song' ? 'Try “Creep”, “Glory Box”, or “Teardrop”.' : 'Try “Radiohead”, “Portishead”, or “Björk”.'}
           </p>
@@ -273,6 +314,8 @@ export default function App() {
             {selected && (
               <ArtistPanel
                 node={selected}
+                excluded={exclusions.some((entry) => entry.item.id === selected.id)}
+                onToggleExclusion={toggleExclusion}
                 saved={isSaved}
                 onToggleSave={toggleSave}
                 isRoot={selected.id === g.graph.rootId}
@@ -337,7 +380,7 @@ export default function App() {
           )}
         </div>
       )}
-      {savedOpen && <SavedDiscoveries entries={bookmarks} onOpen={openBookmark} onRemove={(entry) => removeBookmarks([entry])} onClear={() => removeBookmarks(bookmarksRef.current)} onClose={closeSaved} />}
+      {savedOpen && <SavedDiscoveries exclusions={exclusions} onRemoveExclusion={(entry) => removeExclusions([entry])} onResetExclusions={() => removeExclusions(exclusionsRef.current)} entries={bookmarks} onOpen={openBookmark} onRemove={(entry) => removeBookmarks([entry])} onClear={() => removeBookmarks(bookmarksRef.current)} onClose={closeSaved} />}
       {tasteOpen && <TastePreferences profile={taste ?? { liked_artists: [], liked_tracks: [], liked_genres: [], disliked: [], notes: '' }} onSave={saveTaste} onClear={clearTaste} onClose={() => setTasteOpen(false)} />}
     </div>
   )

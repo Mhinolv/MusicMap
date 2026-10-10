@@ -18,6 +18,8 @@ type Props = {
   onOpenArtist: (artist: ArtistRef) => void
   taste: TasteProfile | null
   onEditTaste: () => void
+  excluded: boolean
+  onToggleExclusion: () => void
   saved: boolean
   onToggleSave: () => void
 }
@@ -169,7 +171,7 @@ function fmtDate(d?: string | null): string {
 }
 
 /** Panel for a song node: album, release date, duration, tags, description, preview. */
-function TrackPanel({ node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist, taste, onEditTaste, followJourney, journeyStops, saved, onToggleSave, sheet }: Omit<Props, 'onTags'> & { sheet: Sheet }) {
+function TrackPanel({ excluded, onToggleExclusion, node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist, taste, onEditTaste, followJourney, journeyStops, saved, onToggleSave, sheet }: Omit<Props, 'onTags'> & { sheet: Sheet }) {
   const [details, setDetails] = useState<TrackDetails | null>(null)
   // undefined = still looking it up, null = unknown.
   const [releaseDate, setReleaseDate] = useState<string | null | undefined>(undefined)
@@ -279,6 +281,7 @@ function TrackPanel({ node, isRoot, impact, onExpand, onPrune, onClose, onOpenAr
             : `Next expansion follows your ${journeyStops}-stop journey.`}</p>
         ) : null}
         <PruneActions node={node} isRoot={isRoot} impact={impact} onPrune={onPrune} />
+        <button className="btn btn--ghost exclusion-toggle" aria-pressed={excluded} onClick={onToggleExclusion}>{excluded ? 'Suggest again' : "Don't suggest again"}</button>
       </div>
 
       <TasteCheck key={`${node.id}:${JSON.stringify(taste)}`} kind="track" itemId={node.id} profile={taste} onEdit={onEditTaste} />
