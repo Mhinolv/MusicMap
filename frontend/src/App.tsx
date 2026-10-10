@@ -7,7 +7,7 @@ import { SearchBar, type SearchMode } from './components/SearchBar'
 import { SavedDiscoveries } from './components/SavedDiscoveries'
 import { addBookmark, bookmarkKey, BOOKMARK_FULL_MESSAGE, nodeBookmark, readBookmarks, restoreBookmarks, writeBookmarks, type Bookmark } from './bookmarks'
 import { TastePreferences } from './components/TastePreferences'
-import { emptyTaste, isEmptyTaste, readTaste, writeTaste, toggleTaste, storedTasteEntry, TASTE_LIMIT, type TasteList } from './taste'
+import { emptyTaste, isEmptyTaste, readTaste, writeTaste, toggleTaste, storedTasteEntry, TASTE_LIMIT, TASTE_LIST_LABELS, type TasteList } from './taste'
 import { TasteToggle } from './components/TasteToggle'
 import { finishSpotifyImport } from './spotifyImport'
 import { artistNode, planPrune, trackNode, useMusicGraph, type ExpandedChild } from './graph/useMusicGraph'
@@ -295,16 +295,18 @@ export default function App() {
     const previous = tasteRef.current
     const next = toggleTaste(previous, list, entry)
     if (next === previous) {
-      showToast({ source: 'taste', msg: `Your ${list === 'liked_artists' ? 'liked bands' : list === 'liked_tracks' ? 'liked songs' : 'dislikes'} list is full (${TASTE_LIMIT}).`,
+      showToast({ source: 'taste', msg: `Your ${TASTE_LIST_LABELS[list]} list is full (${TASTE_LIMIT}).`,
         action: { label: 'Edit taste', run: () => setTasteOpen(true) } }, 7000)
       return
     }
     if (!updateTaste(next)) return
     const added = storedTasteEntry(next, list, entry) !== undefined
-    const moved = added && (list === 'disliked'
-      ? storedTasteEntry(previous, 'liked_artists', entry) !== undefined || storedTasteEntry(previous, 'liked_tracks', entry) !== undefined
-      : storedTasteEntry(previous, 'disliked', entry) !== undefined)
-    showToast({ source: 'taste', msg: `${moved ? 'Moved' : added ? 'Added' : 'Removed'} “${entry}” ${added ? 'to' : 'from'} ${list === 'disliked' ? moved ? 'dislikes' : 'your dislikes' : 'your taste'}.`,
+    const opposite: TasteList[] = list === 'disliked' ? ['liked_artists', 'liked_tracks'] : ['disliked']
+    const sources = added ? opposite.filter((other) => storedTasteEntry(previous, other, entry) !== undefined) : []
+    const msg = sources.length
+      ? `Moved “${entry}” from ${sources.map((source) => TASTE_LIST_LABELS[source]).join(' and ')} to ${TASTE_LIST_LABELS[list]}.`
+      : `${added ? 'Added' : 'Removed'} “${entry}” ${added ? 'to' : 'from'} ${TASTE_LIST_LABELS[list]}.`
+    showToast({ source: 'taste', msg,
       action: { label: 'Undo', run: () => {
         if (tasteRef.current === next) updateTaste(previous)
       } } }, 7000)

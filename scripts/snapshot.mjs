@@ -157,13 +157,17 @@ const scenarios = [
       await page.click(first)
       await page.waitForSelector('.taste-toggle .panel__hint', { visible: true })
       await page.click(second)
-      await page.waitForFunction((destination) => {
+      const likedLabel = kind === 'artist' ? 'liked bands' : 'liked songs'
+      const destination = target === 'taste' ? likedLabel : 'dislikes'
+      const source = target === 'taste' ? 'dislikes' : likedLabel
+      await page.waitForFunction(({ source, destination }) => {
         const hints = document.querySelectorAll('.taste-toggle .panel__hint')
         const toast = document.querySelector('.toast')?.textContent ?? ''
-        return hints.length === 1 && toast.includes('Moved “')
-          && toast.includes(`to ${destination === 'taste' ? 'your taste' : 'dislikes'}.`)
+        const entry = hints[0]?.textContent?.slice(`In ${destination}: `.length)
+        return hints.length === 1 && hints[0].textContent.startsWith(`In ${destination}: `)
+          && toast.includes(`Moved “${entry}” from ${source} to ${destination}.`)
           && document.querySelector('.toast__action')?.textContent === 'Undo'
-      }, {}, target)
+      }, {}, { source, destination })
       return `Moved to ${target} with one stored hint and Undo`
     },
   }))),

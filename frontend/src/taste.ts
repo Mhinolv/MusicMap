@@ -3,6 +3,9 @@ import type { ArtistNode, TasteProfile } from './types'
 export const TASTE_STORAGE_KEY = 'tunegraph:taste:v1'
 export const TASTE_LIMIT = 50
 export type TasteList = 'liked_artists' | 'liked_tracks' | 'disliked'
+export const TASTE_LIST_LABELS: Record<TasteList, string> = {
+  liked_artists: 'liked bands', liked_tracks: 'liked songs', disliked: 'dislikes',
+}
 export const emptyTaste = (): TasteProfile => ({ liked_artists: [], liked_tracks: [], liked_genres: [], disliked: [], notes: '' })
 const matchKey = (value: string) => value.trim().toLowerCase()
 

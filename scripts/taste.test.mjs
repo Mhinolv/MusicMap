@@ -236,8 +236,10 @@ test('toggle labels, stored hints, and click targets cover both modes and both l
       buttons.forEach(button => button.props.onClick())
       assert.deepEqual(calls, [[list, entry], ['disliked', entry]])
       const hints = elements.filter(el => el.type === 'p').map(text)
-      assert.equal(hints.length, Number(liked) + Number(disliked))
-      if (liked) assert.ok(hints.some(hint => hint.includes(entry.toUpperCase())))
+      assert.deepEqual(hints, [
+        ...(liked ? [`In ${kind === 'artist' ? 'liked bands' : 'liked songs'}: ${entry.toUpperCase()}`] : []),
+        ...(disliked ? [`In dislikes: ${entry}`] : []),
+      ])
     }
   }
 })
@@ -254,13 +256,14 @@ test('actions precede taste checking; dislike-only profiles show Add preferences
 })
 
 
-test('moves announce the target and Undo restores exact cross-list and legacy profiles', () => {
+test('moves name source and target lists and Undo restores exact cross-list and legacy profiles', () => {
   for (const liked of ['liked_artists', 'liked_tracks']) {
     for (const [source, target] of [[liked, 'disliked'], ['disliked', liked]]) {
       const previous = { ...t.emptyTaste(), [source]: [' RADIOHEAD '], notes: 'Keep' }
       const app = panelHarness(previous)
       app.toggle(target, 'Radiohead')
-      assert.equal(app.toast().msg, `Moved “Radiohead” to ${target === 'disliked' ? 'dislikes' : 'your taste'}.`)
+      const label = list => list === 'liked_artists' ? 'liked bands' : list === 'liked_tracks' ? 'liked songs' : 'dislikes'
+      assert.equal(app.toast().msg, `Moved “Radiohead” from ${label(source)} to ${label(target)}.`)
       assert.equal(app.timers.at(-1).ms, 7000)
       app.toast().action.run()
       assert.deepEqual(app.writes.at(-1), previous)
@@ -271,6 +274,20 @@ test('moves announce the target and Undo restores exact cross-list and legacy pr
       remove.toast().action.run()
       assert.deepEqual(remove.writes.at(-1), legacy)
     }
+  }
+})
+
+test('Added and Removed toasts name each exact list', () => {
+  for (const [list, label, entry] of [
+    ['liked_artists', 'liked bands', 'Radiohead'],
+    ['liked_tracks', 'liked songs', 'Creep — Radiohead'],
+    ['disliked', 'dislikes', 'Creep — Radiohead'],
+  ]) {
+    const app = panelHarness()
+    app.toggle(list, entry)
+    assert.equal(app.toast().msg, `Added “${entry}” to ${label}.`)
+    app.toggle(list, entry)
+    assert.equal(app.toast().msg, `Removed “${entry}” from ${label}.`)
   }
 })
 
