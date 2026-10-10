@@ -146,6 +146,7 @@ function panelHarness(initial = null, writable = true) {
     './graph/mapSnapshot': { readMap: () => ({ status: 'none' }) },
     './graph/useMusicGraph': { useMusicGraph: () => ({ graph, nodes: [node], edges: [] }), planPrune: () => null },
     './graph/journey': { journeyContext: () => [] },
+    './graph/onMap': { onMapRows: () => ({ count: 1, rows: [] }), journeyStops: () => [] },
     './bookmarks': { readBookmarks: () => [], nodeBookmark: () => null },
     './exclusions': { readExclusions: () => [] },
     './startScreen': startScreen,

@@ -3,6 +3,7 @@ import { api, ApiError } from './api'
 import { ArtistPanel } from './components/ArtistPanel'
 import { ForceGraph } from './components/ForceGraph'
 import { JourneyTrail } from './components/JourneyTrail'
+import { MapNavPane } from './components/MapNavPane'
 import { SearchBar, type SearchMode } from './components/SearchBar'
 import { LibraryButton, LibraryDrawer } from './components/LibraryDrawer'
 import { StartScreen } from './components/StartScreen'
@@ -14,6 +15,7 @@ import { TasteToggle } from './components/TasteToggle'
 import { finishSpotifyImport } from './spotifyImport'
 import { artistNode, planPrune, trackNode, useMusicGraph, type ExpandedChild } from './graph/useMusicGraph'
 import { JOURNEY_CAP, journeyContext } from './graph/journey'
+import { journeyStops, onMapRows } from './graph/onMap'
 import type { ArtistRef, PruneMode, TasteProfile, TrackRankingContext, TrackRef } from './types'
 import { addExclusion, EXCLUSION_FULL_MESSAGE, readExclusions, restoreExclusions, writeExclusions, type ExcludedSong } from './exclusions'
 
@@ -278,6 +280,9 @@ export default function App() {
       remove: planPrune(g.graph, selected.id, 'remove')?.removed.length ?? null,
     }
   }, [g.graph, selected])
+  // Ranked from graph state only, so selection and focus changes never reshuffle the rows.
+  const onMap = useMemo(() => onMapRows({ nodes: g.graph.nodes, edges: g.graph.edges, rootId: g.graph.rootId }),
+    [g.graph.nodes, g.graph.edges, g.graph.rootId])
 
   // Song expansions only: the children still on the map, for "Check these connections".
   const connections = useMemo(
@@ -405,7 +410,9 @@ export default function App() {
   const hasGraph = g.nodes.length > 0
   const rootKind = g.graph.rootId ? g.graph.nodes.get(g.graph.rootId)?.kind : undefined
   const searchProps = { onSelect: onSelectSearch, onSelectTrack, mode: searchMode, onModeChange: setSearchMode }
-  const trailJourney = rootKind === 'track' ? g.graph.journey.filter((id) => g.graph.nodes.get(id)?.expanded) : g.graph.journey
+  const stops = journeyStops(g.graph)
+  const toggleFollow = () => setFollowJourney((on) => !on)
+  const collapse = (id: string) => prune(id, 'collapse')
 
   return (
     <div className={`app ${hasGraph ? 'app--graph' : 'app--empty'}`}>
@@ -472,22 +479,32 @@ export default function App() {
                 <p>Select a star to inspect it. Double-click to expand.</p>
               </section>}
             </div>
-            <nav className="map-nav" aria-label="Map navigation">
-              {/* Placeholder heads until #31; the existing trail fills Journey meanwhile. */}
-              <section><h2>Journey</h2>{trailJourney.length === 0 && <p>Expand a star to start your journey.</p>}</section>
+            <MapNavPane
+              className="map-nav"
+              songMode={rootKind === 'track'}
+              followJourney={followJourney}
+              onFollowJourney={toggleFollow}
+              stops={stops}
+              focusId={g.graph.focusId}
+              selectedId={g.graph.selectedNodeId}
+              rows={onMap.rows}
+              count={onMap.count}
+              onJump={jumpTo}
+              onCollapse={collapse}
+            >
+              {/* The floating trail is hidden while the pane shows (≥1024px) and stays below that until #34. */}
               <JourneyTrail
                 songMode={rootKind === 'track'}
                 followJourney={followJourney}
-                onFollowJourney={() => setFollowJourney((on) => !on)}
-                journey={trailJourney}
+                onFollowJourney={toggleFollow}
+                journey={stops.map((n) => n.id)}
                 nodes={g.graph.nodes}
                 focusId={g.graph.focusId}
                 selectedId={g.graph.selectedNodeId}
                 onJump={jumpTo}
-                onCollapse={(id) => prune(id, 'collapse')}
+                onCollapse={collapse}
               />
-              <section><h2>On map</h2></section>
-            </nav>
+            </MapNavPane>
             <div className={`stage ${selected ? 'has-panel' : ''}`}>
               <ForceGraph
                 zoomControl={zoomControl}

@@ -19,10 +19,33 @@ const scenarios = runInNewContext(
     artistGraph: async () => {},
     search: async () => {}, waitForNodes: async () => {},
     waitForPanel: async () => {}, waitForSettle: async () => {},
+    expandTopRow: async (page) => page.click('expandTopRow'),
   },
 )
 
-for (const name of ['song-journey-on', 'mobile-song-journey-on']) {
+// #31: at desktop width the floating trail is hidden, so the scenario must use the left pane.
+test('desktop song-journey-on drives the left pane, not the hidden floating trail', async () => {
+  const clicks = []
+  const waits = []
+  const page = {
+    async waitForSelector(selector) { waits.push(selector) },
+    async click(selector) { clicks.push(selector) },
+    async waitForFunction() {},
+  }
+  assert.equal(await scenarios.find((scenario) => scenario.name === 'song-journey-on').run(page),
+    'Follow journey on; 2 stops, current stop amber, selected On map row cyan')
+  assert.deepEqual(clicks, ['.map-nav__follow[aria-checked="false"]', 'expandTopRow'])
+  assert.ok(waits.includes('.map-nav__follow[aria-checked="true"]'))
+  assert.equal(scenarios.find((scenario) => scenario.name === 'song-journey-on').viewport.width, 1440)
+})
+
+test('left pane scenarios from the #31 design notes exist', () => {
+  for (const name of ['song-journey-on', 'artist-journey-on-map', 'journey-collapse-undo', 'journey-follow-over-cap', 'nav-long-names']) {
+    assert.ok(scenarios.some((scenario) => scenario.name === name), name)
+  }
+})
+
+for (const name of ['mobile-song-journey-on']) {
   test(`${name} selects an SVG leaf and reaches the journey hint`, async () => {
     let focused = false
     let selected = false

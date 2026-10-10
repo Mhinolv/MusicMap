@@ -141,6 +141,28 @@ async function resumeFixture(page, { song = false, stops = 2 } = {}) {
   await page.waitForSelector('.resume-card--ready', { visible: true })
 }
 
+/** Selects the top On map row and expands it from the inspector, making a second journey stop. */
+async function expandTopRow(page) {
+  await page.waitForSelector('.nav-row', { visible: true })
+  await page.click('.nav-row')
+  await page.waitForSelector('.nav-row[aria-pressed="true"]')
+  await page.waitForSelector('.panel .btn--primary:not([disabled])', { visible: true })
+  await page.click('.panel .btn--primary')
+  await page.waitForFunction(() => document.querySelectorAll('.nav-stop').length === 2)
+}
+
+/** Rewrites the saved map with `edit` (run in the page), then resumes it from the start screen. */
+async function resumeEdited(page, edit, arg) {
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('tunegraph:map:v1') ?? 'null')?.nodes?.length > 2)
+  const raw = await page.evaluate(edit, arg)
+  // Install after the live app's pagehide flush, before React reads storage.
+  await page.evaluateOnNewDocument((value) => localStorage.setItem('tunegraph:map:v1', value), raw)
+  await page.reload({ waitUntil: 'networkidle0' })
+  await page.waitForSelector('.resume-card .btn--primary')
+  await page.click('.resume-card .btn--primary')
+  await page.waitForSelector('.nav-row', { visible: true })
+}
+
 /** Library fixtures with known ages; reload so the start screen reads them. */
 async function libraryFixture(page, { saved = true, excluded = true } = {}) {
   await page.evaluate(({ saved, excluded }) => {
@@ -544,7 +566,7 @@ const scenarios = [
     viewport: DESKTOP,
     async run(page) {
       await artistGraph(page)
-      if (await page.$('.journey__follow')) throw new Error('artist map shows song switch')
+      if (await page.$('.journey__follow, .map-nav__follow')) throw new Error('artist map shows song switch')
       const before = await nodeCount(page)
       const pt = await neighbourPoint(page)
       if (!pt) throw new Error('no clickable neighbour node found')
@@ -576,12 +598,97 @@ const scenarios = [
       await waitForNodes(page, 3)
       await waitForPanel(page)
       await waitForSettle(page)
-      await page.waitForSelector('.journey__follow[aria-checked="false"]')
-      return `${await nodeCount(page)} songs; Follow journey off`
+      await page.waitForSelector('.map-nav__follow[aria-checked="false"]', { visible: true })
+      // Owner decision on #31: ON MAP lists the root's first connections before any expand.
+      await page.waitForFunction(() => document.querySelectorAll('.nav-row').length === document.querySelectorAll('g.node').length - 1)
+      return `${await nodeCount(page)} songs; Follow journey off; every leaf listed On map`
+    },
+  },
+  {
+    name: 'song-journey-on', viewport: DESKTOP,
+    async run(page) {
+      await search(page, 'song', 'Creep', 'Creep')
+      await waitForNodes(page, 3)
+      await waitForPanel(page)
+      await page.click('.map-nav__follow[aria-checked="false"]')
+      await page.waitForSelector('.map-nav__follow[aria-checked="true"]')
+      await expandTopRow(page)
+      // The expanded song is both the current stop (amber) and the selection (cyan row).
+      await page.waitForFunction(() => document.querySelector('.nav-stop:last-child.is-current [aria-current="step"]')
+        && document.querySelector('.nav-row[aria-pressed="true"]'))
+      await waitForSettle(page)
+      return 'Follow journey on; 2 stops, current stop amber, selected On map row cyan'
+    },
+  },
+  {
+    name: 'artist-journey-on-map', viewport: DESKTOP,
+    async run(page) {
+      await artistGraph(page)
+      await expandTopRow(page)
+      if (await page.$('.map-nav__follow')) throw new Error('artist map shows the Follow journey switch')
+      await waitForSettle(page)
+      return `artist journey with 2 stops; ON MAP lists ${await page.$$eval('.nav-row', (rows) => rows.length)} artists`
+    },
+  },
+  {
+    name: 'journey-collapse-undo', viewport: DESKTOP,
+    async run(page) {
+      await search(page, 'song', 'Creep', 'Creep')
+      await waitForNodes(page, 3)
+      await expandTopRow(page)
+      await page.click('.nav-stop:last-child .nav-stop__collapse')
+      // ON MAP keeps one row per remaining leaf after the branch goes.
+      await page.waitForFunction(() => document.querySelectorAll('.nav-stop').length === 1
+        && document.querySelectorAll('.nav-row').length === document.querySelectorAll('g.node').length - 1
+        && document.querySelector('.toast__action')?.textContent === 'Undo')
+      await waitForSettle(page)
+      return 'collapsed the second stop from the pane; ON MAP in sync; undo toast shown'
+    },
+  },
+  {
+    name: 'journey-follow-over-cap', viewport: DESKTOP,
+    async run(page) {
+      await search(page, 'song', 'Creep', 'Creep')
+      await waitForNodes(page, 3)
+      await resumeEdited(page, (count) => {
+        const map = JSON.parse(localStorage.getItem('tunegraph:map:v1'))
+        const root = map.nodes.find((n) => n.id === map.rootId)
+        root.expanded = true
+        const stops = Array.from({ length: count }, (_, i) => ({ id: `stop-${i}`, name: `Journey stop ${i + 1}`, kind: 'track',
+          artist: { id: 'stop-artist', name: 'Stop Artist' }, subtitle: 'Stop Artist', expanded: true, parentId: root.id }))
+        map.nodes.push(...stops)
+        map.edges.push(...stops.map((n, i) => ({ id: `cap-${i}`, source: root.id, target: n.id, similarity: 0.3 + i / 200 })))
+        map.journey = [root.id, ...stops.map((n) => n.id)]
+        map.focusId = map.selectedNodeId = stops.at(-1).id
+        return JSON.stringify(map)
+      }, 51)
+      await page.waitForSelector('.map-nav__follow[aria-disabled="true"]')
+      await page.waitForFunction(() => document.querySelectorAll('.nav-stop').length === 52)
+      await waitForSettle(page)
+      return '52 stops: Follow journey disabled at 0.45 opacity; newest stop scrolled into view'
+    },
+  },
+  {
+    name: 'nav-long-names', viewport: DESKTOP,
+    async run(page) {
+      await search(page, 'song', 'Creep', 'Creep')
+      await waitForNodes(page, 3)
+      await resumeEdited(page, () => {
+        const map = JSON.parse(localStorage.getItem('tunegraph:map:v1'))
+        const leaf = map.nodes.find((n) => n.id !== map.rootId)
+        leaf.name = 'An Extraordinarily Long Song Title That Cannot Possibly Fit In The Left Pane (Extended Remix)'
+        leaf.expanded = true
+        map.journey = [map.rootId, leaf.id]
+        map.focusId = map.selectedNodeId = leaf.id
+        return JSON.stringify(map)
+      })
+      await page.waitForFunction(() => [...document.querySelectorAll('.nav-stop__name, .nav-row__name')]
+        .filter((el) => el.textContent.startsWith('An Extraordinarily')).every((el) => el.scrollWidth > el.clientWidth))
+      await waitForSettle(page)
+      return 'long song name ellipsized in the journey stop and the On map row'
     },
   },
   ...[
-    { name: 'song-journey-on', viewport: DESKTOP },
     { name: 'mobile-song-journey-on', viewport: MOBILE, userAgent: MOBILE_UA,
       extraMedia: [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }] },
   ].map((settings) => ({
