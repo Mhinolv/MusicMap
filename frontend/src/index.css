@@ -101,14 +101,12 @@ a:hover { color: var(--cyan-hover); }
 .brand__name {
   color: var(--text);
 }
-.topbar__stats { margin-left: auto; color: var(--text-faint); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .taste-entry {
   align-self: center; border: 1px solid var(--border); border-radius: var(--radius);
   min-height: 32px; padding: 0 10px; background: transparent; color: var(--text); font-size: 13px;
 }
 .taste-entry:hover { background: var(--raised); }
 .panel__header-actions { display: flex; align-items: center; flex: none; gap: 2px; }
-.saved-entry__mobile { display: none; }
 .saved-dialog { width: min(420px, 100%); }
 .bookmark-toggle { display: grid; place-items: center; }
 .saved-tabs { margin: 18px 0 8px; }
@@ -512,10 +510,7 @@ a:hover { color: var(--cyan-hover); }
   }
   .brand { padding: 2px 0; }
   .brand__name { display: none; }
-  .topbar__stats { display: none; }
   .taste-entry--topbar { padding: 8px 10px; font-size: 12px; }
-  .saved-entry__desktop { display: none; }
-  .saved-entry__mobile { display: inline-flex; align-items: center; gap: 4px; }
   .taste-import { align-items: stretch; flex-direction: column; }
   .search--compact { width: auto; flex: 1; min-width: 0; }
   .search--compact .search__icon { display: none; }
@@ -592,8 +587,6 @@ a:hover { color: var(--cyan-hover); }
   .hero__title { font-size: 30px; }
   .hero__sub { font-size: 14px; margin-bottom: 4px; }
   .search__results { max-height: min(320px, calc(100dvh - 190px)); }
-  /* With the side panel open there is no room to centre the trail; tuck it beside the zoom controls. */
-  .stage.has-panel .journey { left: 68px; transform: none; max-width: calc(100% - 68px - 380px); }
 }
 
 /* Short landscape phones: the sheet would eat the whole graph, so use the side panel. */
@@ -610,7 +603,6 @@ a:hover { color: var(--cyan-hover); }
 
 /* ---------- touch input: ergonomics ---------- */
 @media (hover: none) and (pointer: coarse) {
-  .stage__help--pointer { display: none; }
   .stage__help--touch { display: block; }
 
   /* Comfortable targets (roughly 44px) for anything tapped often. */
@@ -676,4 +668,75 @@ a:hover { color: var(--cyan-hover); }
   }
   .icon-btn, .track__play, .zoom-controls button { min-width: 44px; }
   .tag--steering { min-height: 44px; }
+}
+
+/* Map chrome: DOM order keeps inspector controls ahead of graph node stops. */
+.map-shell { position: relative; flex: 1; min-height: 0; display: flex; }
+.map-shell > .stage { min-width: 0; }
+.inspector-dock { display: contents; }
+.map-nav { display: contents; }
+.map-nav > section, .inspector-empty, .statusbar, .search__find { display: none; }
+.library-count { margin-left: 6px; padding: 1px 5px; background: var(--hairline); font: 11px var(--font-mono); }
+.header-undo[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+
+@media (min-width: 641px) {
+  .app--graph { display: grid; grid-template-rows: 48px minmax(0, 1fr) 28px; }
+  .topbar { gap: 12px; padding: 0 12px; border-color: var(--hairline); min-width: 0; }
+  .brand { font-size: 18px; letter-spacing: 0.12em; }
+  .brand::after { content: ''; height: 24px; width: 1px; background: var(--hairline); margin-left: 4px; }
+  .topbar .search--compact { width: 420px; flex: 0 1 420px; min-width: 200px; }
+  .topbar .search__field { height: 32px; gap: 8px; }
+  .topbar .search__icon { display: none; }
+  .search__find { display: inline; color: var(--muted); font: 600 12px var(--font-label); text-transform: uppercase; }
+  .topbar .search__mode { gap: 0; padding: 0; margin-right: -10px; align-self: stretch; background: none; border: 0; border-left: 1px solid var(--border); }
+  .topbar .search__mode button { min-height: 0; height: 100%; border: 0; padding: 0 10px; color: var(--muted); }
+  .topbar .search__mode button[aria-checked="true"] { background: var(--amber); color: var(--on-amber); }
+  .topbar .search__results { top: 100%; padding: 0; }
+  .topbar .search__item { min-height: 32px; padding: 6px 12px; }
+  .saved-entry { margin-left: auto; }
+  .map-shell { display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr) 320px; grid-template-areas: 'graph inspector'; min-width: 0; }
+  .inspector-dock { display: flex; flex-direction: column; grid-area: inspector; min-height: 0; min-width: 0; background: var(--pane); border-left: 1px solid var(--hairline); }
+  .inspector-dock .panel { position: static; z-index: auto; width: 100%; height: 100%; min-height: 0; border: 0; animation: none; }
+  .inspector-empty { display: block; padding: 18px; color: var(--muted); }
+  .inspector-empty h2, .map-nav h2 { margin: 0 0 12px; font: 600 14px var(--font-label); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); }
+  .map-shell > .stage { grid-area: graph; }
+  .statusbar { display: flex; align-items: center; gap: 24px; padding: 0 12px; background: var(--pane); border-top: 1px solid var(--hairline); color: var(--muted); font: 11px var(--font-mono); font-variant-numeric: tabular-nums; text-transform: uppercase; white-space: nowrap; min-width: 0; }
+  .statusbar__zoom { margin-left: auto; }
+  .statusbar__hints { overflow: hidden; text-overflow: ellipsis; }
+  .app--graph .toast { bottom: 40px; left: calc((100% - 320px) / 2); max-width: calc(100% - 344px); white-space: normal; }
+}
+@media (min-width: 1024px) {
+  .map-shell { grid-template-columns: 280px minmax(0, 1fr) 360px; grid-template-areas: 'navigation graph inspector'; }
+  .map-nav { display: block; grid-area: navigation; overflow-y: auto; background: var(--pane); border-right: 1px solid var(--hairline); color: var(--muted); }
+  .map-nav section { padding: 18px; }
+  .map-nav section:last-child { margin-top: 12px; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
+  .app--graph .toast { left: calc(280px + (100% - 640px) / 2); max-width: calc(100% - 664px); }
+}
+@media (min-width: 641px) and (max-width: 1279px) {
+  .statusbar__extra { display: none; }
+}
+@media (min-width: 641px) and (max-width: 1023px) {
+  .brand__name { display: none; }
+  .statusbar { gap: 12px; }
+}
+@media (max-width: 640px) {
+  .header-taste, .header-undo { display: none; }
+  .topbar .saved-entry { display: inline-flex; align-items: center; }
+}
+@media (pointer: coarse) and (min-width: 641px) {
+  .app--graph { grid-template-rows: 48px minmax(0, 1fr); }
+  .statusbar { display: none; }
+}
+/* Reuse the existing journey controls until the dedicated left lists land. */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .map-nav .journey { left: 68px; transform: none; max-width: calc(100% - 400px); }
+}
+@media (min-width: 1024px) {
+  .map-nav > section { display: block; }
+  .map-nav .journey { position: static; transform: none; margin: 0 18px; max-width: none; flex-wrap: wrap; opacity: 1; }
+  .map-nav .journey__steps { width: 100%; }
+}
+/* With the short-landscape side panel open there is no room to centre the trail; tuck it beside the zoom controls. */
+@media (max-width: 640px) and (max-height: 520px) {
+  .map-shell.has-panel .journey { left: 68px; transform: none; max-width: calc(100% - 68px - 380px); }
 }

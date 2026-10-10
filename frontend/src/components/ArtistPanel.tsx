@@ -266,7 +266,7 @@ function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleE
           <button className={`icon-btn bookmark-toggle ${saved ? 'is-saved' : ''}`} onClick={onToggleSave} aria-pressed={saved} aria-label={saved ? `Remove ${node.name} from saved` : `Save ${node.name}`} title={saved ? 'Saved: click to remove' : 'Save'}>
             <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z" fill={saved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
           </button>
-          <button className="icon-btn" onClick={onClose} aria-label="Close panel">×</button>
+          <button className="icon-btn" onClick={onClose} aria-label="Close inspector">×</button>
         </div>
       </header>
 
@@ -515,7 +515,7 @@ function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTag
           <button className={`icon-btn bookmark-toggle ${saved ? 'is-saved' : ''}`} onClick={onToggleSave} aria-pressed={saved} aria-label={saved ? `Remove ${node.name} from saved` : `Save ${node.name}`} title={saved ? 'Saved: click to remove' : 'Save'}>
             <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z" fill={saved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
           </button>
-          <button className="icon-btn" onClick={onClose} aria-label="Close panel">×</button>
+          <button className="icon-btn" onClick={onClose} aria-label="Close inspector">×</button>
         </div>
       </header>
 
