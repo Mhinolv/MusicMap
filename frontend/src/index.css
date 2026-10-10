@@ -684,3 +684,9 @@ a { color: var(--accent); }
 .tag--steering:hover { border-color: var(--border-strong); color: var(--text); }
 .tag--steering[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .tag--steering[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+
+/* Local map continuity on the search hero. */
+.resume-card { text-align: left; }
+.resume-card p { margin: 6px 0 0; font-size: 13px; color: var(--text-dim); overflow-wrap: anywhere; }
+.resume-card__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.app--empty { overflow-y: auto; }

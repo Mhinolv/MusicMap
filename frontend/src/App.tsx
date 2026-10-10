@@ -13,6 +13,8 @@ import { JOURNEY_CAP, journeyContext } from './graph/journey'
 import type { ArtistRef, PruneMode, TasteProfile, TrackRankingContext, TrackRef } from './types'
 import { addExclusion, EXCLUSION_FULL_MESSAGE, readExclusions, restoreExclusions, writeExclusions, type ExcludedSong } from './exclusions'
 
+import { clearMap, readMap, saveMap } from './graph/mapSnapshot'
+
 const EXPAND_LIMIT = 7
 
 type Toast = { source?: 'bookmarks' | 'exclusions'; msg: string; action?: { label: string; run: () => void } }
@@ -29,6 +31,10 @@ function readTaste(): TasteProfile | null {
 
 export default function App() {
   const g = useMusicGraph()
+  const [savedMap, setSavedMap] = useState(readMap)
+  const warnedMapSize = useRef(false)
+  const persistenceStopped = useRef(false)
+  const [resumeFit, setResumeFit] = useState(false)
   const [resetKey, setResetKey] = useState(0)
   const [followJourney, setFollowJourney] = useState(false)
   const [steering, setSteering] = useState<{ id: string; tags: string[] } | null>(null)
@@ -70,6 +76,38 @@ export default function App() {
     setToast(t)
     toastTimer.current = window.setTimeout(() => setToast((cur) => (cur === t ? null : cur)), ms)
   }, [])
+
+  // Save only reducer changes, never force-simulation ticks. Flush the latest state on exit.
+  useEffect(() => {
+    if (!g.graph.nodes.size || persistenceStopped.current) return
+    const save = () => {
+      if (persistenceStopped.current) return
+      const result = saveMap(g.graph, followJourney)
+      if (result === 'too-large' && !warnedMapSize.current) {
+        warnedMapSize.current = true
+        showToast({ msg: 'This map is too large to keep for next time.' }, 7000)
+      }
+    }
+    const timer = window.setTimeout(save, 300)
+    const flush = () => { if (!persistenceStopped.current) save() }
+    window.addEventListener('pagehide', flush)
+    return () => { window.clearTimeout(timer); window.removeEventListener('pagehide', flush) }
+  }, [g.graph, followJourney, showToast])
+
+  const startFresh = () => { clearMap(); setSavedMap({ status: 'none' }) }
+  const resume = () => {
+    if (savedMap.status !== 'ready') return
+    pendingRoot.current = null
+    mapEpoch.current += 1
+    inflight.current.clear()
+    g.restore(savedMap.snapshot.graph)
+    setFollowJourney(savedMap.snapshot.followJourney)
+    setSearchMode(savedMap.snapshot.graph.nodes.get(savedMap.snapshot.graph.rootId!)?.kind === 'track' ? 'song' : 'artist')
+    setSavedMap({ status: 'none' })
+    setResumeFit(true)
+    setResetKey((k) => k + 1)
+    showToast({ msg: 'Map restored.' }, 4000)
+  }
 
   const updateBookmarks = (next: Bookmark[]) => {
     if (!writeBookmarks(next)) {
@@ -176,6 +214,8 @@ export default function App() {
   const pendingRoot = useRef<string | null>(null)
   const onSelectSearch = (artist: ArtistRef) => {
     updateSteering(null)
+    startFresh()
+    setResumeFit(false)
     mapEpoch.current += 1
     setFollowJourney(false)
     pendingRoot.current = artist.id
@@ -185,6 +225,8 @@ export default function App() {
   }
   const onSelectTrack = (track: TrackRef) => {
     updateSteering(null)
+    startFresh()
+    setResumeFit(false)
     mapEpoch.current += 1
     setFollowJourney(false)
     pendingRoot.current = track.id
@@ -298,6 +340,9 @@ export default function App() {
   const hasGraph = g.nodes.length > 0
   const rootKind = g.graph.rootId ? g.graph.nodes.get(g.graph.rootId)?.kind : undefined
   const searchProps = { onSelect: onSelectSearch, onSelectTrack, mode: searchMode, onModeChange: setSearchMode }
+  const savedGraph = savedMap.status === 'ready' ? savedMap.snapshot.graph : undefined
+  const savedRoot = savedGraph?.nodes.get(savedGraph.rootId!)
+  const savedSongMap = savedRoot?.kind === 'track'
 
   return (
     <div className={`app ${hasGraph ? 'app--graph' : 'app--empty'}`}>
@@ -305,6 +350,20 @@ export default function App() {
         <main className="hero">
           <h1 className="hero__title">Explore music</h1>
           <p className="hero__sub">Start from an artist or a song, then wander outward through who they're connected to.</p>
+          {savedMap.status !== 'none' && (
+            <section className="taste-import resume-card" aria-label="Resume last map">
+              <div>
+                <strong>{savedMap.status === 'ready' ? 'Pick up where you left off' : "Your last map couldn’t be restored"}</strong>
+                <p>{savedGraph
+                  ? `${savedSongMap ? 'Song' : 'Artist'} map from “${savedRoot?.name}” · ${savedGraph.nodes.size} ${savedSongMap ? 'songs' : 'artists'}${savedGraph.journey.length ? ` · ${savedGraph.journey.length} stops` : ''}`
+                  : 'It was damaged or too large to load.'}</p>
+              </div>
+              <div className="resume-card__actions">
+                {savedMap.status === 'ready' && <button className="btn btn--primary" onClick={resume}>Resume</button>}
+                <button className="btn btn--ghost" onClick={startFresh}>Start fresh</button>
+              </div>
+            </section>
+          )}
           <SearchBar {...searchProps} autoFocus />
           <button className="taste-entry" onClick={() => setTasteOpen(true)}>{taste ? 'Edit your music taste' : 'Add your music taste'}</button>
           {(bookmarks.length > 0 || exclusions.length > 0) && <button className="link-btn saved-entry" onClick={() => setSavedOpen(true)}>Open saved discoveries ({bookmarks.length})</button>}
@@ -315,7 +374,7 @@ export default function App() {
       ) : (
         <>
           <header className="topbar">
-            <button className="brand" onClick={() => window.location.reload()} title="Start over" aria-label="TuneGraph: start over">
+            <button className="brand" onClick={() => { persistenceStopped.current = true; clearMap(); window.location.reload() }} title="Start over" aria-label="TuneGraph: start over">
               <svg className="brand__mark" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true">
                 <circle cx="16" cy="16" r="14" fill="#151a2c" />
                 <path d="M9 11l4 3M23 20l-4-2" stroke="#6b7286" strokeWidth="1.5" />
@@ -372,6 +431,7 @@ export default function App() {
               onSelect={select}
               onExpand={expand}
               resetKey={resetKey}
+              fitOnMount={resumeFit}
               centerRequest={centerRequest}
             />
             <JourneyTrail
