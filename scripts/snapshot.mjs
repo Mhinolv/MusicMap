@@ -383,6 +383,57 @@ const scenarios = [
       return 'Song tag steering; artist and expanded tags remain plain'
     },
   })),
+  // #38 plain-word steering on Creep (mock tags: alternative, 90s, rock, alternative rock,
+  // grunge). Mock fixtures: a named tag is emphasized, "less <tag>" is an ignored avoid.
+  ...[
+    { name: 'steer-words-empty', expect: "Picks from this song's tags only." },
+    { name: 'steer-words-pending', text: 'more rock and grunge', hang: true, expect: 'Interpreting…' },
+    { name: 'steer-words-proposed', text: 'more rock and grunge', expect: 'Interpreted as:' },
+    { name: 'steer-words-avoid', text: 'grunge but less rock', expect: "Steering away from a sound isn't supported yet, so that part was left out." },
+    { name: 'steer-words-no-match', text: 'with bagpipes', expect: "None of this song's tags matched. Try words closer to the tags below, or pick them yourself." },
+    { name: 'steer-words-error', text: 'darker', respond: 504, expect: 'JEV took too long to answer. Try again.' },
+    { name: 'steer-words-expanded', expanded: true },
+    { name: 'steer-words-mobile', text: 'more rock and grunge', expect: 'Interpreted as:', viewport: MOBILE, userAgent: MOBILE_UA,
+      extraMedia: [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }] },
+  ].map(({ viewport = DESKTOP, ...settings }) => ({
+    ...settings,
+    viewport,
+    async run(page) {
+      if (settings.respond || settings.hang) {
+        await page.setRequestInterception(true)
+        page.on('request', (request) => {
+          if (!request.url().includes('/api/taste/steer-tags')) return request.continue()
+          if (settings.respond) {
+            return request.respond({ status: settings.respond, contentType: 'application/json',
+              body: JSON.stringify({ error: 'timed out', provider: 'jev' }) })
+          }
+          // hang: leave the request pending so Interpreting… stays on screen
+        })
+      }
+      await search(page, 'song', 'Creep', 'Creep')
+      await waitForNodes(page, 3)
+      await waitForPanel(page)
+      await page.waitForSelector('.tags .tag')
+      await page.waitForFunction(() => document.querySelector('.panel__actions .btn--primary')?.textContent.includes('Connections expanded'))
+      if (viewport === MOBILE) await page.click('.panel__handle')
+      if (settings.expanded) {
+        if (await page.$('.steer-words')) throw new Error('an expanded song must not show the plain-word form')
+        await waitForSettle(page)
+        return 'Expanded song: no plain-word form, plain tags'
+      }
+      await page.click('.panel__prune button[title="Undo this expansion: remove everything explored from here"]')
+      await page.waitForSelector('.steer-words input')
+      if (settings.text) {
+        await page.type('.steer-words input', settings.text)
+        await page.keyboard.press('Enter')
+      }
+      await page.waitForFunction((text) => [...document.querySelectorAll('.steer-words *')]
+        .some((el) => el.textContent.includes(text)), {}, settings.expect)
+      await page.$eval('.steer-words',(el) => el.scrollIntoView({ block: 'center' }))
+      await sleep(200)
+      return settings.expect
+    },
+  })),
   ...[
     { name: 'resume-map', viewport: DESKTOP, song: true, stops: 2 },
     { name: 'resume-map-mobile', viewport: MOBILE, userAgent: MOBILE_UA, song: true, stops: 2 },
@@ -454,7 +505,24 @@ const scenarios = [
       }))
       if (backdrop.hidden !== 'true' || backdrop.pointer !== 'none' || backdrop.dots) throw new Error(`backdrop must be decorative contours only: ${JSON.stringify(backdrop)}`)
       if (await page.$('.start-sky')) throw new Error('old star sky must be gone')
-      return `Contour backdrop below the header (top ${backdrop.top}px), ${backdrop.kb} KB of path data`
+      // #62: intro copy visible above NEW MAP, NEW MAP fully above the fold, no horizontal scroll.
+      const intro = await page.evaluate(() => {
+        // DOMRect does not serialise out of page.evaluate, so copy plain numbers.
+        const box = (sel) => {
+          const r = document.querySelector(sel)?.getBoundingClientRect()
+          return r && { top: r.top, bottom: r.bottom, height: r.height }
+        }
+        const title = box('.start-intro__title')
+        const text = box('.start-intro__text')
+        const panel = box('.start-panel[aria-labelledby="new-map-title"]')
+        return { title, text, panel, vh: innerHeight,
+          scrollX: document.documentElement.scrollWidth > document.documentElement.clientWidth }
+      })
+      if (!intro.title?.height || !intro.text?.height) throw new Error(`intro copy must be visible: ${JSON.stringify(intro)}`)
+      if (intro.text.bottom > intro.panel.top) throw new Error(`intro must sit above NEW MAP: ${JSON.stringify(intro)}`)
+      if (intro.panel.bottom > intro.vh) throw new Error(`NEW MAP must stay above the fold: ${JSON.stringify(intro)}`)
+      if (intro.scrollX) throw new Error('start screen must not scroll horizontally')
+      return `Contour backdrop below the header (top ${backdrop.top}px), ${backdrop.kb} KB of path data; intro above NEW MAP (top ${Math.round(intro.panel.top)}px)`
     },
   })),
   {

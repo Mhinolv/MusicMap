@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, ApiError } from '../api'
 import { TasteCheck } from './TasteCheck'
 import { ConnectionsCheck } from './ConnectionsCheck'
+import { SteerWords } from './SteerWords'
 import type { ConnectionItem } from '../connections'
 import { matchText, type MatchFact } from '../graph/onMap'
 import type { Artist, ArtistNode, ArtistRef, ExternalUrls, PreviewResult, PruneMode, TasteProfile, Track, TrackDetails } from '../types'
@@ -211,6 +212,7 @@ function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleE
   // Whole seconds played: timeupdate fires a few times a second, so this re-renders at most once a second.
   const [elapsed, setElapsed] = useState(0)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const steerRef = useRef<HTMLElement>(null)
   const artistName = node.artist?.name ?? ''
 
   useEffect(() => {
@@ -304,11 +306,19 @@ function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleE
 
       <SaveActions node={node} saved={saved} onToggleSave={onToggleSave} excluded={excluded} onToggleExclusion={onToggleExclusion} />
 
-      <section className="panel__section panel__steer" aria-labelledby={`steer-${node.id}`}>
+      <section className="panel__section panel__steer" aria-labelledby={`steer-${node.id}`} ref={steerRef}>
         <div className="panel__section-head">
           <h3 id={`steer-${node.id}`}>{node.expanded ? 'Tags' : 'Steer next expand'}</h3>
           {!node.expanded && emphasizedTags.length > 0 && <span className="panel__count">{emphasizedTags.length}/{MAX_STEERING}</span>}
         </div>
+        {!node.expanded && tags.length > 0 && onEmphasizedTags && (
+          // Starting an expansion remounts it, which aborts and discards any interpretation.
+          <SteerWords key={String(node.loading)} itemId={node.id} tags={tags} disabled={node.loading}
+            onApply={(picked) => {
+              onEmphasizedTags?.(picked)
+              steerRef.current?.querySelector<HTMLButtonElement>('.btn--primary')?.focus()
+            }} />
+        )}
         {loading ? (
           <div className="panel__loading">
             <span className="spinner spinner--sm" /> Loading…
@@ -337,6 +347,7 @@ function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleE
         ) : (
           !error && <p className="panel__empty">No tags listed for this song.</p>
         )}
+        {!node.expanded && tags.length > 0 && <p className="panel__hint steer-hint">Pick up to 3 for more of that flavour. Tags come from Last.fm listeners.</p>}
         <ExpandButton node={node} onExpand={onExpand} steering={emphasizedTags.length} />
         {node.ranking?.fallback_reason ? (
           <p className="panel__hint" role="status">{node.ranking.fallback_reason === 'cap_exceeded'

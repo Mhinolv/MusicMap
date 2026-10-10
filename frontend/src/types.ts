@@ -132,6 +132,19 @@ export type TasteConnections = {
   simulated: boolean
 }
 
+/** Plain-word steering (#38): up to three of the seed song's own tags, never invented. */
+export type TasteSteer = {
+  version: 1
+  /** `proposed` has 1–3 tags; `no_match` and `low_confidence` have none. */
+  outcome: 'proposed' | 'no_match' | 'low_confidence'
+  tags: string[]
+  /** The request also asked for less of something; that part is not applied. */
+  avoid_ignored: boolean
+  model?: string | null
+  rubric_version: string
+  simulated: boolean
+}
+
 // ---- Graph state (MVP §8) -------------------------------------------------
 
 /** A map is rooted at either an artist or a song; every other node is an artist. */

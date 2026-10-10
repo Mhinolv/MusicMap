@@ -241,3 +241,34 @@ for (const [coarse, narrow] of [[false, false], [false, true], [true, true], [tr
     }
   })
 }
+
+// #62: page.evaluate serialises its result, and a DOMRect (getters on the prototype)
+// arrives as {}. The start scenarios must copy plain numbers out of each rect.
+test('start scenarios read intro and panel boxes as plain numbers', async () => {
+  class FakeRect {
+    #r
+    constructor(r) { this.#r = r }
+    get top() { return this.#r.top }
+    get bottom() { return this.#r.top + this.#r.height }
+    get height() { return this.#r.height }
+  }
+  const rects = {
+    '.start-intro__title': { top: 200, height: 40 }, '.start-intro__text': { top: 248, height: 40 },
+    '.start-panel[aria-labelledby="new-map-title"]': { top: 300, height: 160 },
+  }
+  const document = {
+    querySelector: (sel) => rects[sel] && { getBoundingClientRect: () => new FakeRect(rects[sel]) },
+    documentElement: { scrollWidth: 1440, clientWidth: 1440 },
+  }
+  const svg = { getAttribute: () => 'true', querySelectorAll: () => [], getBoundingClientRect: () => ({ top: 48 }) }
+  const page = {
+    async waitForSelector() {}, async waitForFunction() {}, async $() { return null },
+    async $eval(_sel, fn) { return runInNewContext(`(${fn})(svg)`, { svg, getComputedStyle: () => ({ pointerEvents: 'none' }) }) },
+    // Like Puppeteer: run the function source in the page, then JSON round-trip the result.
+    async evaluate(fn) { return JSON.parse(JSON.stringify(runInNewContext(`(${fn})()`, { document, innerHeight: 600 }))) },
+  }
+  for (const name of ['start-desktop', 'start-mobile', 'start-short']) {
+    assert.equal(await scenarios.find((scenario) => scenario.name === name).run(page),
+      'Contour backdrop below the header (top 48px), 0 KB of path data; intro above NEW MAP (top 300px)')
+  }
+})

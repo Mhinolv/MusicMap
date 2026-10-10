@@ -33,3 +33,19 @@ test('search box focus shows no highlight while other controls keep their ring (
   // Excluding the input from the cyan ring is not enough: without this the browser default ring draws.
   assert.match(css, /(?:^|\})\s*\.search__field input\s*\{[^}]*\boutline:\s*none\b/, 'search input suppresses the browser default focus ring')
 })
+
+test('steer input focus shows only the cursor and the field keeps its width (#38)', () => {
+  const ring = css.match(/([^{}]*):focus-visible\s*\{[^}]*outline:\s*2px solid var\(--cyan\)/)
+  assert.match(ring[1], /:not\([^)]*\.steer-words__field input[^)]*\)/, 'steer input is excluded from the ring')
+  assert.doesNotMatch(css, /\.steer-words__field:focus-within/, 'steer field border does not change on focus')
+  assert.match(css, /(?:^|\})\s*\.steer-words__field input\s*\{[^}]*\boutline:\s*none\b/, 'steer input suppresses the browser default focus ring')
+  // .btn--ghost grows by default, which squeezed the field and scrolled typed text off the left.
+  assert.match(css, /\.steer-words__form \.btn\s*\{[^}]*\bflex:\s*none\b/, 'Interpret button does not take half the row')
+})
+
+test('the steering instruction sits clear of the chips above it (#38 owner decision)', () => {
+  const panel = readFileSync(new URL('../frontend/src/components/ArtistPanel.tsx', import.meta.url), 'utf8')
+  assert.match(panel, /className="panel__hint steer-hint">Pick up to 3/)
+  const gap = css.match(/\.panel__hint\.steer-hint\s*\{[^}]*margin-top:\s*(\d+)px/)
+  assert.ok(gap && Number(gap[1]) >= 6, 'gap at least the 6px chip-row gap')
+})
