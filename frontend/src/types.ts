@@ -26,6 +26,12 @@ export type SimilarTrack = TrackRef & {
   shared_tags?: string[]
 }
 
+export type TrackRankingContext = {
+  mode: 'parent' | 'journey'
+  stop_count: number
+  fallback_reason: 'cap_exceeded' | 'timeout' | 'missing_tags' | null
+}
+
 export type TrackAlbum = {
   title: string
   mbid?: string | null
@@ -112,6 +118,8 @@ export type ArtistNode = {
   artist?: ArtistRef
   /** Second label line under the name (track nodes show their artist). */
   subtitle?: string
+  /** Context actually used for this expansion, separate from edge similarity. */
+  ranking?: TrackRankingContext
 }
 
 export type ArtistEdge = {

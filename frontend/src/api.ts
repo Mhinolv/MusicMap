@@ -1,4 +1,4 @@
-import type { Artist, ArtistRef, PreviewResult, SimilarArtist, SimilarTrack, TasteEvaluation, TasteProfile, Track, TrackDetails, TrackRef } from './types'
+import type { Artist, ArtistRef, PreviewResult, SimilarArtist, SimilarTrack, TasteEvaluation, TasteProfile, Track, TrackDetails, TrackRankingContext, TrackRef } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -84,8 +84,13 @@ export const api = {
 
   track: (id: string, signal?: AbortSignal) => get<TrackDetails>(`/api/tracks/${enc(id)}`, signal),
 
-  trackSimilar: (id: string, limit = 7, signal?: AbortSignal) =>
-    get<{ track: TrackRef | null; tracks: SimilarTrack[] }>(`/api/tracks/${enc(id)}/similar?limit=${limit}`, signal),
+  trackSimilar: (id: string, limit = 7, signal?: AbortSignal, trail?: string[]) => {
+    const query = new URLSearchParams({ limit: String(limit) })
+    trail?.forEach((stop) => query.append('trail', stop))
+    return get<{ track: TrackRef | null; tracks: SimilarTrack[]; ranking: TrackRankingContext }>(
+      `/api/tracks/${enc(id)}/similar?${query}`, signal,
+    )
+  },
 
   trackReleaseDate: (id: string, signal?: AbortSignal) =>
     get<{ release_date: string | null }>(`/api/tracks/${enc(id)}/release-date`, signal).then((r) => r.release_date),

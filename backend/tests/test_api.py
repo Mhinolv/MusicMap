@@ -108,3 +108,54 @@ async def test_unknown_track_404(client):
     assert r.status_code == 404
     r = await client.get("/api/tracks/tr:nobody|nothing")
     assert r.status_code == 404
+
+
+async def test_journey_off_matches_legacy_for_all_mock_seeds(client):
+    from urllib.parse import quote
+    from app.models.graph import make_track_id
+    from app.services import lastfm, mock, similarity
+    for artist in mock._ARTISTS.values():
+        for song in artist['tracks']:
+            track_id = make_track_id(artist=artist['name'], track=song)
+            _, candidates = await lastfm.get_similar_tracks(track_id, 7)
+            expected = await similarity.rerank_similar_tracks(track_id, candidates)
+            response = await client.get(f'/api/tracks/{quote(track_id, safe="")}/similar', params={'limit': 7})
+            assert response.status_code == 200
+            assert response.json()['tracks'] == [t.model_dump(mode='json') for t in expected]
+            assert response.json()['ranking']['mode'] == 'parent'
+
+
+async def test_mock_journey_can_promote_eighth_candidate(client):
+    seed = 'tr:radiohead|creep'
+    # Repeated Björk songs steer toward the eighth candidate, Army of Me.
+    stops = ['tr:radiohead|creep', 'tr:björk|hyperballad', 'tr:björk|jóga', 'tr:björk|human behaviour']
+    off = await client.get(f'/api/tracks/{seed}/similar', params={'limit': 7})
+    on = await client.get(f'/api/tracks/{seed}/similar', params=[('limit', '7'), *(('trail', s) for s in stops)])
+    assert on.status_code == 200
+    assert on.json()['ranking']['mode'] == 'journey'
+    off_ids = {t['id'] for t in off.json()['tracks']}
+    assert any(t['id'] not in off_ids for t in on.json()['tracks'])
+    assert len(on.json()['tracks']) == 7
+
+
+async def test_artist_similar_ignores_song_journey(client):
+    plain = await client.get('/api/artists/nm:radiohead/similar', params={'limit': 7})
+    context = await client.get('/api/artists/nm:radiohead/similar', params={'limit': 7, 'trail': 'tr:radiohead|creep'})
+    assert plain.status_code == context.status_code == 200
+    assert plain.json() == context.json()
+
+
+async def test_song_journey_over_cap_returns_parent_fallback(client):
+    response = await client.get('/api/tracks/tr:radiohead|creep/similar',
+        params=[('limit', '7'), *(('trail', f'tr:test|{i}') for i in range(51))])
+    assert response.status_code == 200
+    assert response.json()['ranking']['fallback_reason'] == 'cap_exceeded'
+
+
+@pytest.mark.parametrize('params', [
+    [('trail', '')], [('trail', 'x' * 201)], [('trail', 'seed')] * 201,
+    [('limit', '0')], [('limit', '21')],
+])
+async def test_journey_request_is_bounded(client, params):
+    response = await client.get('/api/tracks/tr:radiohead|creep/similar', params=params)
+    assert response.status_code == 422

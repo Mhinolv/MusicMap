@@ -18,7 +18,7 @@ import asyncio
 import logging
 import math
 
-from app.models.track import SimilarTrack
+from app.models.track import SimilarTrack, TrackRankingContext, TrackSimilarResponse
 from app.services import lastfm
 from app.services.errors import ProviderError
 
@@ -72,11 +72,30 @@ async def _tags(track_id: str) -> list[str]:
         return []
 
 
+TAG_CONCURRENCY = 6
+TRAIL_CAP = 50
+POOL_SIZE = 20
+# Only optional journey work has this deadline; parent ranking remains available.
+JOURNEY_TIMEOUT = 2.0
+
+
+async def _tag_batch(ids: list[str]) -> dict[str, list[str]]:
+    semaphore = asyncio.Semaphore(TAG_CONCURRENCY)
+
+    async def lookup(track_id: str) -> tuple[str, list[str]]:
+        async with semaphore:
+            return track_id, await _tags(track_id)
+
+    return dict(await asyncio.gather(*(lookup(i) for i in dict.fromkeys(ids))))
+
+
 async def rerank_similar_tracks(seed_id: str, candidates: list[SimilarTrack]) -> list[SimilarTrack]:
     """Blend tag similarity into each candidate's score and re-sort, strongest first."""
     if not candidates:
         return candidates
-    seed_tags, *candidate_tags = await asyncio.gather(_tags(seed_id), *(_tags(c.id) for c in candidates))
+    tags_by_id = await _tag_batch([seed_id, *(c.id for c in candidates)])
+    seed_tags = tags_by_id[seed_id]
+    candidate_tags = [tags_by_id[c.id] for c in candidates]
     out: list[SimilarTrack] = []
     for cand, tags in zip(candidates, candidate_tags):
         content, shared = tag_similarity(seed_tags, tags)
@@ -84,3 +103,77 @@ async def rerank_similar_tracks(seed_id: str, candidates: list[SimilarTrack]) ->
     # Stable sort: ties keep Last.fm's original order.
     out.sort(key=lambda c: -(c.similarity if c.similarity is not None else -1.0))
     return out
+
+
+def journey_vector(tag_lists: list[list[str]]) -> dict[str, float]:
+    """L2-normalize each stop, then weight oldest→newest by 1, 2, …, k.
+
+    Every stop contributes positively. The final cosine normalizes the aggregate,
+    so dividing weights by their sum would produce the same ranking.
+    """
+    vector: dict[str, float] = {}
+    for recency, tags in enumerate(tag_lists, 1):
+        stop = _tag_vector(tags)
+        norm = math.sqrt(sum(w * w for w in stop.values()))
+        if norm:
+            for tag, weight in stop.items():
+                vector[tag] = vector.get(tag, 0.0) + recency * weight / norm
+    return vector
+
+
+def _cosine(a: dict[str, float], b: dict[str, float]) -> float | None:
+    if not a or not b:
+        return None
+    norm = math.sqrt(sum(w * w for w in a.values()) * sum(w * w for w in b.values()))
+    return min(1.0, sum(w * b.get(t, 0.0) for t, w in a.items()) / norm)
+
+
+async def select_similar_tracks(
+    seed_id: str, limit: int = 7, trail: list[str] | None = None,
+) -> TrackSimilarResponse:
+    """Reusable bounded pool selection. No context preserves the legacy path.
+
+    Journey mode fetches 20, scores the entire pool, then slices. Fallbacks score
+    only the original prefix, preserving parent-only membership and ordering.
+    Last.fm already caches tags and candidates; context-specific results aren't
+    cached, preventing cross-journey contamination.
+    """
+    stops = list(dict.fromkeys(trail or []))
+    if stops and seed_id not in stops:
+        stops.append(seed_id)
+    reason = "cap_exceeded" if len(stops) > TRAIL_CAP else None
+    use_trail = len(stops) > 1 and reason is None
+    track, candidates = await lastfm.get_similar_tracks(seed_id, POOL_SIZE if use_trail else limit)
+    if not candidates:
+        return TrackSimilarResponse(track_id=seed_id, track=track, tracks=[],
+            ranking=TrackRankingContext(stop_count=len(stops), fallback_reason=reason))
+    # Compute the ordinary response first so a timed-out optional lookup never
+    # forces another provider request to deliver the fallback.
+    parent = await rerank_similar_tracks(track.id, candidates[:limit])
+    ranking = TrackRankingContext(stop_count=len(stops), fallback_reason=reason)
+    if use_trail:
+        async def rank_journey() -> list[SimilarTrack] | None:
+            tags = await _tag_batch([track.id, *stops, *(c.id for c in candidates)])
+            if any(not _tag_vector(tags[i]) for i in stops):
+                return None
+            vector = journey_vector([tags[i] for i in stops])
+            scored: list[tuple[float, SimilarTrack]] = []
+            for candidate in candidates:
+                content, shared = tag_similarity(tags[track.id], tags[candidate.id])
+                edge = candidate.model_copy(update={
+                    "similarity": blend(candidate.similarity, content), "shared_tags": shared,
+                })
+                score = blend(candidate.similarity, _cosine(vector, _tag_vector(tags[candidate.id])))
+                scored.append((score if score is not None else -1.0, edge))
+            scored.sort(key=lambda item: -item[0])
+            return [edge for _, edge in scored[:limit]]
+
+        try:
+            selected = await asyncio.wait_for(rank_journey(), timeout=JOURNEY_TIMEOUT)
+            if selected is not None:
+                return TrackSimilarResponse(track_id=seed_id, track=track, tracks=selected,
+                    ranking=TrackRankingContext(mode="journey", stop_count=len(stops)))
+            ranking.fallback_reason = "missing_tags"
+        except TimeoutError:
+            ranking.fallback_reason = "timeout"
+    return TrackSimilarResponse(track_id=seed_id, track=track, tracks=parent, ranking=ranking)

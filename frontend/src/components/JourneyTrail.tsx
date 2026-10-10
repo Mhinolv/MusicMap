@@ -1,7 +1,11 @@
 import { useEffect, useRef } from 'react'
+import { JOURNEY_CAP } from '../graph/journey'
 import type { ArtistNode } from '../types'
 
 type Props = {
+  songMode?: boolean
+  followJourney?: boolean
+  onFollowJourney?: () => void
   journey: string[]
   nodes: Map<string, ArtistNode>
   focusId?: string
@@ -20,7 +24,7 @@ function short(name: string): string {
  * low opacity at the bottom of the stage and wakes on hover or keyboard focus.
  * Each stop can be jumped to, or pruned to drop the branch that grew from it.
  */
-export function JourneyTrail({ journey, nodes, focusId, selectedId, onJump, onCollapse }: Props) {
+export function JourneyTrail({ journey, nodes, focusId, selectedId, onJump, onCollapse, songMode, followJourney, onFollowJourney }: Props) {
   const listRef = useRef<HTMLOListElement>(null)
   const steps = journey.map((id) => nodes.get(id)).filter((n): n is ArtistNode => !!n)
 
@@ -33,7 +37,7 @@ export function JourneyTrail({ journey, nodes, focusId, selectedId, onJump, onCo
   if (steps.length === 0) return null
 
   return (
-    <nav className="journey" aria-label="Exploration journey">
+    <nav className={`journey ${followJourney ? 'is-following' : ''}`} aria-label="Exploration journey">
       <span className="journey__label" title="Your exploration path, in order">
         <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
           <circle cx="3" cy="13" r="2" fill="currentColor" />
@@ -42,6 +46,17 @@ export function JourneyTrail({ journey, nodes, focusId, selectedId, onJump, onCo
         </svg>
         <span>{steps.length === 1 ? '1 stop' : `${steps.length} stops`}</span>
       </span>
+      {songMode && (
+        <button
+          className={`journey__follow ${followJourney ? 'is-on' : ''}`}
+          role="switch"
+          aria-checked={!!followJourney}
+          aria-disabled={steps.length > JOURNEY_CAP}
+          onClick={() => { if (steps.length <= JOURNEY_CAP) onFollowJourney?.() }}
+          title={steps.length > JOURNEY_CAP ? 'Follow journey works for up to 50 stops'
+            : "Rank new songs against every song you've expanded, not just this one" + (steps.length === 1 ? ' (needs 2+ stops to make a difference)' : '')}
+        >Follow journey</button>
+      )}
       <ol ref={listRef} className="journey__steps">
         {steps.map((n, i) => {
           const isFocus = n.id === focusId
