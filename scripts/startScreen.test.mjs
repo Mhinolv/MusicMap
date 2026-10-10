@@ -149,9 +149,9 @@ const reactMock = (state = {}) => ({
 })
 
 function renderStart(savedMap, { mode = 'artist', libraryCount = 0, libraryOpen = false } = {}) {
-  const SearchBar = () => null, LibraryButton = () => null
+  const SearchBar = () => null, LibraryButton = () => null, StartBackdrop = () => null
   const { StartScreen } = load('components/StartScreen.tsx', {
-    react: reactMock(), '../startScreen': helpers, '../graph/constellation': { generateStarField: () => [] },
+    react: reactMock(), '../startScreen': helpers, './StartBackdrop': { StartBackdrop },
     './LibraryDrawer': { LibraryButton }, './SearchBar': { SearchBar },
   })
   const calls = []
@@ -160,7 +160,7 @@ function renderStart(savedMap, { mode = 'artist', libraryCount = 0, libraryOpen 
     onResume: () => calls.push('resume'), onStartFresh: () => calls.push('fresh') })
   const elements = visit(tree)
   const button = (label) => elements.find((el) => el.type === 'button' && text(el) === label)
-  return { elements, calls, button, SearchBar, LibraryButton, sections: elements.filter((el) => el.type === 'section') }
+  return { elements, calls, button, SearchBar, LibraryButton, StartBackdrop, sections: elements.filter((el) => el.type === 'section') }
 }
 const ready = (graph) => ({ status: 'ready', snapshot: { graph, followJourney: false } })
 

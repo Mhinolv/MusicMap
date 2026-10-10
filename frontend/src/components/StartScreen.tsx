@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type ComponentProps, type Ref } from 'react'
-import { generateStarField } from '../graph/constellation'
+import { useMemo, type ComponentProps, type Ref } from 'react'
 import type { SavedMap } from '../graph/mapSnapshot'
 import { miniMap, resumeSummary } from '../startScreen'
 import type { MusicGraph } from '../types'
 import { LibraryButton } from './LibraryDrawer'
 import { SearchBar } from './SearchBar'
+import { StartBackdrop } from './StartBackdrop'
 
 type Props = {
   savedMap: SavedMap
@@ -16,32 +16,6 @@ type Props = {
   onTaste: () => void
   onResume: () => void
   onStartFresh: () => void
-}
-
-/** Faint, sparse sky behind the start screen's main column only. */
-function StartSky() {
-  const ref = useRef<SVGSVGElement>(null)
-  const [size, setSize] = useState({ width: 0, height: 0, mobile: false })
-  useEffect(() => {
-    const svg = ref.current
-    if (!svg) return
-    let timer: number | undefined
-    const measure = () => {
-      const { width, height } = svg.getBoundingClientRect()
-      setSize({ width: Math.round(width), height: Math.round(height), mobile: window.matchMedia('(max-width: 640px)').matches })
-    }
-    const observer = new ResizeObserver(() => { window.clearTimeout(timer); timer = window.setTimeout(measure, 120) })
-    observer.observe(svg)
-    measure()
-    return () => { observer.disconnect(); window.clearTimeout(timer) }
-  }, [])
-  const stars = useMemo(() => generateStarField(size.width, size.height, size.mobile, true), [size])
-  return (
-    <svg ref={ref} className="start-sky" aria-hidden="true">
-      {stars.filter((s) => s.soft).map((s, i) => <circle key={`h${i}`} className="sky-halo" cx={s.x} cy={s.y} r={4} fill="rgba(138,142,150,.35)" />)}
-      {stars.map((s, i) => <circle key={i} cx={s.x} cy={s.y} r={s.r} fill={s.color} />)}
-    </svg>
-  )
 }
 
 const TONE = { amber: 'var(--amber)', cyan: 'var(--cyan)', star: 'var(--star)' }
@@ -72,7 +46,7 @@ export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onTog
         <LibraryButton count={libraryCount} open={libraryOpen} onToggle={onToggleLibrary} buttonRef={libraryButton} />
         <button type="button" className="taste-entry start-header__taste" onClick={onTaste}>Taste</button>
       </header>
-      <StartSky />
+      <StartBackdrop />
       <main className={`start ${libraryOpen ? 'start--library' : ''}`}>
         <h1 className="sr-only">TuneGraph</h1>
         <section className="start-panel" aria-labelledby="new-map-title">

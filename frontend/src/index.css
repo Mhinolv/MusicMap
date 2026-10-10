@@ -801,7 +801,7 @@ a:hover { color: var(--cyan-hover); }
 .library-button { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 .library-button .library-count { margin-left: 0; }
 .library-button[aria-expanded="true"] { border-color: var(--cyan); background: var(--cyan-soft); }
-.start-sky { position: absolute; top: 48px; left: 0; width: 100%; height: calc(100% - 48px); pointer-events: none; }
+.start-backdrop { position: absolute; top: 48px; left: 0; width: 100%; height: calc(100% - 48px); pointer-events: none; }
 /* Centred both ways below the header; auto margins collapse to the 40px padding on short screens, which scroll. */
 .start {
   --start-gutter: clamp(24px, 5.5vw, 80px);
@@ -899,7 +899,7 @@ a:hover { color: var(--cyan-hover); }
     height: calc(48px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top);
     padding-left: calc(12px + env(safe-area-inset-left)); padding-right: calc(12px + env(safe-area-inset-right));
   }
-  .start-sky { top: calc(48px + env(safe-area-inset-top)); }
+  .start-backdrop { top: calc(48px + env(safe-area-inset-top)); }
   /* Phones stay top-anchored so the soft keyboard never covers the suggestions (#53). */
   .start, .start--library { width: auto; margin: 0 16px; padding: 24px 0 32px; }
   .start-panel__aside { display: none; }
@@ -920,7 +920,4 @@ a:hover { color: var(--cyan-hover); }
   .library-tabs [role="tab"], .library-drawer__close { min-height: 44px; }
   .library-drawer__close { min-width: 44px; }
   .saved-list li { height: auto; min-height: 60px; }
-}
-@media (prefers-reduced-motion: reduce), (max-width: 640px), (pointer: coarse) {
-  .start-sky .sky-halo { display: none; }
 }
