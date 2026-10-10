@@ -1,0 +1,34 @@
+name: PR template
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the PR body follows the template
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+          body = os.environ.get("BODY") or ""
+          def section(name):
+              m = re.search(rf"^##\s+{re.escape(name)}\s*$(.*?)(?=^##\s|\Z)", body, re.M | re.S)
+              return None if m is None else re.sub(r"<!--.*?-->", "", m.group(1), flags=re.S).strip()
+          errors = []
+          issue = section("Issue")
+          if issue is None or not re.search(r"\b(Closes|Refs)\s+#\d+", issue):
+              errors.append("## Issue must contain 'Closes #<n>' or 'Refs #<n>'")
+          changed = section("What changed")
+          if changed is None or not re.search(r"^\s*[-*]\s+\S", changed, re.M):
+              errors.append("## What changed must have at least one bullet")
+          for name in ("How it was tested", "Screenshots"):
+              if not section(name):
+                  errors.append(f"## {name} is missing or empty")
+          for e in errors:
+              print(f"::error::{e}")
+          sys.exit(1 if errors else 0)
+          PY
