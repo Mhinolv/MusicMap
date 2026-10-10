@@ -1,15 +1,27 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { hasPositiveTaste } from '../taste'
 import { api, ApiError } from '../api'
 import type { TasteEvaluation, TasteProfile } from '../types'
 
 type Props = {
+  actions?: ReactNode
   kind: 'artist' | 'track'
   itemId: string
   profile: TasteProfile | null
   onEdit: () => void
 }
 
-export function TasteCheck({ kind, itemId, profile, onEdit }: Props) {
+export function TasteCheck({ actions, ...props }: Props) {
+  return (
+    <section className="panel__section taste-check">
+      <h3>For your taste</h3>
+      {actions}
+      <TasteEvaluationCheck key={`${props.kind}:${props.itemId}:${JSON.stringify(props.profile)}`} {...props} />
+    </section>
+  )
+}
+
+function TasteEvaluationCheck({ kind, itemId, profile, onEdit }: Props) {
   const [result, setResult] = useState<TasteEvaluation | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -18,7 +30,7 @@ export function TasteCheck({ kind, itemId, profile, onEdit }: Props) {
   useEffect(() => () => abort.current?.abort(), [])
 
   const check = async () => {
-    if (!profile || loading) return
+    if (!hasPositiveTaste(profile) || !profile || loading) return
     abort.current?.abort()
     const ctrl = new AbortController()
     abort.current = ctrl
@@ -42,9 +54,8 @@ export function TasteCheck({ kind, itemId, profile, onEdit }: Props) {
   const shared = result?.tags.filter((tag) => profile?.liked_genres.some((genre) => genre.toLowerCase() === tag.toLowerCase())) ?? []
 
   return (
-    <section className="panel__section taste-check">
-      <h3>For your taste</h3>
-      {!profile ? (
+    <>
+      {!hasPositiveTaste(profile) ? (
         <>
           <p className="panel__hint">Add a few things you like to check this {kind === 'track' ? 'song' : 'artist'}.</p>
           <button className="btn btn--ghost" onClick={onEdit}>Add preferences</button>
@@ -66,6 +77,6 @@ export function TasteCheck({ kind, itemId, profile, onEdit }: Props) {
           </div>}
         </>
       )}
-    </section>
+    </>
   )
 }

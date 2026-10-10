@@ -18,6 +18,7 @@ type Props = {
   onTags: (id: string, tags: string[]) => void
   /** Song nodes: start a fresh artist-rooted map from the song's artist. */
   onOpenArtist: (artist: ArtistRef) => void
+  tasteActions: ReactNode
   taste: TasteProfile | null
   onEditTaste: () => void
   excluded: boolean
@@ -173,7 +174,7 @@ function fmtDate(d?: string | null): string {
 }
 
 /** Panel for a song node: album, release date, duration, tags, description, preview. */
-function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleExclusion, node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist, taste, onEditTaste, followJourney, journeyStops, saved, onToggleSave, sheet }: Omit<Props, 'onTags'> & { sheet: Sheet }) {
+function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleExclusion, node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist, taste, tasteActions, onEditTaste, followJourney, journeyStops, saved, onToggleSave, sheet }: Omit<Props, 'onTags'> & { sheet: Sheet }) {
   const [details, setDetails] = useState<TrackDetails | null>(null)
   // undefined = still looking it up, null = unknown.
   const [releaseDate, setReleaseDate] = useState<string | null | undefined>(undefined)
@@ -289,7 +290,7 @@ function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleE
         <button className="btn btn--ghost exclusion-toggle" aria-pressed={excluded} onClick={onToggleExclusion}>{excluded ? 'Suggest again' : "Don't suggest again"}</button>
       </div>
 
-      <TasteCheck key={`${node.id}:${JSON.stringify(taste)}`} kind="track" itemId={node.id} profile={taste} onEdit={onEditTaste} />
+      <TasteCheck key={node.id} actions={tasteActions} kind="track" itemId={node.id} profile={taste} onEdit={onEditTaste} />
 
       {loading ? (
         <div className="panel__loading">
@@ -429,7 +430,7 @@ export function ArtistPanel(props: Props) {
   return <ArtistDetails {...props} sheet={sheet} />
 }
 
-function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTags, taste, onEditTaste, saved, onToggleSave, sheet }: Omit<Props, 'onOpenArtist'> & { sheet: Sheet }) {
+function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTags, taste, tasteActions, onEditTaste, saved, onToggleSave, sheet }: Omit<Props, 'onOpenArtist'> & { sheet: Sheet }) {
   const [details, setDetails] = useState<Details>({})
   const [loading, setLoading] = useState(true)
   const [playing, setPlaying] = useState<{ track: string; preview: PreviewResult } | null>(null)
@@ -523,7 +524,7 @@ function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTag
         <PruneActions node={node} isRoot={isRoot} impact={impact} onPrune={onPrune} />
       </div>
 
-      <TasteCheck key={`${node.id}:${JSON.stringify(taste)}`} kind="artist" itemId={node.id} profile={taste} onEdit={onEditTaste} />
+      <TasteCheck key={node.id} actions={tasteActions} kind="artist" itemId={node.id} profile={taste} onEdit={onEditTaste} />
 
       {loading ? (
         <div className="panel__loading">
