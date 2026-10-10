@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     # --- JevLab (personal taste estimates) ------------------------------------
     jev_api_key: str = Field(default="", alias="JEV_API_KEY")
     jev_base_url: str = Field(default="https://jevlab.onrender.com", alias="JEV_BASE_URL")
+    # Pinned rather than jev-latest so a silent model move cannot change cached judgments.
+    jev_model: str = Field(default="jev-1.13.0", alias="JEV_MODEL")
 
     # --- App -------------------------------------------------------------------
     cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
@@ -56,6 +58,7 @@ class Settings(BaseSettings):
     ttl_tracks: int = 12 * 3600
     ttl_musicbrainz: int = 7 * 24 * 3600
     ttl_preview: int = 24 * 3600
+    ttl_taste: int = 15 * 60
 
     @property
     def lastfm_enabled(self) -> bool:

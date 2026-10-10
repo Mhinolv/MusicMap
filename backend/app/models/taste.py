@@ -27,9 +27,30 @@ class TasteEvaluationRequest(BaseModel):
     profile: TasteProfile
 
 
+TasteOutcome = Literal["fit", "insufficient_evidence", "uncertain"]
+
+
 class TasteEvaluationResponse(BaseModel):
+    """Version 2: a fit level (0 = conflicts with dislikes … 4 = strong fit) or an
+    uncertainty outcome. There is deliberately no enjoyment probability."""
+
+    version: Literal[2] = 2
     kind: Literal["artist", "track"]
     item_id: str
-    estimate: float = Field(ge=0, le=1)
+    outcome: TasteOutcome
+    # Rounded Score level and the raw fractional Score; both null unless outcome == "fit".
+    level: int | None = Field(default=None, ge=0, le=4)
+    score: float | None = Field(default=None, ge=0, le=4, allow_inf_nan=False)
     model: str | None = None
+    rubric_version: str
     tags: list[str] = Field(default_factory=list)
+    # True when TUNEGRAPH_MOCK fixtures produced the result instead of JevLab.
+    simulated: bool = False
+
+    @model_validator(mode="after")
+    def level_only_for_fit(self) -> "TasteEvaluationResponse":
+        if (self.outcome == "fit") != (self.level is not None):
+            raise ValueError("level is required for fit outcomes and absent otherwise")
+        if self.outcome != "fit" and self.score is not None:
+            raise ValueError("score is only returned for fit outcomes")
+        return self

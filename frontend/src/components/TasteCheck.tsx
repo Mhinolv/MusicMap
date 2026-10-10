@@ -1,7 +1,27 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { hasPositiveTaste } from '../taste'
 import { api, ApiError } from '../api'
+import { bandFor, FIT_PIPS, uncertainHint } from '../fitBand'
+import { SimulatedBadge } from './SimulatedBadge'
 import type { TasteEvaluation, TasteProfile } from '../types'
+
+function tasteErrorMessage(err: unknown): string {
+  if (!(err instanceof ApiError)) return 'Could not check your taste right now. Please retry.'
+  if (err.status === 503) return 'Taste checks are not configured on this server.'
+  if (err.status === 429) return 'JEV is busy. Try again shortly.'
+  if (err.status === 504) return 'JEV took too long to answer. Try again.'
+  if (err.status === 502 && err.message === 'invalid response') return "JEV sent an answer we couldn't read. Try again."
+  return 'Could not check your taste right now. Please retry.'
+}
+
+function ConflictIcon() {
+  return (
+    <svg className="fit-band__icon" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+      <circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M3.1 10.9 10.9 3.1" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  )
+}
 
 type Props = {
   actions?: ReactNode
@@ -36,22 +56,22 @@ function TasteEvaluationCheck({ kind, itemId, profile, onEdit }: Props) {
     abort.current = ctrl
     setLoading(true)
     setError('')
+    setResult(null)
     try {
       setResult(await api.tasteEvaluate(kind, itemId, profile, ctrl.signal))
     } catch (err) {
       if (ctrl.signal.aborted) return
-      setError(err instanceof ApiError && err.status === 503
-        ? 'Taste checks are not configured on this server.'
-        : err instanceof ApiError && err.status === 429
-          ? 'JEV is busy. Try again shortly.'
-          : 'Could not check your taste right now. Please retry.')
+      setError(tasteErrorMessage(err))
     } finally {
       if (!ctrl.signal.aborted) setLoading(false)
     }
   }
 
-  const label = result ? result.estimate >= 0.7 ? 'Likely fit' : result.estimate <= 0.3 ? 'Unlikely fit' : 'Mixed signals' : ''
-  const shared = result?.tags.filter((tag) => profile?.liked_genres.some((genre) => genre.toLowerCase() === tag.toLowerCase())) ?? []
+  const band = result ? bandFor(result) : null
+  const hint = band ? uncertainHint(band, kind) : null
+  const shared = band && band.pips > 0
+    ? result?.tags.filter((tag) => profile?.liked_genres.some((genre) => genre.toLowerCase() === tag.toLowerCase())) ?? []
+    : []
 
   return (
     <>
@@ -65,15 +85,23 @@ function TasteEvaluationCheck({ kind, itemId, profile, onEdit }: Props) {
           <div className="taste-check__actions">
             <button className="btn btn--ghost" onClick={onEdit}>Edit taste</button>
             <button className="btn" onClick={check} disabled={loading}>
-              {loading ? 'Checking…' : result ? 'Check again' : 'Check my taste'}
+              {loading ? 'Checking…' : result || error ? 'Check again' : 'Check my taste'}
             </button>
           </div>
-          {loading && <p className="panel__hint" role="status">JEV is checking. The first request may take a while.</p>}
+          {loading && <p className="panel__hint" role="status">JEV is checking (up to 5 seconds).</p>}
           {error && <p className="panel__error" role="alert">{error}</p>}
-          {result && <div className="taste-check__result" role="status">
-            <strong>{label}</strong><span>{Math.round(result.estimate * 100)}% model estimate</span>
+          {result && band && <div className={`taste-check__result fit--${band.key} fit-tone--${band.tone}`} role="status">
+            <div className="fit-band">
+              {band.key === 'conflict' && <ConflictIcon />}
+              <strong className="fit-band__label">{band.label}</strong>
+              {band.pips > 0 && <span className="fit-pips" aria-hidden="true">
+                {Array.from({ length: FIT_PIPS }, (_, i) => <i key={i} className={i < band.pips ? 'is-on' : undefined} />)}
+              </span>}
+              {result.simulated && <SimulatedBadge />}
+            </div>
+            {hint && <p className="panel__hint">{hint}</p>}
             {shared.length > 0 && <small>Shared tags: {shared.join(', ')}</small>}
-            <small>Experimental judgment based on the preferences you entered.</small>
+            <small>Experimental judgment based on the preferences you entered.{result.model ? ` · ${result.model}` : ''}</small>
           </div>}
         </>
       )}

@@ -8,7 +8,7 @@ TuneGraph is an interactive map for discovering music. A listener searches an ar
 
 - **Artist mode:** artist-to-artist graph from Last.fm similar artists; expand on double-click (long-press on touch); artist panel with tags, top tracks, preview and outbound links.
 - **Song mode:** song-to-song graph. Edge weight blends Last.fm track match (0.6, `COLLAB_WEIGHT`) with a tag-vector cosine (0.4); shared tags show on edge hover. Song panel shows the first release date from MusicBrainz. Journey-trail breadcrumb, branch pruning (collapse / remove with one-level undo).
-- **Taste profile:** "Add your music taste" (liked artists, songs, genres, dislikes, notes) kept in browser local storage (`tunegraph:taste:v1`); no accounts, no profile database. "Import top music" uses Spotify PKCE (`user-top-read`, token in memory only). "Check my taste" posts the profile plus item metadata to the backend, which calls JevLab `/noul`; the result is an experimental estimate, not the graph's similarity score.
+- **Taste profile:** "Add your music taste" (liked artists, songs, genres, dislikes, notes) kept in browser local storage (`tunegraph:taste:v1`); no accounts, no profile database. "Import top music" uses Spotify PKCE (`user-top-read`, token in memory only). "Check my taste" posts the profile plus item metadata to the backend, which calls JevLab `/systemone` once (fit Score + evidence Noul); the panel shows a named fit band or "Not enough information" / "Uncertain estimate", never a percent, and it is not the graph's similarity score.
 - **Mobile:** bottom-sheet panel, long-press to expand, safe-area and `dvh` sizing.
 - Production: https://music-map-lovat.vercel.app (one Vercel project serves the Vite build and the FastAPI function via `api/index.py`).
 

@@ -90,12 +90,23 @@ export type TasteProfile = {
   notes: string
 }
 
+/** `fit` carries a Score level; the other outcomes deliberately carry none. */
+export type TasteOutcome = 'fit' | 'insufficient_evidence' | 'uncertain'
+
+/** `/api/taste/evaluate` v2. There is no enjoyment probability to display. */
 export type TasteEvaluation = {
+  version: 2
   kind: 'artist' | 'track'
   item_id: string
-  estimate: number
+  outcome: TasteOutcome
+  /** 0 = conflicts with your dislikes … 4 = strong fit; null unless outcome is `fit`. */
+  level: number | null
+  score: number | null
   model?: string | null
+  rubric_version: string
   tags: string[]
+  /** Mock-mode fixture rather than a real JEV judgment. */
+  simulated: boolean
 }
 
 // ---- Graph state (MVP §8) -------------------------------------------------

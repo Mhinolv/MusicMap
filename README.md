@@ -63,8 +63,9 @@ scenario failed; it exits non-zero only when the servers could not start. Enviro
 | `APPLE_MUSIC_PRIVATE_KEY` or `APPLE_MUSIC_PRIVATE_KEY_PATH` | Optional | The `.p8` contents (newlines as `\n`) or a path to the file |
 | `APPLE_MUSIC_STOREFRONT` | Optional | Catalog storefront, default `us` |
 | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Optional | Client ID enables listener PKCE import; both credentials resolve public artist links |
-| `JEV_API_KEY` | Required for taste checks | Server-side key sent as `X-API-Key` to JevLab's `/noul` endpoint |
+| `JEV_API_KEY` | Required for taste checks | Server-side key sent as `X-API-Key` to JevLab's `/systemone` endpoint |
 | `JEV_BASE_URL` | Optional | JevLab service URL; defaults to `https://jevlab.onrender.com` |
+| `JEV_MODEL` | Optional | Pinned Jev model id for taste checks; defaults to `jev-1.13.0` |
 | `CORS_ORIGINS` | Optional | Comma-separated allowed origins, default `http://localhost:5173` |
 | `TUNEGRAPH_MOCK` | Optional | `1` serves canned fixture data instead of calling any provider |
 
@@ -90,9 +91,15 @@ extra keys at all.
 
 Use **Add your music taste** to enter liked artists, songs, genres, dislikes, and notes. The profile is stored
 in this browser's local storage. Selecting an artist or song exposes **Check my taste**, which sends that profile
-and the selected item's metadata through the backend to JevLab. Checks happen only when clicked. The result is
-an experimental model estimate, not a calibrated probability or the graph's similarity score. **Clear profile**
-removes the local copy. No profile database or user login is involved.
+and the selected item's metadata through the backend to JevLab. Checks happen only when clicked. One check asks
+Jev two questions in a single `/systemone` call: a five-level fit Score (Conflicts with your dislikes, Unlikely,
+Mixed signals, Likely, Strong fit) and whether there is comparable evidence at all. Weak evidence shows
+"Not enough information" and a split Score shows "Uncertain estimate" instead of a fit band. The gates
+(`EVIDENCE_MIN`, `CONFIDENCE_MIN` in `backend/app/services/jev.py`) are provisional. Results are cached in
+memory for 15 minutes and the whole check has a 5-second server deadline. The result is an experimental
+judgment, not a calibrated probability or the graph's similarity score. With `TUNEGRAPH_MOCK=1`, fixed fixtures
+answer without a key or network and are labelled **Simulated**. **Clear profile** removes the local copy.
+No profile database or user login is involved.
 
 **Import top music** uses Spotify's Authorization Code with PKCE flow and requests only `user-top-read`.
 After the listener approves, TuneGraph copies up to 15 top artists and 15 top songs into the editable profile.

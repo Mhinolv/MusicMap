@@ -515,6 +515,52 @@ const scenarios = [
       return 'Follow journey on, full-opacity trail and next-expansion hint'
     },
   })),
+  // #36 taste check outcomes. Mock fixtures pick the outcome from profile/tag overlap
+  // (backend/app/services/jev.py::mock_judgment); Creep's tags are alternative, 90s, rock,
+  // alternative rock, grunge. Every mock result carries the Simulated badge.
+  ...[
+    { name: 'taste-check-song-strong', kind: 'song', profile: { liked_genres: ['grunge', '90s'] }, expect: 'Strong fit' },
+    { name: 'taste-check-song-likely', kind: 'song', profile: { liked_genres: ['grunge'] }, expect: 'Likely fit' },
+    { name: 'taste-check-song-mixed', kind: 'song', profile: { liked_genres: ['grunge', 'rock'], disliked: ['90s'] }, expect: 'Mixed signals' },
+    { name: 'taste-check-song-unlikely', kind: 'song', profile: { liked_genres: ['grunge'], disliked: ['90s', 'rock'] }, expect: 'Unlikely fit' },
+    { name: 'taste-check-song-conflict', kind: 'song', profile: { liked_genres: ['jazz'], disliked: ['grunge'] }, expect: 'Conflicts with your dislikes' },
+    { name: 'taste-check-song-insufficient', kind: 'song', profile: { liked_genres: ['jazz'] }, expect: 'Not enough information' },
+    { name: 'taste-check-song-uncertain', kind: 'song', profile: { liked_genres: ['grunge'], disliked: ['90s'] }, expect: 'Uncertain estimate' },
+    { name: 'taste-check-artist-strong', kind: 'artist', profile: { liked_artists: ['Radiohead'], liked_genres: ['art rock'] }, expect: 'Strong fit' },
+    { name: 'taste-check-timeout', kind: 'song', profile: { liked_genres: ['grunge'] }, respond: 504, expect: 'JEV took too long to answer. Try again.' },
+    { name: 'taste-check-loading', kind: 'song', profile: { liked_genres: ['grunge'] }, hang: true, expect: 'JEV is checking (up to 5 seconds).' },
+    { name: 'taste-check-mobile-conflict', kind: 'song', viewport: MOBILE, userAgent: MOBILE_UA, profile: { liked_genres: ['jazz'], disliked: ['grunge'] }, expect: 'Conflicts with your dislikes' },
+    { name: 'taste-check-mobile-insufficient', kind: 'song', viewport: MOBILE, userAgent: MOBILE_UA, profile: { liked_genres: ['jazz'] }, expect: 'Not enough information' },
+  ].map(({ viewport = DESKTOP, ...settings }) => ({
+    ...settings,
+    viewport,
+    async run(page) {
+      await page.evaluate((profile) => localStorage.setItem('tunegraph:taste:v1', JSON.stringify({
+        liked_artists: [], liked_tracks: [], liked_genres: [], disliked: [], notes: '', ...profile,
+      })), settings.profile)
+      await page.reload({ waitUntil: 'networkidle0' })
+      if (settings.respond || settings.hang) {
+        await page.setRequestInterception(true)
+        page.on('request', (request) => {
+          if (!request.url().includes('/api/taste/evaluate')) return request.continue()
+          if (settings.respond) {
+            return request.respond({ status: settings.respond, contentType: 'application/json',
+              body: JSON.stringify({ error: 'timed out', provider: 'jev' }) })
+          }
+          // hang: leave the request pending so the loading state stays on screen
+        })
+      }
+      await search(page, settings.kind, settings.kind === 'artist' ? 'Radiohead' : 'Creep', settings.kind === 'artist' ? 'Radiohead' : 'Creep')
+      await waitForPanel(page)
+      if (viewport === MOBILE) await page.click('.panel__handle')
+      await page.click('.taste-check__actions .btn:not(.btn--ghost)')
+      await page.waitForFunction((text) => [...document.querySelectorAll('.taste-check *')]
+        .some((el) => el.textContent.trim() === text), {}, settings.expect)
+      await page.$eval('.taste-check', (el) => el.scrollIntoView({ block: 'center' }))
+      await sleep(200)
+      return settings.expect
+    },
+  })),
   {
     name: 'taste-profile',
     viewport: DESKTOP,
