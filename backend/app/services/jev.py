@@ -9,6 +9,11 @@ independent questions over the same state:
 
 Code, not the model, combines them: weak evidence or a split Score distribution
 becomes an uncertainty outcome instead of a fit level.
+
+"Check these connections" (#37) repeats the same pair once per candidate song in one
+batched request (at most ``MAX_CANDIDATES`` candidates, 14 questions). Each candidate is
+cached on its own, so only misses are sent, and one bad answer leaves only that
+candidate unknown.
 """
 
 from __future__ import annotations
@@ -16,7 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import httpx
@@ -67,6 +72,9 @@ DEADLINE_SECONDS = 5.0
 
 MOCK_MODEL = "mock-fixture"
 
+# Same cap as the frontend's EXPAND_LIMIT: one song expansion.
+MAX_CANDIDATES = 7
+
 
 @dataclass(frozen=True)
 class TasteJudgment:
@@ -114,6 +122,37 @@ def build_payload(profile: TasteProfile, target: dict, model: str) -> dict:
     }
 
 
+def _candidate_question(question: str, ref: str) -> str:
+    # The single-item questions name the item "music"; a batch names candidates[<ref>].
+    return question.replace("music", f"candidates[{ref}]", 1)
+
+
+def build_batch_payload(profile: TasteProfile, targets: list[dict], model: str) -> dict:
+    """One state with every candidate and a Score + evidence Noul pair per candidate.
+    Question and candidate ids are positional, so no item text is used as an id."""
+    questions = {}
+    for i in range(len(targets)):
+        ref = f"c{i}"
+        questions[f"taste_fit_{i}"] = {
+            "type": "score",
+            "instructions": f"{SAFETY_PREAMBLE} {_candidate_question(FIT_QUESTION, ref)}",
+            "criteria": FIT_LEVELS,
+        }
+        questions[f"taste_evidence_{i}"] = {
+            "type": "noul",
+            "instructions": f"{SAFETY_PREAMBLE} {_candidate_question(EVIDENCE_QUESTION, ref)}",
+            "criteria": EVIDENCE_CRITERIA,
+        }
+    return {
+        "model": model,
+        "state": {
+            "listener_preferences": profile.model_dump(),
+            "candidates": {f"c{i}": target for i, target in enumerate(targets)},
+        },
+        "questions": questions,
+    }
+
+
 def cache_key(profile: TasteProfile, target: dict, model: str) -> str:
     """Hash of everything that can change the answer. A hash is not anonymization;
     it only keeps raw preferences out of cache keys and logs."""
@@ -122,6 +161,12 @@ def cache_key(profile: TasteProfile, target: dict, model: str) -> str:
         sort_keys=True, ensure_ascii=False, separators=(",", ":"),
     )
     return f"jev:taste:{hashlib.sha256(raw.encode()).hexdigest()}"
+
+
+def batch_cache_key(profile: TasteProfile, target: dict, model: str) -> str:
+    """Per-candidate key for batch answers. Kept apart from single checks because the
+    batch wording (candidates[<ref>]) differs from the single-item prompt."""
+    return "jev:taste-batch:" + cache_key(profile, target, model).removeprefix("jev:taste:")
 
 
 def _finite(value: Any, low: float, high: float) -> float:
@@ -159,24 +204,54 @@ def _confidence(answer: dict) -> float | None:
     return max(0.0, 1 - entropy / math.log(len(probs)))
 
 
+_PARSE_ERRORS = (IndexError, KeyError, TypeError, ValueError, AttributeError)
+
+
+def _result(body: Any) -> tuple[dict, str | None]:
+    result = body[0] if isinstance(body, list) else body
+    answers = result["answers"]
+    if not isinstance(answers, dict):
+        raise TypeError("answers is not an object")
+    model = result.get("model")
+    if model is not None and not isinstance(model, str):
+        raise TypeError("model is not a string")
+    return answers, model
+
+
+def _judgment(answers: dict, fit_id: str, evidence_id: str, model: str | None) -> TasteJudgment:
+    fit = _answer(answers, fit_id, "score")
+    evidence = _answer(answers, evidence_id, "noul")
+    return TasteJudgment(
+        score=_finite(fit["score"], 0, MAX_LEVEL),
+        evidence=_finite(evidence["noul"], 0, 1),
+        confidence=_confidence(fit),
+        model=model,
+    )
+
+
 def parse_judgment(body: Any) -> TasteJudgment:
     """Validate a /systemone body (object or one-item list). Raises ProviderError."""
     try:
-        result = body[0] if isinstance(body, list) else body
-        answers = result["answers"]
-        fit = _answer(answers, "taste_fit", "score")
-        evidence = _answer(answers, "taste_evidence", "noul")
-        model = result.get("model")
-        if model is not None and not isinstance(model, str):
-            raise TypeError("model is not a string")
-        return TasteJudgment(
-            score=_finite(fit["score"], 0, MAX_LEVEL),
-            evidence=_finite(evidence["noul"], 0, 1),
-            confidence=_confidence(fit),
-            model=model,
-        )
-    except (IndexError, KeyError, TypeError, ValueError, AttributeError) as exc:
+        answers, model = _result(body)
+        return _judgment(answers, "taste_fit", "taste_evidence", model)
+    except _PARSE_ERRORS as exc:
         raise ProviderError(PROVIDER, "invalid response") from exc
+
+
+def parse_batch(body: Any, count: int) -> dict[int, TasteJudgment]:
+    """Validate a batched /systemone body. A malformed envelope raises ProviderError;
+    a malformed or missing answer pair only drops that candidate's index."""
+    try:
+        answers, model = _result(body)
+    except _PARSE_ERRORS as exc:
+        raise ProviderError(PROVIDER, "invalid response") from exc
+    judgments = {}
+    for i in range(count):
+        try:
+            judgments[i] = _judgment(answers, f"taste_fit_{i}", f"taste_evidence_{i}", model)
+        except _PARSE_ERRORS:
+            continue
+    return judgments
 
 
 async def judge_fit(profile: TasteProfile, target: dict) -> TasteJudgment:
@@ -193,7 +268,38 @@ async def judge_fit(profile: TasteProfile, target: dict) -> TasteJudgment:
     )
 
 
+async def judge_fits(profile: TasteProfile, targets: dict[str, dict]) -> dict[str, TasteJudgment]:
+    """Judge up to MAX_CANDIDATES items (id -> canonical facts) with one batch for the
+    cache misses. Ids missing from the result could not be judged (bad or missing answer)."""
+    if len(targets) > MAX_CANDIDATES:
+        raise ValueError(f"at most {MAX_CANDIDATES} candidates")
+    settings = get_settings()
+    # Fixtures come before the key check so mock mode never needs JEV_API_KEY or network.
+    simulated = settings.mock_providers
+    if not simulated and not settings.jev_enabled:
+        raise ProviderNotConfigured(PROVIDER, "JEV_API_KEY is not configured")
+    model = MOCK_MODEL if simulated else settings.jev_model
+    keys = {item_id: batch_cache_key(profile, target, model) for item_id, target in targets.items()}
+    by_key = {key: targets[item_id] for item_id, key in keys.items()}
+
+    async def compute(missing: list[str]) -> dict[str, TasteJudgment]:
+        batch = [by_key[key] for key in missing]
+        if simulated:
+            parsed = parse_batch(mock_batch_body(profile, batch), len(batch))
+            parsed = {i: replace(judgment, simulated=True) for i, judgment in parsed.items()}
+        else:
+            parsed = parse_batch(await _post(build_batch_payload(profile, batch, model)), len(batch))
+        return {missing[i]: judgment for i, judgment in parsed.items()}
+
+    found = await cache.get_or_set_many(list(by_key), settings.ttl_taste, compute)
+    return {item_id: found[key] for item_id, key in keys.items() if key in found}
+
+
 async def _request(payload: dict) -> TasteJudgment:
+    return parse_judgment(await _post(payload))
+
+
+async def _post(payload: dict) -> Any:
     settings = get_settings()
     try:
         response = await get_client().post(
@@ -215,10 +321,9 @@ async def _request(payload: dict) -> TasteJudgment:
     if response.status_code >= 400:
         raise ProviderError(PROVIDER, f"HTTP {response.status_code}")
     try:
-        body = response.json()
+        return response.json()
     except ValueError as exc:
         raise ProviderError(PROVIDER, "invalid response") from exc
-    return parse_judgment(body)
 
 
 # ---- mock fixtures --------------------------------------------------------------
@@ -227,7 +332,7 @@ def _key(value: str | None) -> str:
     return (value or "").strip().casefold()
 
 
-def mock_judgment(profile: TasteProfile, target: dict) -> TasteJudgment:
+def _mock_answers(profile: TasteProfile, target: dict) -> tuple[dict, dict]:
     """Deterministic, key-free fixtures chosen by exact overlap between the profile and
     the item facts (case-insensitive):
 
@@ -276,11 +381,26 @@ def mock_judgment(profile: TasteProfile, target: dict) -> TasteJudgment:
     else:
         body = {"score": 3.8, "confidence": 0.83}, 0.97
     fit, evidence = body
-    judgment = parse_judgment({
-        "model": MOCK_MODEL,
-        "answers": {
-            "taste_fit": {"type": "score", **fit},
-            "taste_evidence": {"type": "noul", "noul": evidence},
-        },
-    })
-    return TasteJudgment(judgment.score, judgment.evidence, judgment.confidence, judgment.model, simulated=True)
+    return {"type": "score", **fit}, {"type": "noul", "noul": evidence}
+
+
+def mock_judgment(profile: TasteProfile, target: dict) -> TasteJudgment:
+    fit, evidence = _mock_answers(profile, target)
+    judgment = parse_judgment({"model": MOCK_MODEL, "answers": {"taste_fit": fit, "taste_evidence": evidence}})
+    return replace(judgment, simulated=True)
+
+
+def mock_batch_body(profile: TasteProfile, targets: list[dict]) -> dict:
+    """A /systemone-shaped batch body built from the single-item fixtures above. A full
+    batch of MAX_CANDIDATES gets a malformed answer for its last candidate, so mock mode
+    shows a partial failure; checking that one again (a batch of one) succeeds."""
+    answers = {}
+    for i, target in enumerate(targets):
+        fit, evidence = _mock_answers(profile, target)
+        answers[f"taste_fit_{i}"] = fit
+        answers[f"taste_evidence_{i}"] = evidence
+    if len(targets) == MAX_CANDIDATES:
+        last = MAX_CANDIDATES - 1
+        answers[f"taste_fit_{last}"] = {"type": "score", "score": "unreadable"}
+        del answers[f"taste_evidence_{last}"]
+    return {"model": MOCK_MODEL, "answers": answers}
