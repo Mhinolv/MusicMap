@@ -6,7 +6,7 @@ const require = createRequire(new URL('../frontend/package.json', import.meta.ur
 const ts = require('typescript')
 const source = readFileSync(new URL('../frontend/src/graph/constellation.ts', import.meta.url), 'utf8')
 const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText
-const { generateStarField, starRadius, labelLines, placeLabels, journeyPath } = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)
+const { generateStarField, starRadius, labelLines, placeLabels, journeyPath, SELECTED_OUTER_RING, LABEL_GAP } = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)
 const point = (id, overrides = {}) => ({ id, name: id, x: 200, y: 100, core: 6, ring: 13, mainWidth: 100, subWidth: 110, selected: false, root: false, journey: false, ...overrides })
 
 test('star field is deterministic, bounded, sparse on mobile and reusable faint', () => {
@@ -86,6 +86,30 @@ test('journey follows stop order, handles empty/single and splits missing stops'
   assert.equal(journeyPath(['a', 'missing', 'b', 'c'], positions), 'M0,0M10,20L30,5')
 })
 
+
+test('selected labels clear the 32px outer ring by a 6px gap on every side (#43)', () => {
+  const selected = (overrides = {}) => point('s', { x: 300, y: 150, selected: true, ring: 22, outer: 32, ...overrides })
+  // Right, left (edge flip) and below (narrow canvas), then mobile below.
+  const right = placeLabels([selected()], 600, 300, false).get('s')
+  assert.deepEqual([right.side, right.x, right.y], ['right', 38, -8])
+  const left = placeLabels([selected({ x: 520 })], 600, 300, false).get('s')
+  assert.deepEqual([left.side, left.x, left.anchor], ['left', -38, 'end'])
+  const below = placeLabels([selected({ x: 100, mainWidth: 150, subWidth: 150 })], 200, 300, false).get('s')
+  assert.deepEqual([below.side, below.x, below.y], ['below', 0, 38])
+  const mobile = placeLabels([selected()], 600, 300, true).get('s')
+  assert.deepEqual([mobile.side, mobile.y, mobile.hidden], ['below', 38, false])
+  assert.equal(placeLabels([selected()], 1, 1, true).get('s').y, 38)
+  // Collision box moves with the label: a core just past the new box keeps right, one just inside flips left.
+  const blocker = point('b', { x: 300 + 38 + 110 + 10, y: 150, core: 6 })
+  assert.equal(placeLabels([selected(), blocker], 600, 300, false).get('s').side, 'right')
+  const near = point('b', { x: 300 + 38 + 110 - 2, y: 150, core: 6 })
+  assert.equal(placeLabels([selected(), near], 600, 300, false).get('s').side, 'left')
+  // Non-selected labels keep the generic +/-18 beside and ring + 4 below.
+  const plain = placeLabels([point('a', { x: 300, y: 150 })], 600, 300, false).get('a')
+  assert.deepEqual([plain.side, plain.x], ['right', 18])
+  assert.equal(placeLabels([point('a', { x: 300, y: 150 })], 600, 300, true).get('a').y, 17)
+  assert.deepEqual([SELECTED_OUTER_RING, LABEL_GAP], [32, 6])
+})
 
 test('equal-priority collisions rank by match then name', () => {
   const low = point('a', { x: 100, match: 0.6 })
