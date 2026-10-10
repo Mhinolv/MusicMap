@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import type { TasteProfile } from '../types'
+import { TASTE_LIMIT } from '../taste'
 import { beginSpotifyImport } from '../spotifyImport'
 
 type Props = {
@@ -10,7 +11,7 @@ type Props = {
 }
 
 const lines = (values: string[]) => values.join('\n')
-const parse = (value: string) => [...new Set(value.split('\n').map((s) => s.trim()).filter(Boolean))].slice(0, 15)
+const parse = (value: string) => [...new Set(value.split('\n').map((s) => s.trim()).filter(Boolean))].slice(0, TASTE_LIMIT)
 
 export function TastePreferences({ profile, onSave, onClear, onClose }: Props) {
   const [artists, setArtists] = useState(lines(profile.liked_artists))
@@ -74,10 +75,10 @@ export function TastePreferences({ profile, onSave, onClear, onClose }: Props) {
           </button>
         </div>
         <form onSubmit={submit} className="taste-form">
-          <label>Artists you like<textarea autoFocus value={artists} onChange={(e) => setArtists(e.target.value)} maxLength={1800} rows={3} placeholder={'Radiohead\nPortishead'} /></label>
-          <label>Songs you like<textarea value={tracks} onChange={(e) => setTracks(e.target.value)} maxLength={1800} rows={2} placeholder={'Glory Box — Portishead'} /></label>
-          <label>Genres or sounds you like<textarea value={genres} onChange={(e) => setGenres(e.target.value)} maxLength={1800} rows={2} placeholder={'Dream pop\nWarm, layered guitars'} /></label>
-          <label>Music you dislike<textarea value={disliked} onChange={(e) => setDisliked(e.target.value)} maxLength={1800} rows={2} placeholder={'Harsh vocals'} /></label>
+          <label>Artists you like<textarea autoFocus value={artists} onChange={(e) => setArtists(e.target.value)} maxLength={TASTE_LIMIT * 121} rows={3} placeholder={'Radiohead\nPortishead'} /></label>
+          <label>Songs you like<textarea value={tracks} onChange={(e) => setTracks(e.target.value)} maxLength={TASTE_LIMIT * 121} rows={2} placeholder={'Glory Box — Portishead'} /></label>
+          <label>Genres or sounds you like<textarea value={genres} onChange={(e) => setGenres(e.target.value)} maxLength={TASTE_LIMIT * 121} rows={2} placeholder={'Dream pop\nWarm, layered guitars'} /></label>
+          <label>Music you dislike<textarea value={disliked} onChange={(e) => setDisliked(e.target.value)} maxLength={TASTE_LIMIT * 121} rows={2} placeholder={'Harsh vocals'} /></label>
           <label>Anything else<textarea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} rows={2} placeholder="I prefer slower songs with atmospheric production." /></label>
           {error && <p className="panel__error" role="alert">{error}</p>}
           <div className="taste-form__actions">

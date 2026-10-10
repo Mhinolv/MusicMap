@@ -1,7 +1,7 @@
 import type { ArtistNode, TasteProfile } from './types'
 
 export const TASTE_STORAGE_KEY = 'tunegraph:taste:v1'
-export const TASTE_LIMIT = 15
+export const TASTE_LIMIT = 50
 export type TasteList = 'liked_artists' | 'liked_tracks' | 'disliked'
 export const emptyTaste = (): TasteProfile => ({ liked_artists: [], liked_tracks: [], liked_genres: [], disliked: [], notes: '' })
 const matchKey = (value: string) => value.trim().toLowerCase()
@@ -34,6 +34,10 @@ export function toggleTaste(profile: TasteProfile | null, list: TasteList, entry
   const next = { ...previous, [list]: stored === undefined
     ? [...previous[list], value]
     : previous[list].filter((item) => matchKey(item) !== matchKey(value)) }
+  const opposite: TasteList[] = list === 'disliked' ? ['liked_artists', 'liked_tracks'] : ['disliked']
+  for (const other of opposite) {
+    next[other] = previous[other].filter((item) => matchKey(item) !== matchKey(value))
+  }
   return isEmptyTaste(next) ? null : next
 }
 

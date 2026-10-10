@@ -43,13 +43,34 @@ test('every toggle creates, matches case/whitespace, removes all matches, and cl
   assert.deepEqual(song.liked_artists, [], 'liking a song does not add its artist')
 })
 
-test('each list accepts item 15, blocks 16, and allows removal at capacity', () => {
+test('cross-list toggles move case-insensitive matches and legacy Remove clears both lists', () => {
+  for (const liked of ['liked_artists', 'liked_tracks']) {
+    for (const [source, target] of [[liked, 'disliked'], ['disliked', liked]]) {
+      const previous = { ...t.emptyTaste(), [source]: [' Entry ', 'ENTRY'], notes: 'Keep notes' }
+      const snapshot = structuredClone(previous)
+      const next = t.toggleTaste(previous, target, 'entry')
+      assert.deepEqual(next[source], [], 'moving must remove all opposite-list matches')
+      assert.deepEqual(next[target], ['entry'])
+      assert.equal(next.notes, 'Keep notes')
+      assert.deepEqual(previous, snapshot, 'Undo snapshot must remain exact')
+      const legacy = { ...previous, [target]: ['entry'] }
+      const removed = t.toggleTaste(legacy, target, 'ENTRY')
+      assert.deepEqual(removed[source], [], 'legacy Remove clears the opposite list')
+      assert.deepEqual(removed[target], [])
+    }
+    const legacyLast = { ...t.emptyTaste(), [liked]: ['entry'], disliked: ['ENTRY'] }
+    assert.equal(t.toggleTaste(legacyLast, liked, 'entry'), null)
+    assert.equal(t.toggleTaste(legacyLast, 'disliked', 'entry'), null)
+  }
+})
+
+test('each list accepts item 50, blocks 51, and allows removal at capacity', () => {
   for (const list of ['liked_artists', 'liked_tracks', 'disliked']) {
-    const almost = { ...t.emptyTaste(), [list]: Array.from({ length: 14 }, (_, i) => `Item ${i}`) }
+    const almost = { ...t.emptyTaste(), [list]: Array.from({ length: 49 }, (_, i) => `Item ${i}`) }
     const full = t.toggleTaste(almost, list, 'Last')
-    assert.equal(full[list].length, 15)
+    assert.equal(full[list].length, 50)
     assert.equal(t.toggleTaste(full, list, 'Overflow'), full)
-    assert.equal(t.toggleTaste(full, list, 'LAST')[list].length, 14)
+    assert.equal(t.toggleTaste(full, list, 'LAST')[list].length, 49)
     assert.equal(t.toggleTaste(almost, list, 'x'.repeat(121))[list].at(-1).length, 120)
   }
 })
@@ -162,7 +183,7 @@ test('panel changes persist, announce seven-second Undo, and rapid toggles use t
 })
 
 test('full list offers Edit taste without writes; blocked storage never announces success', () => {
-  const full = { ...t.emptyTaste(), liked_artists: Array.from({ length: 15 }, (_, i) => `Artist ${i}`) }
+  const full = { ...t.emptyTaste(), liked_artists: Array.from({ length: 50 }, (_, i) => `Artist ${i}`) }
   const app = panelHarness(full)
   app.toggle('liked_artists', 'Radiohead')
   assert.equal(app.writes.length, 0)
@@ -229,5 +250,91 @@ test('actions precede taste checking; dislike-only profiles show Add preferences
     const buttons = elements.filter(el => el.type === 'button').map(text)
     assert.deepEqual(buttons, positive ? ['Edit taste', 'Check my taste'] : ['Add preferences'])
     assert.ok(elements.indexOf(actions) < elements.findIndex(el => el.type === 'button'))
+  }
+})
+
+
+test('moves announce the target and Undo restores exact cross-list and legacy profiles', () => {
+  for (const liked of ['liked_artists', 'liked_tracks']) {
+    for (const [source, target] of [[liked, 'disliked'], ['disliked', liked]]) {
+      const previous = { ...t.emptyTaste(), [source]: [' RADIOHEAD '], notes: 'Keep' }
+      const app = panelHarness(previous)
+      app.toggle(target, 'Radiohead')
+      assert.equal(app.toast().msg, `Moved “Radiohead” to ${target === 'disliked' ? 'dislikes' : 'your taste'}.`)
+      assert.equal(app.timers.at(-1).ms, 7000)
+      app.toast().action.run()
+      assert.deepEqual(app.writes.at(-1), previous)
+      const legacy = { ...previous, [target]: ['Radiohead'] }
+      const remove = panelHarness(legacy)
+      remove.toggle(target, 'Radiohead')
+      assert.equal(remove.writes.at(-1)[source].length, 0)
+      remove.toast().action.run()
+      assert.deepEqual(remove.writes.at(-1), legacy)
+    }
+  }
+})
+
+test('full destinations block moves atomically and name each list', () => {
+  for (const liked of ['liked_artists', 'liked_tracks']) {
+    for (const [source, target] of [[liked, 'disliked'], ['disliked', liked]]) {
+      const previous = { ...t.emptyTaste(), [source]: ['Radiohead'], [target]: Array.from({ length: 50 }, (_, i) => `Item ${i}`) }
+      assert.equal(t.toggleTaste(previous, target, 'Radiohead'), previous)
+      const app = panelHarness(previous)
+      app.toggle(target, 'Radiohead')
+      assert.equal(app.writes.length, 0)
+      const label = target === 'liked_artists' ? 'liked bands' : target === 'liked_tracks' ? 'liked songs' : 'dislikes'
+      assert.equal(app.toast().msg, `Your ${label} list is full (50).`)
+      assert.equal(app.toast().action.label, 'Edit taste')
+    }
+  }
+})
+
+test('Edit taste saves up to 50 entries in all four lists, including full-length lines', () => {
+  for (const count of [0, 15, 49, 50, 51]) {
+    const entries = Array.from({ length: count }, (_, i) => String(i).padEnd(120, 'x'))
+    const profile = { liked_artists: entries, liked_tracks: entries, liked_genres: entries, disliked: entries, notes: 'Keep' }
+    let saved
+    const elements = componentTree('TastePreferences', 'TastePreferences', { profile, onSave: next => { saved = next } })
+    for (const field of elements.filter(el => el.type === 'textarea' && el.props.maxLength !== 500)) {
+      assert.ok(field.props.maxLength >= 50 * 120 + 49)
+    }
+    elements.find(el => el.type === 'form').props.onSubmit({ preventDefault() {} })
+    for (const list of ['liked_artists', 'liked_tracks', 'liked_genres', 'disliked']) {
+      assert.deepEqual(Array.from(saved[list]), entries.slice(0, 50))
+    }
+  }
+})
+
+
+test('Spotify requests top 15 while merging up to 50 without truncating existing taste', async () => {
+  const source = ts.transpileModule(readFileSync(new URL('../frontend/src/spotifyImport.ts', import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS },
+  }).outputText
+  for (const count of [0, 40, 50]) {
+    const exports = {}
+    const calls = []
+    runInNewContext(source, {
+      exports, URL, URLSearchParams,
+      require: name => name === './taste' ? t : { api: { spotifyConfig: async () => ({ client_id: 'test' }) } },
+      window: { location: { pathname: '/spotify/callback', search: '?state=test&code=code', origin: 'https://test' }, history: { replaceState() {} } },
+      sessionStorage: { getItem: () => JSON.stringify({ state: 'test', verifier: 'test' }), removeItem() {} },
+      fetch: async url => {
+        if (String(url).includes('/api/token')) return { ok: true, json: async () => ({ access_token: 'test' }) }
+        calls.push(String(url))
+        return { ok: true, json: async () => ({ items: Array.from({ length: 15 }, (_, i) => ({ name: `Imported ${i}`, artists: [{ name: 'Artist' }] })) }) }
+      },
+    })
+    const existing = Array.from({ length: count }, (_, i) => `Saved ${i}`)
+    const previous = { ...t.emptyTaste(), liked_artists: existing, liked_tracks: existing, liked_genres: ['Pop'], disliked: ['Harsh'], notes: 'Keep' }
+    const next = await exports.finishSpotifyImport(previous)
+    assert.equal(calls.length, 2)
+    for (const url of calls) assert.equal(new URL(url).searchParams.get('limit'), '15')
+    for (const list of ['liked_artists', 'liked_tracks']) {
+      assert.equal(next[list].length, Math.min(50, count + 15))
+      assert.deepEqual(Array.from(next[list].slice(0, count)), existing)
+    }
+    assert.deepEqual(next.liked_genres, previous.liked_genres)
+    assert.deepEqual(next.disliked, previous.disliked)
+    assert.equal(next.notes, previous.notes)
   }
 })
