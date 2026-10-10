@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Query
+from pydantic import StringConstraints
 
 from app.models.track import PreviewResult, TrackDetails, TrackReleaseDate, TrackSearchResponse, TrackSimilarResponse
 from app.services import lastfm, links, preview, similarity
@@ -33,11 +36,13 @@ async def get_release_date(track_id: str) -> TrackReleaseDate:
 
 
 @router.get("/{track_id}/similar", response_model=TrackSimilarResponse)
-async def get_similar(track_id: str, limit: int = Query(8, ge=1, le=20)) -> TrackSimilarResponse:
-    """Last.fm's candidates, re-ranked by a blend of its match score and shared-tag similarity."""
-    track, tracks = await lastfm.get_similar_tracks(track_id, limit)
-    tracks = await similarity.rerank_similar_tracks(track.id, tracks)
-    return TrackSimilarResponse(track_id=track_id, track=track, tracks=tracks)
+async def get_similar(
+    track_id: str,
+    limit: int = Query(8, ge=1, le=20),
+    trail: list[Annotated[str, StringConstraints(min_length=1, max_length=200)]] | None = Query(None, max_length=200),
+) -> TrackSimilarResponse:
+    """Optional ordered journey context; edge scores always describe the parent pair."""
+    return await similarity.select_similar_tracks(track_id, limit, trail)
 
 
 @router.get("/{track_id}/preview", response_model=PreviewResult)

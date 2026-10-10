@@ -4,6 +4,8 @@ import { TasteCheck } from './TasteCheck'
 import type { Artist, ArtistNode, ArtistRef, PreviewResult, PruneMode, TasteProfile, Track, TrackDetails } from '../types'
 
 type Props = {
+  followJourney?: boolean
+  journeyStops?: number
   node: ArtistNode
   isRoot: boolean
   /** How many artists collapsing / removing this node would take with it (null = not possible). */
@@ -165,7 +167,7 @@ function fmtDate(d?: string | null): string {
 }
 
 /** Panel for a song node: album, release date, duration, tags, description, preview. */
-function TrackPanel({ node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist, taste, onEditTaste, sheet }: Omit<Props, 'onTags'> & { sheet: Sheet }) {
+function TrackPanel({ node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist, taste, onEditTaste, followJourney, journeyStops, sheet }: Omit<Props, 'onTags'> & { sheet: Sheet }) {
   const [details, setDetails] = useState<TrackDetails | null>(null)
   // undefined = still looking it up, null = unknown.
   const [releaseDate, setReleaseDate] = useState<string | null | undefined>(undefined)
@@ -260,6 +262,17 @@ function TrackPanel({ node, isRoot, impact, onExpand, onPrune, onClose, onOpenAr
 
       <div className="panel__actions">
         <ExpandButton node={node} onExpand={onExpand} />
+        {node.ranking?.fallback_reason ? (
+          <p className="panel__hint" role="status">{node.ranking.fallback_reason === 'cap_exceeded'
+            ? 'Journey is over 50 stops, so this expansion used only this song.'
+            : "Couldn't follow the whole journey this time; ranked by this song."}</p>
+        ) : node.expanded && node.ranking?.mode === 'journey' ? (
+          <p className="panel__hint">Expanded using your {node.ranking.stop_count}-stop journey.</p>
+        ) : followJourney && !node.expanded ? (
+          <p className="panel__hint">{(journeyStops ?? 0) > 50
+            ? 'Journey is over 50 stops; next expansion will use only this song.'
+            : `Next expansion follows your ${journeyStops}-stop journey.`}</p>
+        ) : null}
         <PruneActions node={node} isRoot={isRoot} impact={impact} onPrune={onPrune} />
       </div>
 

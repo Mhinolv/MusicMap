@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.models.artist import ArtistRef, ExternalUrls
@@ -74,9 +76,16 @@ class TrackSearchResponse(BaseModel):
     tracks: list[TrackRef]
 
 
+class TrackRankingContext(BaseModel):
+    mode: Literal["parent", "journey"] = "parent"
+    stop_count: int = 0
+    fallback_reason: Literal["cap_exceeded", "timeout", "missing_tags"] | None = None
+
+
 class TrackSimilarResponse(BaseModel):
     """Songs Last.fm considers similar to a song."""
 
     track_id: str
     track: TrackRef | None = None
     tracks: list[SimilarTrack]
+    ranking: TrackRankingContext = Field(default_factory=TrackRankingContext)
