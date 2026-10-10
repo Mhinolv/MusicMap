@@ -250,8 +250,9 @@ a:hover { color: var(--cyan-hover); }
 .connections-check h3 { margin-bottom: 0; }
 .connections-check__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .connections { list-style: none; margin: 0; padding: 0; counter-reset: connection; }
+/* #58: the fit label wraps under the song name at every width, so long bands never squeeze the name. */
 .connections__row {
-  display: flex; align-items: center; gap: 8px; min-height: 32px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 32px; padding: 4px 0;
   counter-increment: connection; border-bottom: 1px solid var(--border);
 }
 .connections__row::before {
@@ -259,15 +260,15 @@ a:hover { color: var(--cyan-hover); }
   color: var(--text-faint); font-family: var(--font-mono); font-size: 11px;
 }
 .connections__name {
-  flex: 1; min-width: 38%; text-align: left; font-size: 13px;
+  flex: 1; flex-basis: calc(100% - 22px); text-align: left; font-size: 13px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* border: 0 keeps the result-card frames (.fit--conflict, dashed .fit-tone--uncertain) off the row labels. */
 .connections__label {
-  flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; justify-content: flex-end;
-  gap: 6px; margin-left: auto; border: 0; text-align: right;
+  flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; justify-content: flex-start;
+  gap: 6px; margin-left: 22px; border: 0; text-align: left;
 }
-.connections__label .fit-band { flex-wrap: nowrap; justify-content: flex-end; }
+.connections__label .fit-band { justify-content: flex-start; }
 .connections__label .fit-band__label { min-width: 0; }
 .connections__label .fit-pips { flex: none; }
 .connections__label--pending, .connections__label--unknown {
@@ -577,11 +578,8 @@ a:hover { color: var(--cyan-hover); }
     padding-right: calc(16px + env(safe-area-inset-right));
   }
   .panel__title { font-size: 26px; }
-  /* Sheet rows: 44px targets, and the fit label wraps under the name. */
-  .connections__row { flex-wrap: wrap; min-height: 44px; padding: 4px 0; }
-  .connections__name { flex-basis: calc(100% - 22px); }
-  .connections__label, .connections__label .fit-band { justify-content: flex-start; text-align: left; }
-  .connections__label { margin-left: 22px; }
+  /* Sheet rows: 44px targets; the stacked label layout comes from the base rules (#58). */
+  .connections__row { min-height: 44px; }
 
   .toast {
     bottom: auto; top: calc(62px + env(safe-area-inset-top));
