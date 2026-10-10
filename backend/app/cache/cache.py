@@ -46,13 +46,21 @@ class TTLCache:
         self, key: str, ttl: float, factory: Callable[[], Awaitable[T]]
     ) -> T:
         """Return the cached value, or compute it once even under concurrent calls."""
-        value = self.get(key, _MISSING)
-        if value is not _MISSING:
-            return value  # type: ignore[return-value]
+        while True:
+            value = self.get(key, _MISSING)
+            if value is not _MISSING:
+                return value  # type: ignore[return-value]
 
-        pending = self._inflight.get(key)
-        if pending is not None:
-            return await pending
+            pending = self._inflight.get(key)
+            if pending is None:
+                break
+            try:
+                # Shield: a waiter hitting its own deadline must not cancel the shared work.
+                return await asyncio.shield(pending)
+            except asyncio.CancelledError:
+                if not pending.cancelled():
+                    raise  # this waiter itself was cancelled
+                # The computing caller was cancelled (e.g. its deadline); compute anew.
 
         loop = asyncio.get_running_loop()
         fut: asyncio.Future[Any] = loop.create_future()
@@ -62,8 +70,12 @@ class TTLCache:
             self.set(key, result, ttl)
             fut.set_result(result)
             return result
+        except asyncio.CancelledError:
+            fut.cancel()
+            raise
         except BaseException as exc:  # propagate to waiters, never cache errors
             fut.set_exception(exc)
+            fut.exception()  # mark retrieved so a waiter-less failure is not logged
             raise
         finally:
             self._inflight.pop(key, None)
