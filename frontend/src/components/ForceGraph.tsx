@@ -2,6 +2,7 @@ import * as d3 from 'd3'
 import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import { generateStarField, journeyPath, labelLines, placeLabels, SELECTED_OUTER_RING, starRadius } from '../graph/constellation'
 import type { LabelPosition } from '../graph/constellation'
+import { nodeMatches } from '../graph/onMap'
 import type { ArtistEdge, ArtistNode, NodeKind } from '../types'
 
 type SimNode = d3.SimulationNodeDatum & {
@@ -405,14 +406,7 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
       return heading - fan / 2 + (count > 1 ? (fan * i) / (count - 1) : 0)
     }
 
-    const matches = new Map<string, number>()
-    const parents = new Map(nodes.map(n => [n.id, n.parentId]))
-    for (const e of edges) {
-      if (e.similarity == null) continue
-      for (const [id, other] of [[e.source, e.target], [e.target, e.source]]) {
-        if (!parents.get(id) || parents.get(id) === other) matches.set(id, Math.max(matches.get(id) ?? 0, e.similarity))
-      }
-    }
+    const matches = nodeMatches(nodes, edges)
 
     const simNodes: SimNode[] = nodes.map((n) => {
       seen.add(n.id)
