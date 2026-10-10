@@ -120,6 +120,7 @@ a:hover { color: var(--cyan-hover); }
 .search__field input {
   flex: 1; min-width: 0; background: none; border: 0;
   color: var(--text); font: inherit; font-size: 12px; padding: 6px 0;
+  outline: none;
 }
 .search__field input::placeholder { color: var(--text-faint); }
 .search--compact .search__field input { padding: 6px 0; font-size: 12px; }

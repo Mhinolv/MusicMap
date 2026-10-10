@@ -23,4 +23,6 @@ test('search box focus shows no highlight while other controls keep their ring (
   assert.match(ring[1], /:not\([^)]*\.search__field input[^)]*\)/, 'search input is excluded from the ring')
   assert.doesNotMatch(css, /\.search__field:focus-within/, 'search group border does not change on focus')
   assert.doesNotMatch(css, /\.search__field input:focus(?:-visible)?\s*\{[^}]*(?:outline|border|box-shadow)\s*:\s*(?!none|0)/)
+  // Excluding the input from the cyan ring is not enough: without this the browser default ring draws.
+  assert.match(css, /(?:^|\})\s*\.search__field input\s*\{[^}]*\boutline:\s*none\b/, 'search input suppresses the browser default focus ring')
 })
