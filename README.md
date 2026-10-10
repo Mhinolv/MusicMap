@@ -63,8 +63,8 @@ scenario failed; it exits non-zero only when the servers could not start. Enviro
 | `APPLE_MUSIC_PRIVATE_KEY` or `APPLE_MUSIC_PRIVATE_KEY_PATH` | Optional | The `.p8` contents (newlines as `\n`) or a path to the file |
 | `APPLE_MUSIC_STOREFRONT` | Optional | Catalog storefront, default `us` |
 | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Optional | Client ID enables listener PKCE import; both credentials resolve public artist links |
-| `JEV_API_KEY` | Required for taste checks | Server-side key sent as `X-API-Key` to JevLab's `/systemone` endpoint |
-| `JEV_BASE_URL` | Optional | JevLab service URL; defaults to `https://jevlab.onrender.com` |
+| `JEV_API_KEY` | Required for taste checks | Server-side TypeSafe API key, sent as `Authorization: Bearer` to JEV's `/systemone` endpoint |
+| `JEV_BASE_URL` | Optional | JEV API base URL (requests go to `{base}/systemone`); defaults to TypeSafe, `https://api.typesafe.ai/v1` |
 | `JEV_MODEL` | Optional | Pinned Jev model id for taste checks; defaults to `jev-1.13.0` |
 | `CORS_ORIGINS` | Optional | Comma-separated allowed origins, default `http://localhost:5173` |
 | `TUNEGRAPH_MOCK` | Optional | `1` serves canned fixture data instead of calling any provider |
@@ -79,7 +79,7 @@ All secrets stay on the backend. The frontend only ever talks to `/api/*` (proxi
   create a key with **Media Services (MusicKit)** enabled. Note the Key ID, download the `.p8` once, and use
   your Team ID from the membership page. The backend signs an ES256 developer token itself.
 - **Spotify** (optional): create an app at https://developer.spotify.com/dashboard and copy the client ID/secret.
-- **JevLab**: set `JEV_API_KEY` in `backend/.env` for local development and in Vercel project environment
+- **JEV (TypeSafe)**: get an API key from TypeSafe (https://docs.typesafe.ai/api) and set `JEV_API_KEY` in `backend/.env` for local development and in Vercel project environment
   variables for deployment. The key is never included in frontend code.
 
 Without Apple Music, the play buttons resolve to "no preview" and the panel still offers Apple Music / Spotify /
@@ -91,7 +91,7 @@ extra keys at all.
 
 Use **Add your music taste** to enter liked artists, songs, genres, dislikes, and notes. The profile is stored
 in this browser's local storage. Selecting an artist or song exposes **Check my taste**, which sends that profile
-and the selected item's metadata through the backend to JevLab. Checks happen only when clicked. One check asks
+and the selected item's metadata through the backend to TypeSafe's JEV API. Checks happen only when clicked. One check asks
 Jev two questions in a single `/systemone` call: a five-level fit Score (Conflicts with your dislikes, Unlikely,
 Mixed signals, Likely, Strong fit) and whether there is comparable evidence at all. Weak evidence shows
 "Not enough information" and a split Score shows "Uncertain estimate" instead of a fit band. The gates
@@ -213,7 +213,7 @@ backend/app/
   services/musicbrainz.py identity + streaming links, throttled to 1 req/s
   services/apple_music.py developer token + catalog preview lookup
   services/spotify.py     optional artist links
-  services/jev.py         JevLab taste estimate adapter
+  services/jev.py         JEV (TypeSafe) taste estimate adapter
   services/preview.py     PreviewProvider abstraction
   services/links.py       outbound link resolution with fallbacks
   services/mock.py        fixture data for TUNEGRAPH_MOCK=1

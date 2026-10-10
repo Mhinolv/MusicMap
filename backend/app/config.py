@@ -40,9 +40,10 @@ class Settings(BaseSettings):
     spotify_client_id: str = Field(default="", alias="SPOTIFY_CLIENT_ID")
     spotify_client_secret: str = Field(default="", alias="SPOTIFY_CLIENT_SECRET")
 
-    # --- JevLab (personal taste estimates) ------------------------------------
+    # --- JEV via TypeSafe (personal taste estimates) ----------------------------
     jev_api_key: str = Field(default="", alias="JEV_API_KEY")
-    jev_base_url: str = Field(default="https://jevlab.onrender.com", alias="JEV_BASE_URL")
+    # Requests go to {base}/systemone; override only to point at another compatible host.
+    jev_base_url: str = Field(default="https://api.typesafe.ai/v1", alias="JEV_BASE_URL")
     # Pinned rather than jev-latest so a silent model move cannot change cached judgments.
     jev_model: str = Field(default="jev-1.13.0", alias="JEV_MODEL")
 

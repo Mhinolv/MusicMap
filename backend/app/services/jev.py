@@ -1,4 +1,5 @@
-"""Server-side JevLab adapter. The API key never reaches the browser.
+"""Server-side JEV adapter for TypeSafe's API (https://docs.typesafe.ai/api).
+The API key is sent as ``Authorization: Bearer`` and never reaches the browser.
 
 One explicit taste check sends a single mixed ``/systemone`` request with two
 independent questions over the same state:
@@ -57,7 +58,7 @@ MAX_LEVEL = len(FIT_LEVELS) - 1
 # Provisional gates (owner decision: ship documented constants, tune after a manual eval set).
 # Evidence Noul below EVIDENCE_MIN means "Not enough information".
 EVIDENCE_MIN = 0.5
-# Score confidence below CONFIDENCE_MIN means "Uncertain estimate". When JevLab returns no
+# Score confidence below CONFIDENCE_MIN means "Uncertain estimate". When JEV returns no
 # confidence field, it is derived from the Score distribution as 1 - normalized entropy.
 CONFIDENCE_MIN = 0.4
 
@@ -198,7 +199,7 @@ async def _request(payload: dict) -> TasteJudgment:
         response = await get_client().post(
             f"{settings.jev_base_url.rstrip('/')}/systemone",
             json=payload,
-            headers={"X-API-Key": settings.jev_api_key},
+            headers={"Authorization": f"Bearer {settings.jev_api_key}"},
             timeout=httpx.Timeout(DEADLINE_SECONDS, connect=min(3.0, DEADLINE_SECONDS)),
         )
     except httpx.TimeoutException as exc:
@@ -206,9 +207,11 @@ async def _request(payload: dict) -> TasteJudgment:
     except httpx.HTTPError as exc:
         raise ProviderError(PROVIDER, "request failed") from exc
 
-    # 503/529 from JevLab or TypeSafe mean "overloaded, try later", like 429.
+    # 503/529 from TypeSafe mean "overloaded, try later", like 429.
     if response.status_code in (429, 503, 529):
         raise RateLimited(PROVIDER, retry_after_seconds(response))
+    if response.status_code in (401, 403):
+        raise ProviderError(PROVIDER, f"API key rejected (HTTP {response.status_code})")
     if response.status_code >= 400:
         raise ProviderError(PROVIDER, f"HTTP {response.status_code}")
     try:
