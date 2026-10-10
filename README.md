@@ -33,6 +33,25 @@ Open http://localhost:5173 and search for an artist.
 
 Run the backend tests with `cd backend && .venv/bin/pytest`.
 
+## UI snapshots
+
+`./scripts/snapshot.sh <out-dir>` captures the main screens offscreen, with no keys and no visible browser.
+It starts the backend in mock mode and the Vite dev server on two free ports, drives headless Google Chrome
+through `puppeteer-core` (a frontend devDependency, so run `npm install` in `frontend/` first), and stops
+both servers when it exits.
+
+```bash
+./scripts/snapshot.sh /tmp/tunegraph-snaps
+```
+
+It writes `<scenario>-light.png` and `<scenario>-dark.png` (via `prefers-color-scheme` emulation) for the
+scenarios `empty`, `artist-graph`, `artist-panel`, `song-graph`, `taste-profile` and `mobile-graph`
+(390x844, touch), plus `manifest.json` with each scenario's `status` (`ok`, `error` or `timeout`) and a
+`note`. Server logs go to `<out-dir>/logs/`. The script exits 0 whenever the harness ran, even if a
+scenario failed; it exits non-zero only when the servers could not start. Environment overrides:
+`CHROME_PATH` (Chrome binary), `SNAPSHOT_TIMEOUT_MS` (per scenario, default 45000) and
+`TUNEGRAPH_MAIN_CHECKOUT` (where a git worktree borrows `backend/.venv` and `frontend/node_modules` from).
+
 ## Configuration (`backend/.env`)
 
 | Variable | Required | What it does |
