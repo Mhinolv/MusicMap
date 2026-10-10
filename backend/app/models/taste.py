@@ -49,8 +49,54 @@ class TasteEvaluationResponse(BaseModel):
 
     @model_validator(mode="after")
     def level_only_for_fit(self) -> "TasteEvaluationResponse":
-        if (self.outcome == "fit") != (self.level is not None):
-            raise ValueError("level is required for fit outcomes and absent otherwise")
-        if self.outcome != "fit" and self.score is not None:
-            raise ValueError("score is only returned for fit outcomes")
+        _check_level(self.outcome, self.level, self.score)
         return self
+
+
+def _check_level(outcome: str, level: int | None, score: float | None) -> None:
+    if (outcome == "fit") != (level is not None):
+        raise ValueError("level is required for fit outcomes and absent otherwise")
+    if outcome != "fit" and score is not None:
+        raise ValueError("score is only returned for fit outcomes")
+
+
+ItemId = Annotated[str, StringConstraints(min_length=1, max_length=250)]
+
+
+class TasteConnectionsRequest(BaseModel):
+    """Up to seven child songs of one song expansion (the frontend's EXPAND_LIMIT)."""
+
+    item_ids: list[ItemId] = Field(min_length=1, max_length=7)
+    profile: TasteProfile
+
+    @model_validator(mode="after")
+    def unique_ids(self) -> "TasteConnectionsRequest":
+        if len(set(self.item_ids)) != len(self.item_ids):
+            raise ValueError("item_ids must be unique")
+        return self
+
+
+# "unknown": the song's facts couldn't be looked up or JEV's answer for it was unusable.
+ConnectionOutcome = Literal["fit", "insufficient_evidence", "uncertain", "unknown"]
+
+
+class TasteConnectionResult(BaseModel):
+    item_id: str
+    outcome: ConnectionOutcome
+    level: int | None = Field(default=None, ge=0, le=4)
+    score: float | None = Field(default=None, ge=0, le=4, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def level_only_for_fit(self) -> "TasteConnectionResult":
+        _check_level(self.outcome, self.level, self.score)
+        return self
+
+
+class TasteConnectionsResponse(BaseModel):
+    """Version 1: one result per requested id, in request order. No enjoyment probability."""
+
+    version: Literal[1] = 1
+    results: list[TasteConnectionResult]
+    model: str | None = None
+    rubric_version: str
+    simulated: bool = False

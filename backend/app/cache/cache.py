@@ -56,7 +56,10 @@ class TTLCache:
                 break
             try:
                 # Shield: a waiter hitting its own deadline must not cancel the shared work.
-                return await asyncio.shield(pending)
+                value = await asyncio.shield(pending)
+                if value is not _MISSING:
+                    return value  # type: ignore[return-value]
+                # A batch (get_or_set_many) left this key unanswered; compute anew.
             except asyncio.CancelledError:
                 if not pending.cancelled():
                     raise  # this waiter itself was cancelled
@@ -79,6 +82,62 @@ class TTLCache:
             raise
         finally:
             self._inflight.pop(key, None)
+
+    async def get_or_set_many(
+        self, keys: list[str], ttl: float,
+        factory: Callable[[list[str]], Awaitable[dict[str, Any]]],
+    ) -> dict[str, Any]:
+        """Batch form of get_or_set. Cached keys return directly, keys another caller is
+        already computing are awaited, and the rest are computed with one factory(missing)
+        call. Keys the factory leaves out are not cached and are absent from the result."""
+        found: dict[str, Any] = {}
+        waiting: dict[str, asyncio.Future[Any]] = {}
+        missing: list[str] = []
+        for key in dict.fromkeys(keys):
+            value = self.get(key, _MISSING)
+            if value is not _MISSING:
+                found[key] = value
+            elif key in self._inflight:
+                waiting[key] = self._inflight[key]
+            else:
+                missing.append(key)
+
+        if missing:
+            loop = asyncio.get_running_loop()
+            futures = {key: loop.create_future() for key in missing}
+            self._inflight.update(futures)
+            try:
+                computed = await factory(missing)
+            except asyncio.CancelledError:
+                for fut in futures.values():
+                    fut.cancel()
+                raise
+            except BaseException as exc:  # propagate to waiters, never cache errors
+                for fut in futures.values():
+                    fut.set_exception(exc)
+                    fut.exception()
+                raise
+            finally:
+                for key, fut in futures.items():
+                    if self._inflight.get(key) is fut:
+                        self._inflight.pop(key)
+            for key, fut in futures.items():
+                value = computed.get(key, _MISSING)
+                if value is not _MISSING:
+                    self.set(key, value, ttl)
+                    found[key] = value
+                fut.set_result(value)
+
+        for key, pending in waiting.items():
+            try:
+                value = await asyncio.shield(pending)
+            except asyncio.CancelledError:
+                if not pending.cancelled():
+                    raise
+                continue  # the computing caller was cancelled: leave this key unanswered
+            if value is not _MISSING:
+                found[key] = value
+        return found
 
     def _evict(self) -> None:
         now = time.monotonic()

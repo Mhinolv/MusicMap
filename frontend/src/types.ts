@@ -109,6 +109,25 @@ export type TasteEvaluation = {
   simulated: boolean
 }
 
+/** `unknown`: that song's facts or JEV's answer for it were unusable; only it failed. */
+export type TasteConnectionOutcome = TasteOutcome | 'unknown'
+
+export type TasteConnectionResult = {
+  item_id: string
+  outcome: TasteConnectionOutcome
+  level: number | null
+  score: number | null
+}
+
+/** `/api/taste/connections/evaluate` v1: one result per requested song, in request order. */
+export type TasteConnections = {
+  version: 1
+  results: TasteConnectionResult[]
+  model?: string | null
+  rubric_version: string
+  simulated: boolean
+}
+
 // ---- Graph state (MVP §8) -------------------------------------------------
 
 /** A map is rooted at either an artist or a song; every other node is an artist. */

@@ -11,7 +11,8 @@ from httpx import ASGITransport, AsyncClient, MockTransport, Response
 from app.api.routes import taste as taste_route
 from app.cache.cache import TTLCache, cache
 from app.config import Settings, get_settings
-from app.models.taste import TasteEvaluationResponse, TasteProfile
+from app.models.graph import make_track_id
+from app.models.taste import TasteConnectionResult, TasteEvaluationResponse, TasteProfile
 from app.services import jev
 from app.services.errors import ProviderError, ProviderNotConfigured, RateLimited
 
@@ -536,3 +537,395 @@ async def test_mock_evaluation_accepts_fifty_preferences(client, monkeypatch, ki
         "kind": kind, "item_id": item_id, "profile": profile,
     })
     assert response.status_code == 200
+
+
+# ---- #37: batch check across one song expansion --------------------------------------
+
+# Seven mock songs with hand-written tags (backend/app/services/mock.py), in "graph order".
+CONNECTIONS = [
+    ("Massive Attack", "Teardrop"),   # trip-hop, electronic, downtempo, 90s
+    ("Portishead", "Roads"),          # trip-hop, melancholic, downtempo
+    ("Radiohead", "Karma Police"),    # alternative, alternative rock, 90s, rock
+    ("Sigur Rós", "Hoppípolla"),      # post-rock, ambient, icelandic
+    ("Thom Yorke", "Black Swan"),     # electronic, experimental
+    ("Muse", "Hysteria"),             # alternative rock, rock, 00s
+    ("Björk", "Hyperballad"),         # electronic, art pop, 90s
+]
+CONNECTION_IDS = [make_track_id(artist=artist, track=title) for artist, title in CONNECTIONS]
+CONNECTION_PROFILE = {"liked_genres": ["trip-hop", "electronic"], "disliked": ["rock"]}
+
+
+def batch_body(scores, model="jev-test", evidence=0.9, confidence=0.8):
+    """A batched /systemone body: scores[i] is candidate i's Score (None = leave it out)."""
+    answers = {}
+    for i, score in enumerate(scores):
+        if score is None:
+            continue
+        answers[f"taste_fit_{i}"] = {"type": "score", "score": score, "confidence": confidence}
+        answers[f"taste_evidence_{i}"] = {"type": "noul", "noul": evidence}
+    return {"model": model, "answers": answers}
+
+
+def song(title, tags=("rock",), artist="Band"):
+    return {"kind": "song", "title": title, "artist": artist, "album": None, "tags": list(tags)}
+
+
+async def check_connections(client, item_ids, profile=CONNECTION_PROFILE):
+    return await client.post("/api/taste/connections/evaluate", json={"item_ids": item_ids, "profile": profile})
+
+
+async def test_mock_batch_returns_mixed_fixtures_and_one_unknown_without_key_or_network(client, monkeypatch):
+    monkeypatch.setenv("JEV_API_KEY", "")
+    get_settings.cache_clear()
+    _no_network(monkeypatch)
+    response = await check_connections(client, CONNECTION_IDS)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["version"] == 1
+    assert body["simulated"] is True
+    assert body["model"] == jev.MOCK_MODEL
+    assert body["rubric_version"] == jev.RUBRIC_VERSION
+    assert [r["item_id"] for r in body["results"]] == CONNECTION_IDS, "results keep request (graph) order"
+    assert [(r["outcome"], r["level"]) for r in body["results"]] == [
+        ("fit", 4),                        # two likes
+        ("fit", 3),                        # one like
+        ("fit", 0),                        # only a dislike: conflict
+        ("insufficient_evidence", None),   # sparse facts: no overlap
+        ("fit", 3),
+        ("fit", 0),
+        ("unknown", None),                 # fixture: a full batch's last answer is malformed
+    ]
+    assert all("estimate" not in r and "percent" not in r for r in body["results"])
+
+
+async def test_mock_retry_sends_only_the_miss_and_succeeds(client, monkeypatch):
+    sent = []
+    original = jev.mock_batch_body
+
+    def spy(profile, targets):
+        sent.append([t["title"] for t in targets])
+        return original(profile, targets)
+
+    monkeypatch.setattr(jev, "mock_batch_body", spy)
+    first = (await check_connections(client, CONNECTION_IDS)).json()["results"]
+    unknown = [r["item_id"] for r in first if r["outcome"] == "unknown"]
+    assert unknown == [CONNECTION_IDS[-1]]
+
+    retry = (await check_connections(client, unknown)).json()["results"]
+    assert [(r["outcome"], r["level"]) for r in retry] == [("fit", 3)]
+    again = (await check_connections(client, CONNECTION_IDS)).json()["results"]
+    assert all(r["outcome"] != "unknown" for r in again)
+    assert sent == [[title for _, title in CONNECTIONS], ["Hyperballad"]], "cached candidates are never re-sent"
+
+
+@pytest.mark.parametrize("item_ids", [
+    [], [f"t:{i}" for i in range(8)], ["t:a", "t:a"], ["x" * 251], [""],
+], ids=["none", "eight", "duplicate", "too-long", "empty"])
+async def test_batch_request_caps(client, item_ids):
+    assert (await check_connections(client, item_ids)).status_code == 422
+
+
+async def test_batch_accepts_seven_and_rejects_empty_positive_profile(client):
+    assert (await check_connections(client, CONNECTION_IDS)).status_code == 200
+    assert (await check_connections(client, CONNECTION_IDS[:2], {"disliked": ["rock"]})).status_code == 422
+
+
+async def test_judge_fits_refuses_more_than_seven_candidates():
+    targets = {f"t:{i}": song(f"S{i}") for i in range(8)}
+    with pytest.raises(ValueError):
+        await jev.judge_fits(TasteProfile(liked_genres=["rock"]), targets)
+
+
+async def test_unknown_song_is_unknown_and_does_not_fail_the_batch(client):
+    missing = make_track_id(artist="Nobody", track="Not A Song")
+    body = (await check_connections(client, [CONNECTION_IDS[0], missing])).json()
+    assert [(r["item_id"], r["outcome"]) for r in body["results"]] == [(CONNECTION_IDS[0], "fit"), (missing, "unknown")]
+
+
+async def test_batch_uses_server_metadata_not_edge_tags(client, monkeypatch):
+    captured = []
+
+    async def judge(profile, targets):
+        captured.append(targets)
+        return {}
+
+    monkeypatch.setattr(jev, "judge_fits", judge)
+    body = (await check_connections(client, CONNECTION_IDS[:1])).json()
+    assert body["results"] == [{"item_id": CONNECTION_IDS[0], "outcome": "unknown", "level": None, "score": None}]
+    assert captured == [{CONNECTION_IDS[0]: {
+        "kind": "song", "title": "Teardrop", "artist": "Massive Attack", "album": "Mezzanine",
+        "tags": ["trip-hop", "electronic", "downtempo", "90s"],
+    }}]
+
+
+async def test_batch_metadata_tags_are_capped_at_twelve(monkeypatch):
+    class Track:
+        name = "Many Tags"
+        artist = type("A", (), {"name": "Band"})()
+        album = None
+        tags = [f"tag {i}" for i in range(20)]
+
+    async def details(_):
+        return Track()
+
+    monkeypatch.setattr(taste_route.lastfm, "get_track_details", details)
+    assert len((await taste_route._song_target("x"))["tags"]) == 12
+
+
+async def test_live_batch_sends_one_request_with_paired_questions_and_maps_ids(monkeypatch, live_jev):
+    requests = []
+
+    def handler(request):
+        payload = json.loads(request.content)
+        requests.append(payload)
+        # Score each candidate by its title length so a wrong id mapping is visible.
+        scores = [len(c["title"]) % 5 for c in payload["state"]["candidates"].values()]
+        return Response(200, json=[batch_body(scores)])
+
+    use_transport(monkeypatch, handler)
+    targets = {f"t:{i}": song("x" * i) for i in range(7)}
+    judgments = await jev.judge_fits(TasteProfile(liked_genres=["rock"]), targets)
+
+    assert len(requests) == 1
+    payload = requests[0]
+    assert payload["model"] == "jev-test-pinned"
+    assert payload["state"]["listener_preferences"]["liked_genres"] == ["rock"]
+    assert payload["state"]["candidates"] == {f"c{i}": targets[f"t:{i}"] for i in range(7)}
+    questions = payload["questions"]
+    assert len(questions) == 14
+    for i in range(7):
+        fit, evidence = questions[f"taste_fit_{i}"], questions[f"taste_evidence_{i}"]
+        assert fit["type"] == "score" and fit["criteria"] == jev.FIT_LEVELS
+        assert evidence["type"] == "noul" and evidence["criteria"] == jev.EVIDENCE_CRITERIA
+        for question in (fit, evidence):
+            assert question["instructions"].startswith(jev.SAFETY_PREAMBLE)
+            assert f"candidates[c{i}]" in question["instructions"]
+            assert " music " not in question["instructions"]
+    assert {item_id: j.score for item_id, j in judgments.items()} == {f"t:{i}": float(i % 5) for i in range(7)}
+    assert all(not j.simulated and j.model == "jev-test" for j in judgments.values())
+    assert not any(item_id in json.dumps(payload["questions"]) for item_id in targets), "item ids never appear in prompts"
+
+
+async def test_live_bad_answer_leaves_only_that_item_unknown_and_uncached(monkeypatch, live_jev):
+    requests = []
+    bad = batch_body([3.0, 9.0, 1.0])  # Score 9 is outside the five levels
+    bodies = [bad, batch_body([2.0])]
+
+    def handler(request):
+        requests.append(json.loads(request.content))
+        return Response(200, json=bodies.pop(0))
+
+    use_transport(monkeypatch, handler)
+    profile = TasteProfile(liked_genres=["rock"])
+    targets = {"a": song("A"), "b": song("B"), "c": song("C")}
+    first = await jev.judge_fits(profile, targets)
+    assert {k: j.score for k, j in first.items()} == {"a": 3.0, "c": 1.0}
+
+    second = await jev.judge_fits(profile, targets)
+    assert {k: j.score for k, j in second.items()} == {"a": 3.0, "b": 2.0, "c": 1.0}
+    assert len(requests) == 2
+    assert list(requests[1]["state"]["candidates"].values()) == [song("B")]
+    assert set(requests[1]["questions"]) == {"taste_fit_0", "taste_evidence_0"}
+
+
+async def test_live_batch_cache_hits_and_relevant_changes_miss(monkeypatch, live_jev):
+    calls = []
+
+    def handler(request):
+        count = len(json.loads(request.content)["state"]["candidates"])
+        calls.append(count)
+        return Response(200, json=batch_body([3.0] * count))
+
+    use_transport(monkeypatch, handler)
+    targets = {"a": song("A"), "b": song("B")}
+    await jev.judge_fits(TasteProfile(liked_genres=["rock"]), targets)
+    await jev.judge_fits(TasteProfile(liked_genres=["rock"]), dict(targets))
+    assert calls == [2], "repeat clicks are served from cache"
+    await jev.judge_fits(TasteProfile(liked_genres=["rock"]), {**targets, "c": song("C")})
+    assert calls == [2, 1], "only the new candidate is sent"
+    await jev.judge_fits(TasteProfile(liked_genres=["rock", "jazz"]), targets)
+    assert calls == [2, 1, 2], "profile edit must miss"
+    await jev.judge_fits(TasteProfile(liked_genres=["rock"]), {"a": song("A", tags=["pop"])})
+    assert calls == [2, 1, 2, 1], "changed metadata must miss"
+    # Batch answers never stand in for single-item answers (different prompt wording).
+    profile = TasteProfile(liked_genres=["rock"])
+    assert jev.batch_cache_key(profile, song("A"), "m") != jev.cache_key(profile, song("A"), "m")
+    assert "rock" not in jev.batch_cache_key(profile, song("A"), "m")
+
+
+async def test_live_overlapping_batches_coalesce(monkeypatch, live_jev):
+    requests = []
+    release = asyncio.Event()
+
+    async def handler(request):
+        candidates = json.loads(request.content)["state"]["candidates"]
+        requests.append([c["title"] for c in candidates.values()])
+        await release.wait()
+        return Response(200, json=batch_body([3.0] * len(candidates)))
+
+    use_transport(monkeypatch, handler)
+    profile = TasteProfile(liked_genres=["rock"])
+    first = asyncio.create_task(jev.judge_fits(profile, {"a": song("A"), "b": song("B")}))
+    await asyncio.sleep(0.01)
+    second = asyncio.create_task(jev.judge_fits(profile, {"b": song("B"), "c": song("C")}))
+    await asyncio.sleep(0.01)
+    release.set()
+    one, two = await asyncio.gather(first, second)
+    assert requests == [["A", "B"], ["C"]], "an in-flight candidate is awaited, not re-sent"
+    assert set(one) == {"a", "b"} and set(two) == {"b", "c"}
+
+
+@pytest.mark.parametrize("body", [
+    {"answers": None}, {"answers": []}, {}, [], "nope", None, {"model": 7, "answers": {}},
+], ids=lambda b: json.dumps(b))
+def test_batch_parser_rejects_invalid_envelopes(body):
+    with pytest.raises(ProviderError, match="invalid response"):
+        jev.parse_batch(body, 2)
+
+
+def test_batch_parser_drops_only_bad_pairs():
+    answers = batch_body([1.0, 2.0, 3.0, 4.0, 0.0])["answers"]
+    answers["taste_fit_1"]["score"] = float("nan")
+    answers["taste_evidence_2"] = {"type": "score", "noul": 0.5}
+    del answers["taste_evidence_3"]
+    parsed = jev.parse_batch([{"model": "m", "answers": answers}], 6)
+    assert {i: j.score for i, j in parsed.items()} == {0: 1.0, 4: 0.0}
+    assert parsed[0].model == "m"
+
+
+@pytest.mark.parametrize("upstream, status, error", [
+    (Response(200, json={"answers": None}), 502, "invalid response"),
+    (Response(200, text="<html>"), 502, "invalid response"),
+    (Response(429, headers={"Retry-After": "4"}), 429, "rate limited"),
+    (Response(503), 429, "rate limited"),
+    (Response(500), 502, "HTTP 500"),
+], ids=["envelope", "non-json", "429", "503", "500"])
+async def test_live_upstream_failures_fail_the_whole_request(client, monkeypatch, live_jev, upstream, status, error):
+    async def target(kind, item_id):
+        return song(item_id), ["rock"]
+
+    monkeypatch.setattr(taste_route, "canonical_target", target)
+    use_transport(monkeypatch, lambda _: upstream)
+    response = await check_connections(client, CONNECTION_IDS[:2])
+    assert response.status_code == status
+    assert response.json()["error"] == error
+    assert response.json()["provider"] == "jev"
+
+
+async def test_batch_without_key_is_not_configured(client, monkeypatch):
+    monkeypatch.setenv("TUNEGRAPH_MOCK", "0")
+    monkeypatch.setenv("JEV_API_KEY", "")
+    get_settings.cache_clear()
+    with pytest.raises(ProviderNotConfigured):
+        await jev.judge_fits(TasteProfile(liked_genres=["rock"]), {"a": song("A")})
+
+
+async def test_batch_handler_enforces_total_deadline(client, monkeypatch):
+    async def slow(profile, targets):
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(jev, "judge_fits", slow)
+    monkeypatch.setattr(jev, "DEADLINE_SECONDS", 0.05)
+    response = await check_connections(client, CONNECTION_IDS[:2])
+    assert response.status_code == 504
+    assert response.json() == {"error": "timed out", "provider": "jev"}
+
+
+async def test_batch_does_not_log_raw_profile(client, caplog):
+    caplog.set_level(logging.DEBUG)
+    await check_connections(client, CONNECTION_IDS[:2], {"liked_genres": ["Very Private Genre"], "notes": "diary"})
+    assert "Very Private Genre" not in caplog.text
+
+
+async def test_artist_and_similarity_endpoints_are_unchanged_by_batch(client):
+    artist_id, song_id = await ids(client)
+    requests = [(f"/api/artists/{artist_id}/similar", {"limit": 7}), (f"/api/tracks/{song_id}/similar", {"limit": 7}),
+                (f"/api/artists/{artist_id}", None), (f"/api/tracks/{song_id}", None)]
+    before = [(await client.get(path, params=params)).json() for path, params in requests]
+    await check_connections(client, CONNECTION_IDS)
+    after = [(await client.get(path, params=params)).json() for path, params in requests]
+    assert before == after
+
+
+@pytest.mark.parametrize("bad", [
+    {"outcome": "unknown", "level": 2}, {"outcome": "fit"}, {"outcome": "unknown", "score": 1.0},
+    {"outcome": "fit", "level": 5},
+])
+def test_connection_result_model_rejects_inconsistent_outcomes(bad):
+    with pytest.raises(ValidationError):
+        TasteConnectionResult(item_id="x", **bad)
+
+
+# ---- batch cache helper ------------------------------------------------------------
+
+async def test_get_or_set_many_batches_misses_and_skips_unanswered_keys():
+    local = TTLCache()
+    local.set("hit", "cached", 60)
+    calls = []
+
+    async def factory(missing):
+        calls.append(missing)
+        return {key: key.upper() for key in missing if key != "bad"}
+
+    assert await local.get_or_set_many(["hit", "a", "bad", "a"], 60, factory) == {"hit": "cached", "a": "A"}
+    assert calls == [["a", "bad"]]
+    assert local.get("bad") is None, "unanswered keys are not cached"
+    assert await local.get_or_set_many(["a", "bad"], 60, factory) == {"a": "A"}
+    assert calls[-1] == ["bad"]
+
+
+async def test_get_or_set_many_errors_reach_waiters_and_are_not_cached():
+    local = TTLCache()
+    started, release = asyncio.Event(), asyncio.Event()
+
+    async def failing(missing):
+        started.set()
+        await release.wait()
+        raise ProviderError("jev", "HTTP 500")
+
+    leader = asyncio.create_task(local.get_or_set_many(["a"], 60, failing))
+    await started.wait()
+    waiter = asyncio.create_task(local.get_or_set_many(["a"], 60, failing))
+    await asyncio.sleep(0)
+    release.set()
+    for task in (leader, waiter):
+        with pytest.raises(ProviderError):
+            await task
+    assert local.get("a") is None
+
+
+async def test_get_or_set_many_cancelled_leader_leaves_waiters_unanswered():
+    local = TTLCache()
+    started = asyncio.Event()
+
+    async def hang(missing):
+        started.set()
+        await asyncio.sleep(10)
+
+    leader = asyncio.create_task(local.get_or_set_many(["a"], 60, hang))
+    await started.wait()
+    waiter = asyncio.create_task(local.get_or_set_many(["a"], 60, hang))
+    await asyncio.sleep(0)
+    leader.cancel()
+    assert await waiter == {}
+
+
+async def test_single_waiter_recomputes_when_a_batch_leaves_its_key_unanswered():
+    local = TTLCache()
+    started, release = asyncio.Event(), asyncio.Event()
+
+    async def batch(missing):
+        started.set()
+        await release.wait()
+        return {}
+
+    async def single():
+        return "computed"
+
+    leader = asyncio.create_task(local.get_or_set_many(["a"], 60, batch))
+    await started.wait()
+    waiter = asyncio.create_task(local.get_or_set("a", 60, single))
+    await asyncio.sleep(0)
+    release.set()
+    assert await leader == {}
+    assert await waiter == "computed"

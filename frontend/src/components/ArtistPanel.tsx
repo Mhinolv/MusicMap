@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, ApiError } from '../api'
 import { TasteCheck } from './TasteCheck'
+import { ConnectionsCheck } from './ConnectionsCheck'
+import type { ConnectionItem } from '../connections'
 import type { Artist, ArtistNode, ArtistRef, PreviewResult, PruneMode, TasteProfile, Track, TrackDetails } from '../types'
 
 type Props = {
@@ -25,6 +27,11 @@ type Props = {
   onToggleExclusion: () => void
   saved: boolean
   onToggleSave: () => void
+  /** Song nodes: the expansion's surviving children, for "Check these connections". */
+  connections?: ConnectionItem[]
+  onSelectNode?: (id: string) => void
+  /** Changes on map reset/restore so per-map panel state never carries over. */
+  mapKey?: number
 }
 
 type Details = { artist?: Artist; tracks?: Track[]; error?: string }
@@ -174,7 +181,7 @@ function fmtDate(d?: string | null): string {
 }
 
 /** Panel for a song node: album, release date, duration, tags, description, preview. */
-function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleExclusion, node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist, taste, tasteActions, onEditTaste, followJourney, journeyStops, saved, onToggleSave, sheet }: Omit<Props, 'onTags'> & { sheet: Sheet }) {
+function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleExclusion, node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist, taste, tasteActions, onEditTaste, followJourney, journeyStops, saved, onToggleSave, connections = [], onSelectNode, mapKey = 0, sheet }: Omit<Props, 'onTags'> & { sheet: Sheet }) {
   const [details, setDetails] = useState<TrackDetails | null>(null)
   // undefined = still looking it up, null = unknown.
   const [releaseDate, setReleaseDate] = useState<string | null | undefined>(undefined)
@@ -291,6 +298,10 @@ function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleE
       </div>
 
       <TasteCheck key={node.id} actions={tasteActions} kind="track" itemId={node.id} profile={taste} onEdit={onEditTaste} />
+
+      {node.expanded && connections.length > 0 && onSelectNode && (
+        <ConnectionsCheck key={`${mapKey}:${node.id}`} parentId={node.id} items={connections} profile={taste} onSelect={onSelectNode} onEdit={onEditTaste} />
+      )}
 
       {loading ? (
         <div className="panel__loading">

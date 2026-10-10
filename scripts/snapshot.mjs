@@ -731,6 +731,69 @@ const scenarios = [
       return settings.expect
     },
   })),
+  // #37 "Check these connections" after Creep's expansion. Its seven mock children are
+  // Glory Box, Karma Police, The Smoke, Hearing Damage, Hysteria, Where Is My Mind? and
+  // Hoppípolla; this profile gives Strong/Likely fits, Conflicts, Not enough information,
+  // and the fixture's malformed seventh answer ("Couldn't check"). Mock results are Simulated.
+  ...[
+    { name: 'connections-idle', expect: 'Check these connections' },
+    { name: 'connections-no-profile', profile: null, expect: 'Add preferences' },
+    { name: 'connections-pending', click: true, hang: true, expect: 'Checking…' },
+    { name: 'connections-mixed-simulated', click: true, expect: "Couldn't check" },
+    { name: 'connections-error', click: true, respond: 504, expect: 'JEV took too long to answer. Try again.' },
+    // Its own notes give it fresh cache keys: the backend still holds the desktop scenario's
+    // answers, which would make this a one-song retry that the fixture answers.
+    { name: 'connections-mobile', click: true, viewport: MOBILE, userAgent: MOBILE_UA,
+      profile: { liked_genres: ['trip-hop', 'electronic'], disliked: ['rock'], notes: 'phone' },
+      extraMedia: [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }], expect: "Couldn't check" },
+  ].map(({ viewport = DESKTOP, profile = { liked_genres: ['trip-hop', 'electronic'], disliked: ['rock'] }, ...settings }) => ({
+    ...settings,
+    viewport,
+    async run(page) {
+      if (profile) {
+        await page.evaluate((profile) => localStorage.setItem('tunegraph:taste:v1', JSON.stringify({
+          liked_artists: [], liked_tracks: [], liked_genres: [], disliked: [], notes: '', ...profile,
+        })), profile)
+        await page.reload({ waitUntil: 'networkidle0' })
+      }
+      if (settings.respond || settings.hang) {
+        await page.setRequestInterception(true)
+        page.on('request', (request) => {
+          if (!request.url().includes('/api/taste/connections/evaluate')) return request.continue()
+          if (settings.respond) {
+            return request.respond({ status: settings.respond, contentType: 'application/json',
+              body: JSON.stringify({ error: 'timed out', provider: 'jev' }) })
+          }
+          // hang: leave the batch pending so every row shows Checking…
+        })
+      }
+      await search(page, 'song', 'Creep', 'Creep')
+      await waitForNodes(page, 3)
+      await waitForPanel(page)
+      if (viewport === MOBILE) await page.click('.panel__handle')
+      await page.waitForSelector('.connections-check .connections__row')
+      if (settings.click) await page.click('.connections-check .btn--ghost')
+      await page.waitForFunction((text) => [...document.querySelectorAll('.connections-check *')]
+        .some((el) => el.textContent.trim() === text), {}, settings.expect)
+      await page.$eval('.connections-check', (el) => el.scrollIntoView({ block: 'center' }))
+      await sleep(200)
+      return `${await page.$$eval('.connections__row', (rows) => rows.length)} rows; ${settings.expect}`
+    },
+  })),
+  {
+    name: 'connections-artist-regression', viewport: DESKTOP,
+    async run(page) {
+      await page.evaluate(() => localStorage.setItem('tunegraph:taste:v1', JSON.stringify({
+        liked_artists: [], liked_tracks: [], liked_genres: ['rock'], disliked: [], notes: '',
+      })))
+      await page.reload({ waitUntil: 'networkidle0' })
+      await artistGraph(page)
+      await waitForPanel(page)
+      await page.waitForFunction(() => document.querySelector('.panel__actions .btn--primary')?.textContent.includes('Connections expanded'))
+      if (await page.$('.connections-check')) throw new Error('artist panels must not show the connections check')
+      return 'Expanded artist panel without the connections section'
+    },
+  },
   {
     name: 'taste-profile',
     viewport: DESKTOP,

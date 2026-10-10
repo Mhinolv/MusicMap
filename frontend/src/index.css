@@ -241,6 +241,35 @@ a:hover { color: var(--cyan-hover); }
 .fit--conflict { border-left: 2px solid var(--border-strong); }
 .fit-tone--uncertain { border-style: dashed; background: none; }
 .fit-tone--uncertain .fit-band { color: var(--text-dim); }
+/* minmax(0, 1fr): the nowrap song names must not widen the track past the panel. */
+.connections-check { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; }
+.connections-check h3 { margin-bottom: 0; }
+.connections-check__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.connections { list-style: none; margin: 0; padding: 0; counter-reset: connection; }
+.connections__row {
+  display: flex; align-items: center; gap: 8px; min-height: 32px;
+  counter-increment: connection; border-bottom: 1px solid var(--border);
+}
+.connections__row::before {
+  content: counter(connection); flex: none; width: 14px;
+  color: var(--text-faint); font-family: var(--font-mono); font-size: 11px;
+}
+.connections__name {
+  flex: 1; min-width: 38%; text-align: left; font-size: 13px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* border: 0 keeps the result-card frames (.fit--conflict, dashed .fit-tone--uncertain) off the row labels. */
+.connections__label {
+  flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; justify-content: flex-end;
+  gap: 6px; margin-left: auto; border: 0; text-align: right;
+}
+.connections__label .fit-band { flex-wrap: nowrap; justify-content: flex-end; }
+.connections__label .fit-band__label { min-width: 0; }
+.connections__label .fit-pips { flex: none; }
+.connections__label--pending, .connections__label--unknown {
+  color: var(--text-dim); font-family: var(--font-mono); font-size: 12px;
+}
+.connections-check__note { margin: 0; }
 .sim-badge {
   border: 1px solid #3A3E46; padding: 0 5px; color: var(--text-dim);
   font-family: var(--font-label); font-size: 11px; font-weight: 600;
@@ -343,6 +372,7 @@ a:hover { color: var(--cyan-hover); }
   animation: spin 0.8s linear infinite; display: inline-block; flex: none;
 }
 .spinner--sm { width: 12px; height: 12px; border-width: 2px; }
+.spinner--xs { width: 10px; height: 10px; border-width: 2px; }
 
 .toast {
   position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
@@ -543,6 +573,11 @@ a:hover { color: var(--cyan-hover); }
     padding-right: calc(16px + env(safe-area-inset-right));
   }
   .panel__title { font-size: 26px; }
+  /* Sheet rows: 44px targets, and the fit label wraps under the name. */
+  .connections__row { flex-wrap: wrap; min-height: 44px; padding: 4px 0; }
+  .connections__name { flex-basis: calc(100% - 22px); }
+  .connections__label, .connections__label .fit-band { justify-content: flex-start; text-align: left; }
+  .connections__label { margin-left: 22px; }
 
   .toast {
     bottom: auto; top: calc(62px + env(safe-area-inset-top));
@@ -755,9 +790,9 @@ a:hover { color: var(--cyan-hover); }
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
-.app--empty { position: relative; display: block; }
+.app--empty { position: relative; display: flex; flex-direction: column; }
 .start-header {
-  position: sticky; top: 0; z-index: 5; height: 48px; padding: 0 12px;
+  position: sticky; top: 0; z-index: 5; flex: none; height: 48px; padding: 0 12px;
   display: flex; align-items: center; gap: 12px;
   background: var(--pane); border-bottom: 1px solid var(--hairline);
 }
@@ -767,12 +802,19 @@ a:hover { color: var(--cyan-hover); }
 .library-button .library-count { margin-left: 0; }
 .library-button[aria-expanded="true"] { border-color: var(--cyan); background: var(--cyan-soft); }
 .start-sky { position: absolute; top: 48px; left: 0; width: 100%; height: calc(100% - 48px); pointer-events: none; }
+/* Centred both ways below the header; auto margins collapse to the 40px padding on short screens, which scroll. */
 .start {
+  --start-gutter: clamp(24px, 5.5vw, 80px);
   position: relative; display: flex; flex-direction: column; gap: 24px;
-  margin: 72px 0 48px clamp(24px, 5.5vw, 80px);
-  width: min(900px, calc(100% - 160px));
+  flex: none; margin: auto; padding-block: 40px;
+  width: min(900px, 100% - 2 * var(--start-gutter));
 }
-.start--library { width: min(900px, calc(100% - clamp(24px, 5.5vw, 80px) - 404px)); }
+/* Library open: centred in the width left of the 380px drawer. */
+.start--library {
+  --start-w: min(900px, 100% - 380px - 2 * var(--start-gutter));
+  width: var(--start-w);
+  margin-left: calc((100% - 380px - var(--start-w)) / 2);
+}
 .start-panel { background: var(--pane); border: 1px solid var(--hairline); }
 .start-panel__head {
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
@@ -845,13 +887,9 @@ a:hover { color: var(--cyan-hover); }
 .library-drawer__note { margin: 0; padding: 12px 14px 0; color: var(--muted); line-height: 1.6; }
 .library-drawer__note:last-child { padding-bottom: 12px; }
 
-@media (max-width: 1023px) {
-  .start { width: calc(100% - 2 * clamp(24px, 5.5vw, 80px)); }
-  .start--library { width: calc(100% - clamp(24px, 5.5vw, 80px) - 404px); }
-}
 @media (max-width: 860px) {
   /* Too narrow to share the row: the drawer overlays the column instead. */
-  .start--library { width: calc(100% - 2 * clamp(24px, 5.5vw, 80px)); }
+  .start--library { --start-w: min(900px, 100% - 2 * var(--start-gutter)); margin-left: auto; }
   .resume { flex-wrap: wrap; }
   .resume__info { flex-basis: calc(100% - 224px); }
   .resume__actions { flex-direction: row; flex-basis: 100%; }
@@ -862,7 +900,8 @@ a:hover { color: var(--cyan-hover); }
     padding-left: calc(12px + env(safe-area-inset-left)); padding-right: calc(12px + env(safe-area-inset-right));
   }
   .start-sky { top: calc(48px + env(safe-area-inset-top)); }
-  .start, .start--library { width: auto; margin: 24px 16px 32px; }
+  /* Phones stay top-anchored so the soft keyboard never covers the suggestions (#53). */
+  .start, .start--library { width: auto; margin: 0 16px; padding: 24px 0 32px; }
   .start-panel__aside { display: none; }
   .search--start { flex-wrap: wrap; }
   .search--start .search__anchor { flex-basis: 100%; }
