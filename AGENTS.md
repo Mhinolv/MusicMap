@@ -23,6 +23,7 @@ TuneGraph is an interactive map for discovering music. A listener searches an ar
 | Side / bottom-sheet panel for artists and songs | `frontend/src/components/ArtistPanel.tsx` |
 | Search, journey breadcrumb | `frontend/src/components/SearchBar.tsx`, `frontend/src/components/JourneyTrail.tsx` |
 | Taste profile UI and taste check | `frontend/src/components/TastePreferences.tsx`, `frontend/src/components/TasteCheck.tsx` |
+| Batch taste check for a song expansion's children (#37) | `frontend/src/components/ConnectionsCheck.tsx`, `frontend/src/connections.ts`; backend `POST /api/taste/connections/evaluate` |
 | Spotify PKCE import | `frontend/src/spotifyImport.ts` |
 | HTTP routes | `backend/app/api/routes/{artists,tracks,taste,spotify_auth}.py` |
 | Response models | `backend/app/models/{artist,graph,track,taste}.py` |

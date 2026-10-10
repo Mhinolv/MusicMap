@@ -20,6 +20,7 @@ import { addExclusion, EXCLUSION_FULL_MESSAGE, readExclusions, restoreExclusions
 import { clearMap, readMap, saveMap } from './graph/mapSnapshot'
 
 import { zoomShortcut } from './graph/zoomShortcut'
+import { expansionChildren } from './connections'
 
 const EXPAND_LIMIT = 7
 
@@ -278,6 +279,12 @@ export default function App() {
     }
   }, [g.graph, selected])
 
+  // Song expansions only: the children still on the map, for "Check these connections".
+  const connections = useMemo(
+    () => (selected?.expanded ? expansionChildren(g.graph.nodes, selected.id) : []),
+    [g.graph.nodes, selected],
+  )
+
   const undoGraph = g.undo
   const undoPrune = useCallback(() => {
     undoGraph()
@@ -455,6 +462,9 @@ export default function App() {
                   taste={taste}
                   tasteActions={<TasteToggle node={selected} profile={taste} onToggle={togglePanelTaste} />}
                   onEditTaste={() => setTasteOpen(true)}
+                  connections={connections}
+                  onSelectNode={select}
+                  mapKey={resetKey}
                 />
               )}
               {!selected && <section className="inspector-empty" aria-label="Inspector">
