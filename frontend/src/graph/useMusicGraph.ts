@@ -7,13 +7,14 @@ import {
   type MusicGraph,
   type PruneMode,
   type TrackRef,
+  type TrackRankingContext,
 } from '../types'
 
 type Action =
   | { type: 'reset'; root: ArtistNode }
   | { type: 'select'; id?: string }
   | { type: 'expand:start'; id: string }
-  | { type: 'expand:success'; id: string; children: ExpandedChild[] }
+  | { type: 'expand:success'; id: string; children: ExpandedChild[]; ranking?: TrackRankingContext }
   | { type: 'expand:failure'; id: string; error: string }
   | { type: 'node:tags'; id: string; tags: string[] }
   | { type: 'prune'; id: string; mode: PruneMode }
@@ -123,7 +124,7 @@ function prune(state: MusicGraph, id: string, mode: PruneMode, seq: number): Mus
     const node = nodes.get(n)
     if (node) nodes.set(n, { ...node, parentId: parent })
   }
-  if (mode === 'collapse') nodes.set(id, { ...target, expanded: false, loading: false, error: undefined })
+  if (mode === 'collapse') nodes.set(id, { ...target, expanded: false, loading: false, error: undefined, ranking: undefined })
 
   const edges = new Map<string, ArtistEdge>()
   for (const e of state.edges.values()) {
@@ -198,7 +199,7 @@ function reducer(state: MusicGraph, action: Action): MusicGraph {
       if (!source) return state
       const nodes = new Map(state.nodes)
       const edges = new Map(state.edges)
-      nodes.set(action.id, { ...source, loading: false, expanded: true, error: undefined })
+      nodes.set(action.id, { ...source, loading: false, expanded: true, error: undefined, ranking: action.ranking })
       for (const { node: child, similarity, sharedTags } of action.children) {
         if (child.id === action.id) continue
         // Reuse existing nodes rather than duplicating (MVP §9).
@@ -250,7 +251,7 @@ export function useMusicGraph() {
   const select = useCallback((id?: string) => dispatch({ type: 'select', id }), [])
   const expandStart = useCallback((id: string) => dispatch({ type: 'expand:start', id }), [])
   const expandSuccess = useCallback(
-    (id: string, children: ExpandedChild[]) => dispatch({ type: 'expand:success', id, children }),
+    (id: string, children: ExpandedChild[], ranking?: TrackRankingContext) => dispatch({ type: 'expand:success', id, children, ranking }),
     [],
   )
   const expandFailure = useCallback((id: string, error: string) => dispatch({ type: 'expand:failure', id, error }), [])

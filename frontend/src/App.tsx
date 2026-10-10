@@ -8,8 +8,9 @@ import { SavedDiscoveries } from './components/SavedDiscoveries'
 import { addBookmark, bookmarkKey, BOOKMARK_FULL_MESSAGE, nodeBookmark, readBookmarks, restoreBookmarks, writeBookmarks, type Bookmark } from './bookmarks'
 import { TastePreferences } from './components/TastePreferences'
 import { finishSpotifyImport } from './spotifyImport'
-import { artistNode, planPrune, trackNode, useMusicGraph } from './graph/useMusicGraph'
-import type { ArtistRef, PruneMode, TasteProfile, TrackRef } from './types'
+import { artistNode, planPrune, trackNode, useMusicGraph, type ExpandedChild } from './graph/useMusicGraph'
+import { JOURNEY_CAP, journeyContext } from './graph/journey'
+import type { ArtistRef, PruneMode, TasteProfile, TrackRankingContext, TrackRef } from './types'
 
 const EXPAND_LIMIT = 7
 
@@ -28,6 +29,8 @@ function readTaste(): TasteProfile | null {
 export default function App() {
   const g = useMusicGraph()
   const [resetKey, setResetKey] = useState(0)
+  const [followJourney, setFollowJourney] = useState(false)
+  const mapEpoch = useRef(0)
   const [toast, setToast] = useState<Toast | null>(null)
   const [searchMode, setSearchMode] = useState<SearchMode>('artist')
   const [centerRequest, setCenterRequest] = useState<{ id: string; nonce: number }>()
@@ -71,44 +74,61 @@ export default function App() {
       if (inflight.current.has(id)) return
       const node = g.graph.nodes.get(id)
       if (!node || node.expanded) return
+      const epoch = mapEpoch.current
       inflight.current.add(id)
       g.expandStart(id)
       try {
         // Song maps stay song-to-song; artist maps stay artist-to-artist.
-        const children =
-          node.kind === 'track'
-            ? (await api.trackSimilar(id, EXPAND_LIMIT)).tracks.map((t) => ({
-                node: trackNode(t, id),
-                similarity: t.similarity ?? undefined,
-                sharedTags: t.shared_tags?.length ? t.shared_tags : undefined,
-              }))
-            : (await api.similar(id, EXPAND_LIMIT)).map((a) => ({ node: artistNode(a, id), similarity: a.similarity ?? undefined }))
-        g.expandSuccess(id, children)
+        let children: ExpandedChild[]
+        let ranking: TrackRankingContext | undefined
+        if (node.kind === 'track') {
+          const trail = followJourney ? journeyContext(g.graph.journey, g.graph.nodes, id) : undefined
+          const overCap = !!trail && trail.length > JOURNEY_CAP
+          const result = await api.trackSimilar(id, EXPAND_LIMIT, undefined, overCap ? undefined : trail)
+          if (epoch !== mapEpoch.current) return
+          ranking = overCap ? { mode: 'parent', stop_count: trail.length, fallback_reason: 'cap_exceeded' } : result.ranking
+          children = result.tracks.map((t) => ({
+            node: trackNode(t, id),
+            similarity: t.similarity ?? undefined,
+            sharedTags: t.shared_tags?.length ? t.shared_tags : undefined,
+          }))
+          if (ranking.fallback_reason) showToast({ msg: ranking.fallback_reason === 'cap_exceeded'
+            ? 'Journey is over 50 stops, so this expansion used only this song.'
+            : "Couldn't follow the whole journey this time; ranked by this song." })
+        } else {
+          children = (await api.similar(id, EXPAND_LIMIT)).map((a) => ({ node: artistNode(a, id), similarity: a.similarity ?? undefined }))
+        }
+        if (epoch !== mapEpoch.current) return
+        g.expandSuccess(id, children, ranking)
         if (children.length === 0) showToast({ msg: `No known connections for ${node.name}.` })
       } catch (err) {
         const msg =
           err instanceof ApiError && err.status === 429
             ? 'Rate limited. Try again in a moment.'
             : "Couldn't load more connections."
-        g.expandFailure(id, msg)
+        if (epoch === mapEpoch.current) g.expandFailure(id, msg)
       } finally {
-        inflight.current.delete(id)
+        if (epoch === mapEpoch.current) inflight.current.delete(id)
       }
     },
     // g.graph changes every render; we only need the stable callbacks + current nodes map.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [g.graph.nodes, g.expandStart, g.expandSuccess, g.expandFailure, showToast],
+    [g.graph.nodes, g.graph.journey, followJourney, g.expandStart, g.expandSuccess, g.expandFailure, showToast],
   )
 
   // After a reset, expand the root once it exists in state.
   const pendingRoot = useRef<string | null>(null)
   const onSelectSearch = (artist: ArtistRef) => {
+    mapEpoch.current += 1
+    setFollowJourney(false)
     pendingRoot.current = artist.id
     inflight.current.clear()
     g.resetArtist(artist)
     setResetKey((k) => k + 1)
   }
   const onSelectTrack = (track: TrackRef) => {
+    mapEpoch.current += 1
+    setFollowJourney(false)
     pendingRoot.current = track.id
     inflight.current.clear()
     g.resetTrack(track)
@@ -257,6 +277,8 @@ export default function App() {
                 onToggleSave={toggleSave}
                 isRoot={selected.id === g.graph.rootId}
                 impact={impact}
+                followJourney={followJourney}
+                journeyStops={journeyContext(g.graph.journey, g.graph.nodes, selected.id).length}
                 onExpand={expand}
                 onPrune={prune}
                 onClose={() => g.select(undefined)}
@@ -280,7 +302,10 @@ export default function App() {
               centerRequest={centerRequest}
             />
             <JourneyTrail
-              journey={g.graph.journey}
+              songMode={rootKind === 'track'}
+              followJourney={followJourney}
+              onFollowJourney={() => setFollowJourney((on) => !on)}
+              journey={rootKind === 'track' ? g.graph.journey.filter((id) => g.graph.nodes.get(id)?.expanded) : g.graph.journey}
               nodes={g.graph.nodes}
               focusId={g.graph.focusId}
               selectedId={g.graph.selectedNodeId}

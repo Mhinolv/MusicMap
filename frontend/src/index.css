@@ -666,3 +666,14 @@ a { color: var(--accent); }
 @media (prefers-reduced-motion: reduce) {
   .panel { transition: none; }
 }
+
+/* Song journey ranking is a session control; active context stays visible. */
+.journey.is-following { opacity: 1; }
+.journey__follow {
+  flex: none; padding: 6px 10px; border: 1px solid var(--border); border-radius: 999px;
+  font: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+  color: var(--text-faint); background: rgba(255,255,255,0.05);
+}
+.journey__follow.is-on { background: var(--accent); color: #1a1206; border-color: var(--accent); }
+.journey__follow[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+.journey__follow:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

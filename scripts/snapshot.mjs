@@ -222,6 +222,7 @@ const scenarios = [
     viewport: DESKTOP,
     async run(page) {
       await artistGraph(page)
+      if (await page.$('.journey__follow')) throw new Error('artist map shows song switch')
       const before = await nodeCount(page)
       const pt = await neighbourPoint(page)
       if (!pt) throw new Error('no clickable neighbour node found')
@@ -253,9 +254,36 @@ const scenarios = [
       await waitForNodes(page, 3)
       await waitForPanel(page)
       await waitForSettle(page)
-      return `${await nodeCount(page)} songs`
+      await page.waitForSelector('.journey__follow[aria-checked="false"]')
+      return `${await nodeCount(page)} songs; Follow journey off`
     },
   },
+  ...[
+    { name: 'song-journey-on', viewport: DESKTOP },
+    { name: 'mobile-song-journey-on', viewport: MOBILE, userAgent: MOBILE_UA,
+      extraMedia: [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }] },
+  ].map((settings) => ({
+    ...settings,
+    async run(page) {
+      await search(page, 'song', 'Creep', 'Creep')
+      await waitForNodes(page, 3)
+      await waitForPanel(page)
+      await page.waitForSelector('.journey__follow[aria-checked="false"]')
+      await page.click('.journey__follow')
+      // Select a leaf through its existing keyboard control, avoiding panel overlap.
+      const leaf = await page.$('g.node:not(.is-root)')
+      if (!leaf) throw new Error('no song leaf')
+      // ElementHandle.focus() rejects SVG; use the node's native DOM focus.
+      await page.evaluate((node) => node.focus(), leaf)
+      await page.keyboard.press('Enter')
+      await waitForPanel(page)
+      await page.waitForFunction(() => [...document.querySelectorAll('.panel__hint')]
+        .some((el) => el.textContent.includes('Next expansion follows your')))
+      await page.waitForFunction(() => getComputedStyle(document.querySelector('.journey')).opacity === '1')
+      await waitForSettle(page)
+      return 'Follow journey on, full-opacity trail and next-expansion hint'
+    },
+  })),
   {
     name: 'taste-profile',
     viewport: DESKTOP,
