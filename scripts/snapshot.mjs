@@ -414,11 +414,15 @@ const scenarios = [
       if (await page.$('.start-sky')) throw new Error('old star sky must be gone')
       // #62: intro copy visible above NEW MAP, NEW MAP fully above the fold, no horizontal scroll.
       const intro = await page.evaluate(() => {
-        const box = (el) => el?.getBoundingClientRect()
-        const title = box(document.querySelector('.start-intro__title'))
-        const text = box(document.querySelector('.start-intro__text'))
-        const panel = box(document.querySelector('.start-panel[aria-labelledby="new-map-title"]'))
-        return { title, text, panel: panel && { top: panel.top, bottom: panel.bottom }, vh: innerHeight,
+        // DOMRect does not serialise out of page.evaluate, so copy plain numbers.
+        const box = (sel) => {
+          const r = document.querySelector(sel)?.getBoundingClientRect()
+          return r && { top: r.top, bottom: r.bottom, height: r.height }
+        }
+        const title = box('.start-intro__title')
+        const text = box('.start-intro__text')
+        const panel = box('.start-panel[aria-labelledby="new-map-title"]')
+        return { title, text, panel, vh: innerHeight,
           scrollX: document.documentElement.scrollWidth > document.documentElement.clientWidth }
       })
       if (!intro.title?.height || !intro.text?.height) throw new Error(`intro copy must be visible: ${JSON.stringify(intro)}`)
