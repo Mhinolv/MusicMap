@@ -3,7 +3,8 @@ import { api, ApiError } from './api'
 import { ArtistPanel } from './components/ArtistPanel'
 import { ForceGraph } from './components/ForceGraph'
 import { JourneyTrail } from './components/JourneyTrail'
-import { MapNavPane } from './components/MapNavPane'
+import { JourneyList, MapNavPane, OnMapList } from './components/MapNavPane'
+import { MobileSheet } from './components/MobileSheet'
 import { SearchBar, type SearchMode } from './components/SearchBar'
 import { LibraryButton, LibraryDrawer } from './components/LibraryDrawer'
 import { StartScreen } from './components/StartScreen'
@@ -23,12 +24,16 @@ import { clearMap, readMap, saveMap } from './graph/mapSnapshot'
 
 import { zoomShortcut } from './graph/zoomShortcut'
 import { expansionChildren } from './connections'
+import { inspectorView, NARROW_QUERY, resizeSheet, sheetForSelection, type SheetGesture, type SheetTab, type SheetView } from './sheet'
 
 const EXPAND_LIMIT = 7
 
-type Toast = { source?: 'bookmarks' | 'exclusions' | 'taste'; msg: string; action?: { label: string; run: () => void } }
+/** `lines` stack under `msg` in the same toast (#24). */
+type Toast = { source?: 'bookmarks' | 'exclusions' | 'taste'; msg: string; lines?: string[]; action?: { label: string; run: () => void } }
 
 const UNDO_KEY = /Mac|iPhone|iPad/.test(typeof navigator === 'undefined' ? '' : navigator.platform) ? '⌘Z' : 'Ctrl+Z'
+
+const matchNarrow = () => typeof window.matchMedia === 'function' && window.matchMedia(NARROW_QUERY).matches
 
 function ZoomReadout({ listener }: { listener: { current: ((k: number) => void) | undefined } }) {
   const [percent, setPercent] = useState(100)
@@ -70,6 +75,20 @@ export default function App() {
       setSteering(null)
     }
   }, [g.graph.selectedNodeId])
+  // Phones get the tabbed bottom sheet and the compact header instead of the panes (#34).
+  const [narrow, setNarrow] = useState(matchNarrow)
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const query = window.matchMedia(NARROW_QUERY)
+    const onChange = () => setNarrow(query.matches)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
+  const [sheetChoice, setSheetChoice] = useState<SheetView>({ tab: 'journey', size: 'peek' })
+  const sheet = sheetForSelection(sheetChoice, selectionId)
+  const chooseTab = (tab: SheetTab) => setSheetChoice({ ...sheet, tab, size: sheet.size === 'peek' ? 'half' : sheet.size })
+  const resizeSheetBy = (gesture: SheetGesture) => setSheetChoice({ ...sheet, size: resizeSheet(sheet.size, gesture) })
+  const [searchOpen, setSearchOpen] = useState(false)
   const mapEpoch = useRef(0)
   const [toast, setToast] = useState<Toast | null>(null)
   const [searchMode, setSearchMode] = useState<SearchMode>('artist')
@@ -197,14 +216,17 @@ export default function App() {
             similarity: t.similarity ?? undefined,
             sharedTags: t.shared_tags?.length ? t.shared_tags : undefined,
           }))
+          const fallback = !ranking.fallback_reason ? undefined : ranking.fallback_reason === 'cap_exceeded'
+            ? 'Journey is over 50 stops, so this expansion used only this song.'
+            : "Couldn't follow the whole journey this time; ranked by this song."
           if (result.ranking.steering_matched === false && emphasis?.tags.length) {
             showToast({ msg: `No new songs matched ${emphasis.tags.join(', ')}; showing the closest matches.` }, 7000)
           } else if (children.length < EXPAND_LIMIT && (result.excluded_count > 0 || tracks.length < result.tracks.length)) {
-            showToast({ msg: children.length ? `Only ${plural(children.length, 'connection')} ${children.length === 1 ? 'remains' : 'remain'} after not suggested songs were excluded.` : 'No connections remain after not suggested songs were excluded. Manage them in Library → Not suggested.' }, 7000)
+            // A shortfall and a fallback from the same expansion share one two-line toast (#24).
+            showToast({ msg: children.length ? `Only ${plural(children.length, 'connection')} ${children.length === 1 ? 'remains' : 'remain'} after not suggested songs were excluded.` : 'No connections remain after not suggested songs were excluded. Manage them in Library → Not suggested.',
+              ...(children.length && fallback ? { lines: [fallback] } : {}) }, 7000)
           } else if (!children.length) showToast({ msg: `No known connections for ${node.name}.` })
-          else if (ranking.fallback_reason) showToast({ msg: ranking.fallback_reason === 'cap_exceeded'
-            ? 'Journey is over 50 stops, so this expansion used only this song.'
-            : "Couldn't follow the whole journey this time; ranked by this song." })
+          else if (fallback) showToast({ msg: fallback })
         } else {
           children = (await api.similar(id, EXPAND_LIMIT)).map((a) => ({ node: artistNode(a, id), similarity: a.similarity ?? undefined }))
         }
@@ -233,6 +255,7 @@ export default function App() {
   // After a reset, expand the root once it exists in state.
   const pendingRoot = useRef<string | null>(null)
   const onSelectSearch = (artist: ArtistRef) => {
+    setSearchOpen(false)
     updateSteering(null)
     startFresh()
     setResumeFit(false)
@@ -244,6 +267,7 @@ export default function App() {
     setResetKey((k) => k + 1)
   }
   const onSelectTrack = (track: TrackRef) => {
+    setSearchOpen(false)
     updateSteering(null)
     startFresh()
     setResumeFit(false)
@@ -306,6 +330,7 @@ export default function App() {
         e.preventDefault()
         zoomControl.current(factor)
       } else if (e.key === 'Escape') {
+        setSearchOpen(false)
         select(undefined)
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && selected && selected.id !== g.graph.rootId) {
         e.preventDefault()
@@ -375,6 +400,8 @@ export default function App() {
   }, [showToast])
 
   const jumpTo = (id: string) => {
+    // A list row opens INSPECTOR even when its node is already selected.
+    if (narrow) setSheetChoice(inspectorView(id))
     select(id)
     setCenterRequest({ id, nonce: Date.now() })
   }
@@ -413,14 +440,66 @@ export default function App() {
   const stops = journeyStops(g.graph)
   const toggleFollow = () => setFollowJourney((on) => !on)
   const collapse = (id: string) => prune(id, 'collapse')
+  const libraryCount = bookmarks.length + exclusions.length
+
+  // One inspector and one graph, placed by the layout: the dock and panes, or the phone sheet.
+  const panel = selected && (
+    <ArtistPanel
+      node={selected}
+      emphasizedTags={steering?.id === selected.id ? steering.tags : []}
+      onEmphasizedTags={(tags) => updateSteering(tags.length ? { id: selected.id, tags } : null)}
+      excluded={exclusions.some((entry) => entry.item.id === selected.id)}
+      onToggleExclusion={toggleExclusion}
+      saved={isSaved}
+      onToggleSave={toggleSave}
+      isRoot={selected.id === g.graph.rootId}
+      impact={impact}
+      followJourney={followJourney}
+      journeyStops={journeyContext(g.graph.journey, g.graph.nodes, selected.id).length}
+      onExpand={expand}
+      onPrune={prune}
+      onClose={() => select(undefined)}
+      onTags={g.setTags}
+      onOpenArtist={onSelectSearch}
+      taste={taste}
+      tasteActions={<TasteToggle node={selected} profile={taste} onToggle={togglePanelTaste} />}
+      onEditTaste={() => setTasteOpen(true)}
+      connections={connections}
+      onSelectNode={select}
+      mapKey={resetKey}
+    />
+  )
+  const stage = (
+    <div className={`stage ${selected ? 'has-panel' : ''}`}>
+      <ForceGraph
+        zoomControl={zoomControl}
+        onZoom={reportZoom}
+        nodes={g.nodes}
+        edges={g.edges}
+        degree={g.degree}
+        selectedId={g.graph.selectedNodeId}
+        rootId={g.graph.rootId}
+        focusId={g.graph.focusId}
+        journey={g.graph.journey}
+        onSelect={select}
+        onExpand={expand}
+        resetKey={resetKey}
+        fitOnMount={resumeFit}
+        centerRequest={centerRequest}
+      />
+      {g.graph.journey.length < 2 && (
+        <div className="stage__help stage__help--touch">Tap to inspect · hold to expand · pinch to zoom</div>
+      )}
+    </div>
+  )
 
   return (
-    <div className={`app ${hasGraph ? 'app--graph' : 'app--empty'}`}>
+    <div className={`app ${hasGraph ? 'app--graph' : 'app--empty'}${hasGraph && narrow ? ` app--sheet-${sheet.size}` : ''}`}>
       {!hasGraph ? (
         <StartScreen
           savedMap={savedMap}
           search={searchProps}
-          libraryCount={bookmarks.length + exclusions.length}
+          libraryCount={libraryCount}
           libraryOpen={savedOpen}
           onToggleLibrary={toggleSaved}
           libraryButton={libraryButton}
@@ -441,92 +520,87 @@ export default function App() {
               </svg>
               <span className="brand__name">TuneGraph</span>
             </button>
-            <SearchBar {...searchProps} compact />
-            <LibraryButton className="taste-entry--topbar saved-entry" count={bookmarks.length + exclusions.length} open={savedOpen} onToggle={toggleSaved} buttonRef={libraryButton} />
-            <button className="taste-entry taste-entry--topbar header-taste" onClick={() => setTasteOpen(true)}>Taste</button>
-            <button className="taste-entry taste-entry--topbar header-undo" aria-disabled={!g.graph.undo} onClick={() => { if (g.graph.undo) undoPrune() }}>Undo</button>
+            {narrow ? (
+              <>
+                {/* Phone header (#34): no TASTE or UNDO; taste opens from the inspector, undo from the toast. */}
+                <button type="button" className="topbar__mode" onClick={() => setSearchMode(searchMode === 'song' ? 'artist' : 'song')}
+                  aria-label={`Switch mode, currently ${searchMode === 'song' ? 'Song' : 'Artist'}`}>
+                  <span className="topbar__chip">{searchMode === 'song' ? 'Song' : 'Artist'}</span>
+                </button>
+                <button type="button" className="topbar__icon topbar__find" aria-expanded={searchOpen} onClick={() => setSearchOpen((open) => !open)}
+                  aria-label={searchMode === 'song' ? 'Find a song' : 'Find an artist'}>
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+                </button>
+                <LibraryButton icon className="topbar__icon saved-entry" count={libraryCount} open={savedOpen} onToggle={toggleSaved} buttonRef={libraryButton} />
+                {searchOpen && <div className="topbar__search"><SearchBar {...searchProps} compact autoFocus /></div>}
+              </>
+            ) : (
+              <>
+                <SearchBar {...searchProps} compact />
+                <LibraryButton className="taste-entry--topbar saved-entry" count={libraryCount} open={savedOpen} onToggle={toggleSaved} buttonRef={libraryButton} />
+                <button className="taste-entry taste-entry--topbar header-taste" onClick={() => setTasteOpen(true)}>Taste</button>
+                <button className="taste-entry taste-entry--topbar header-undo" aria-disabled={!g.graph.undo} onClick={() => { if (g.graph.undo) undoPrune() }}>Undo</button>
+              </>
+            )}
           </header>
-          <div className={`map-shell ${selected ? 'has-panel' : ''}`}>
-            <div className="inspector-dock">
-              {selected && (
-                <ArtistPanel
-                  node={selected}
-                  emphasizedTags={steering?.id === selected.id ? steering.tags : []}
-                  onEmphasizedTags={(tags) => updateSteering(tags.length ? { id: selected.id, tags } : null)}
-                  excluded={exclusions.some((entry) => entry.item.id === selected.id)}
-                  onToggleExclusion={toggleExclusion}
-                  saved={isSaved}
-                  onToggleSave={toggleSave}
-                  isRoot={selected.id === g.graph.rootId}
-                  impact={impact}
-                  followJourney={followJourney}
-                  journeyStops={journeyContext(g.graph.journey, g.graph.nodes, selected.id).length}
-                  onExpand={expand}
-                  onPrune={prune}
-                  onClose={() => select(undefined)}
-                  onTags={g.setTags}
-                  onOpenArtist={onSelectSearch}
-                  taste={taste}
-                  tasteActions={<TasteToggle node={selected} profile={taste} onToggle={togglePanelTaste} />}
-                  onEditTaste={() => setTasteOpen(true)}
-                  connections={connections}
-                  onSelectNode={select}
-                  mapKey={resetKey}
-                />
-              )}
-              {!selected && <section className="inspector-empty" aria-label="Inspector">
-                <h2>Inspector</h2>
-                <p>Select a star to inspect it. Double-click to expand.</p>
-              </section>}
+          {narrow ? (
+            <div className="map-shell">
+              <MobileSheet
+                label={`${(selected?.kind ?? rootKind) === 'track' ? 'Song' : 'Artist'} details`}
+                view={sheet}
+                onTab={chooseTab}
+                onResize={resizeSheetBy}
+                journeyCount={stops.length}
+                onMapCount={onMap.count}
+                inspector={panel || (
+                  <section className="inspector-empty" aria-label="Inspector">
+                    <p>Tap a star to inspect it. Hold a star to expand.</p>
+                  </section>
+                )}
+                journey={<JourneyList songMode={rootKind === 'track'} followJourney={followJourney} onFollowJourney={toggleFollow}
+                  stops={stops} focusId={g.graph.focusId} onJump={jumpTo} onCollapse={collapse} />}
+                onMap={<OnMapList rows={onMap.rows} count={onMap.count} selectedId={g.graph.selectedNodeId} onJump={jumpTo} />}
+              />
+              {stage}
             </div>
-            <MapNavPane
-              className="map-nav"
-              songMode={rootKind === 'track'}
-              followJourney={followJourney}
-              onFollowJourney={toggleFollow}
-              stops={stops}
-              focusId={g.graph.focusId}
-              selectedId={g.graph.selectedNodeId}
-              rows={onMap.rows}
-              count={onMap.count}
-              onJump={jumpTo}
-              onCollapse={collapse}
-            >
-              {/* The floating trail is hidden while the pane shows (≥1024px) and stays below that until #34. */}
-              <JourneyTrail
+          ) : (
+            <div className={`map-shell ${selected ? 'has-panel' : ''}`}>
+              <div className="inspector-dock">
+                {panel}
+                {!selected && <section className="inspector-empty" aria-label="Inspector">
+                  <h2>Inspector</h2>
+                  <p>Select a star to inspect it. Double-click to expand.</p>
+                </section>}
+              </div>
+              <MapNavPane
+                className="map-nav"
                 songMode={rootKind === 'track'}
                 followJourney={followJourney}
                 onFollowJourney={toggleFollow}
-                journey={stops.map((n) => n.id)}
-                nodes={g.graph.nodes}
+                stops={stops}
                 focusId={g.graph.focusId}
                 selectedId={g.graph.selectedNodeId}
+                rows={onMap.rows}
+                count={onMap.count}
                 onJump={jumpTo}
                 onCollapse={collapse}
-              />
-            </MapNavPane>
-            <div className={`stage ${selected ? 'has-panel' : ''}`}>
-              <ForceGraph
-                zoomControl={zoomControl}
-                onZoom={reportZoom}
-                nodes={g.nodes}
-                edges={g.edges}
-                degree={g.degree}
-                selectedId={g.graph.selectedNodeId}
-                rootId={g.graph.rootId}
-                focusId={g.graph.focusId}
-                journey={g.graph.journey}
-                onSelect={select}
-                onExpand={expand}
-                resetKey={resetKey}
-                fitOnMount={resumeFit}
-                centerRequest={centerRequest}
-              />
-              {g.graph.journey.length < 2 && (
-                <div className="stage__help stage__help--touch">Tap to inspect · hold to expand · pinch to zoom</div>
-              )}
+              >
+                {/* The floating trail is hidden while the pane shows (≥1024px); phones use the sheet tabs. */}
+                <JourneyTrail
+                  songMode={rootKind === 'track'}
+                  followJourney={followJourney}
+                  onFollowJourney={toggleFollow}
+                  journey={stops.map((n) => n.id)}
+                  nodes={g.graph.nodes}
+                  focusId={g.graph.focusId}
+                  selectedId={g.graph.selectedNodeId}
+                  onJump={jumpTo}
+                  onCollapse={collapse}
+                />
+              </MapNavPane>
+              {stage}
             </div>
-          </div>
+          )}
           <footer className="statusbar">
             <span className="statusbar__counts" aria-live="polite">{plural(g.nodes.length, rootKind === 'track' ? 'song' : 'artist')} · {plural(g.edges.length, 'link')}</span>
             <span className="statusbar__hints">Double-click expand · Del remove branch<span className="statusbar__extra"> · Esc deselect</span> · {UNDO_KEY} undo<span className="statusbar__extra"> · +/− zoom</span></span>
@@ -535,8 +609,13 @@ export default function App() {
         </>
       )}
       {toast && (
-        <div className="toast" role="status">
-          <span>{toast.msg}</span>
+        <div className={`toast ${toast.lines ? 'toast--lines' : ''}`} role="status">
+          {toast.lines ? (
+            <span className="toast__lines">
+              <span>{toast.msg}</span>
+              {toast.lines.map((line) => <span key={line}>{line}</span>)}
+            </span>
+          ) : <span>{toast.msg}</span>}
           {toast.action && (
             <button
               className="toast__action"
