@@ -656,6 +656,29 @@ a:hover { color: var(--cyan-hover); }
 .tag--steering[aria-pressed="true"] { background: var(--cyan-soft); border-color: var(--cyan); color: var(--cyan); }
 .tag--steering[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 
+/* Plain-word steering (#38): proposes chips from the song's own tags. */
+.steer-words { display: grid; gap: 6px; margin-bottom: 10px; }
+.steer-words__form { display: flex; gap: 8px; align-items: stretch; }
+.steer-words__field {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0 10px; min-height: 32px; transition: border-color 0.15s;
+}
+.steer-words__field:focus-within { border-color: var(--cyan); }
+.steer-words__field input {
+  flex: 1; min-width: 0; background: none; border: 0; outline: none;
+  color: var(--text); font: inherit; font-size: 12px; padding: 6px 0;
+}
+.steer-words__field input::placeholder { color: var(--text-faint); }
+.steer-words__field input[readonly] { color: var(--text-dim); }
+.steer-words__count { flex: none; color: var(--text-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+.steer-words .panel__hint, .steer-words .panel__error { margin: 0; }
+.steer-words__result { display: grid; gap: 6px; }
+.steer-words__result:empty { display: none; }
+.steer-words__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.steer-words__label { color: var(--muted); font-size: 12px; }
+.steer-words__actions { display: flex; align-items: center; gap: 12px; }
+
 .app--empty { overflow-y: auto; }
 
 /* Coarse targets also cover hybrid devices that can hover. */
@@ -666,6 +689,9 @@ a:hover { color: var(--cyan-hover); }
   }
   .icon-btn, .track__play, .zoom-controls button { min-width: 44px; }
   .tag--steering { min-height: 44px; }
+  /* 16px stops iOS Safari from zooming the page when the field gets focus. */
+  .steer-words__field { min-height: 44px; }
+  .steer-words__field input { font-size: 16px; }
 }
 
 /* Map chrome: DOM order keeps inspector controls ahead of graph node stops. */

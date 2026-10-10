@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, ApiError } from '../api'
 import { TasteCheck } from './TasteCheck'
 import { ConnectionsCheck } from './ConnectionsCheck'
+import { SteerWords } from './SteerWords'
 import type { ConnectionItem } from '../connections'
 import type { Artist, ArtistNode, ArtistRef, PreviewResult, PruneMode, TasteProfile, Track, TrackDetails } from '../types'
 
@@ -190,6 +191,7 @@ function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleE
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [state, setState] = useState<'idle' | 'resolving' | 'playing' | 'unavailable'>('idle')
   const audioRef = useRef<HTMLAudioElement>(null)
+  const actionsRef = useRef<HTMLDivElement>(null)
   const artistName = node.artist?.name ?? ''
 
   useEffect(() => {
@@ -277,7 +279,7 @@ function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleE
         </div>
       </header>
 
-      <div className="panel__actions">
+      <div className="panel__actions" ref={actionsRef}>
         <ExpandButton node={node} onExpand={onExpand} />
         {node.ranking?.fallback_reason ? (
           <p className="panel__hint" role="status">{node.ranking.fallback_reason === 'cap_exceeded'
@@ -357,6 +359,14 @@ function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleE
 
             <section className="panel__section">
               <h3>{node.expanded ? 'Tags' : 'Tags · steer next expansion'}</h3>
+              {!node.expanded && details.tags.length > 0 && onEmphasizedTags && (
+                // Starting an expansion remounts it, which aborts and discards any interpretation.
+                <SteerWords key={String(node.loading)} itemId={node.id} tags={details.tags} disabled={node.loading}
+                  onApply={(tags) => {
+                    onEmphasizedTags?.(tags)
+                    actionsRef.current?.querySelector<HTMLButtonElement>('.btn--primary')?.focus()
+                  }} />
+              )}
               {details.tags.length > 0 ? (
                 <ul className="tags">
                   {details.tags.map((t) => (
