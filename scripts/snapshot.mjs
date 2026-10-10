@@ -129,7 +129,7 @@ const scenarios = [
     async run(page) {
       await artistGraph(page)
       await page.waitForFunction(() => JSON.parse(localStorage.getItem('tunegraph:map:v1') ?? 'null')?.nodes?.length > 1)
-      await page.evaluate(() => {
+      const denseMap = await page.evaluate(() => {
         const map = JSON.parse(localStorage.getItem('tunegraph:map:v1'))
         const root = map.nodes.find(n => n.id === map.rootId)
         map.nodes = [root, ...Array.from({ length: 36 }, (_, i) => ({
@@ -139,8 +139,11 @@ const scenarios = [
         map.edges = map.nodes.slice(1).map((n, i) => ({ id: `edge-${i}`, source: root.id, target: n.id, similarity: 0.6 + i / 120 }))
         map.journey = [root.id, 'dense-0', 'dense-1']
         map.selectedNodeId = 'dense-1'
-        localStorage.setItem('tunegraph:map:v1', JSON.stringify(map))
+        return JSON.stringify(map)
       })
+      // The live app flushes its old graph on pagehide. Install the fixture only
+      // in the new document, after that flush and before React reads storage.
+      await page.evaluateOnNewDocument(raw => localStorage.setItem('tunegraph:map:v1', raw), denseMap)
       await page.reload({ waitUntil: 'networkidle0' })
       await page.waitForSelector('.resume-card .btn--primary')
       await page.click('.resume-card .btn--primary')
@@ -153,11 +156,16 @@ const scenarios = [
     },
   },
   ...[
-    { name: 'constellation-reduced-motion', extraMedia: [{ name: 'prefers-reduced-motion', value: 'reduce' }] },
-    { name: 'constellation-coarse-pointer', extraMedia: [{ name: 'pointer', value: 'coarse' }] },
+    { name: 'constellation-reduced-motion', viewport: DESKTOP, extraMedia: [{ name: 'prefers-reduced-motion', value: 'reduce' }] },
+    { name: 'constellation-coarse-pointer', viewport: { ...DESKTOP, isMobile: true, hasTouch: true } },
   ].map(settings => ({
-    ...settings, viewport: DESKTOP,
+    ...settings,
     async run(page) {
+      if (settings.name === 'constellation-coarse-pointer') {
+        const coarseOnly = await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches
+          && !window.matchMedia('(max-width: 640px)').matches)
+        if (!coarseOnly) throw new Error('coarse-pointer scenario requires native coarse pointer at desktop width')
+      }
       await artistGraph(page)
       await page.waitForSelector('.graph.reduced-glow')
       await page.waitForFunction(() => !document.querySelector('.star-field .sky-halo')
