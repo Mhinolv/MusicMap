@@ -1,4 +1,4 @@
-"""Taste requests use canonical music facts and parse JevLab's response shape."""
+"""Taste requests use canonical music facts and parse JEV's (TypeSafe) response shape."""
 
 import asyncio
 import json
@@ -10,7 +10,7 @@ from httpx import ASGITransport, AsyncClient, MockTransport, Response
 
 from app.api.routes import taste as taste_route
 from app.cache.cache import TTLCache, cache
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.models.taste import TasteEvaluationResponse, TasteProfile
 from app.services import jev
 from app.services.errors import ProviderError, ProviderNotConfigured, RateLimited
@@ -167,8 +167,9 @@ async def test_jev_adapter_sends_one_mixed_systemone_request(monkeypatch, live_j
 
     assert len(requests) == 1
     request = requests[0]
-    assert request.url.path == "/systemone"
-    assert request.headers["X-API-Key"] == "test-key"
+    assert str(request.url) == "https://api.typesafe.ai/v1/systemone"
+    assert request.headers["Authorization"] == "Bearer test-key"
+    assert "X-API-Key" not in request.headers
     payload = json.loads(request.content)
     assert payload["model"] == "jev-test-pinned"
     assert payload["state"]["music"] == ARTIST
@@ -373,6 +374,35 @@ async def test_upstream_status_mapping(monkeypatch, live_jev, status, error, exp
     assert raised.value.status == expected
     if expected == 429:
         assert raised.value.retry_after == 7
+
+
+def test_jev_defaults_to_typesafe(monkeypatch):
+    monkeypatch.delenv("JEV_BASE_URL", raising=False)
+    assert Settings(_env_file=None).jev_base_url == "https://api.typesafe.ai/v1"
+
+
+@pytest.mark.parametrize("base_url", ["https://relay.example/v2", "https://relay.example/v2/"])
+async def test_jev_base_url_override(monkeypatch, live_jev, base_url):
+    monkeypatch.setenv("JEV_BASE_URL", base_url)
+    get_settings.cache_clear()
+    urls = []
+
+    def handler(request):
+        urls.append(str(request.url))
+        return Response(200, json=jev_body())
+
+    use_transport(monkeypatch, handler)
+    await jev.judge_fit(TasteProfile(liked_genres=["rock"]), ARTIST)
+    assert urls == ["https://relay.example/v2/systemone"]
+
+
+@pytest.mark.parametrize("status", [401, 403])
+async def test_rejected_key_maps_to_clear_error(monkeypatch, live_jev, status):
+    use_transport(monkeypatch, lambda _: Response(status, json={"error": "invalid api key"}))
+    with pytest.raises(ProviderError) as raised:
+        await jev.judge_fit(TasteProfile(liked_genres=["rock"]), ARTIST)
+    assert raised.value.status == 502
+    assert raised.value.message == f"API key rejected (HTTP {status})"
 
 
 async def test_upstream_timeout_maps_to_504(monkeypatch, live_jev):
