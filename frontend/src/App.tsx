@@ -4,7 +4,9 @@ import { ArtistPanel } from './components/ArtistPanel'
 import { ForceGraph } from './components/ForceGraph'
 import { JourneyTrail } from './components/JourneyTrail'
 import { SearchBar, type SearchMode } from './components/SearchBar'
-import { SavedDiscoveries } from './components/SavedDiscoveries'
+import { LibraryButton, LibraryDrawer } from './components/LibraryDrawer'
+import { StartScreen } from './components/StartScreen'
+import { plural } from './startScreen'
 import { addBookmark, bookmarkKey, BOOKMARK_FULL_MESSAGE, nodeBookmark, readBookmarks, restoreBookmarks, writeBookmarks, type Bookmark } from './bookmarks'
 import { TastePreferences } from './components/TastePreferences'
 import { emptyTaste, isEmptyTaste, readTaste, writeTaste, toggleTaste, storedTasteEntry, TASTE_LIMIT, TASTE_LIST_LABELS, type TasteList } from './taste'
@@ -77,7 +79,12 @@ export default function App() {
   const [exclusions, setExclusions] = useState(readExclusions)
   const exclusionsRef = useRef(exclusions)
   const [savedOpen, setSavedOpen] = useState(false)
-  const closeSaved = useCallback(() => setSavedOpen(false), [])
+  const libraryButton = useRef<HTMLButtonElement>(null)
+  const closeSaved = useCallback(() => {
+    setSavedOpen(false)
+    libraryButton.current?.focus()
+  }, [])
+  const toggleSaved = () => setSavedOpen((open) => !open)
   const inflight = useRef(new Set<string>())
   const toastTimer = useRef<number>(0)
 
@@ -190,7 +197,7 @@ export default function App() {
           if (result.ranking.steering_matched === false && emphasis?.tags.length) {
             showToast({ msg: `No new songs matched ${emphasis.tags.join(', ')}; showing the closest matches.` }, 7000)
           } else if (children.length < EXPAND_LIMIT && (result.excluded_count > 0 || tracks.length < result.tracks.length)) {
-            showToast({ msg: children.length ? `Only ${children.length} connections remain after not suggested songs were excluded.` : 'No connections remain after not suggested songs were excluded. Manage them in Saved → Not suggested.' }, 7000)
+            showToast({ msg: children.length ? `Only ${plural(children.length, 'connection')} ${children.length === 1 ? 'remains' : 'remain'} after not suggested songs were excluded.` : 'No connections remain after not suggested songs were excluded. Manage them in Library → Not suggested.' }, 7000)
           } else if (!children.length) showToast({ msg: `No known connections for ${node.name}.` })
           else if (ranking.fallback_reason) showToast({ msg: ranking.fallback_reason === 'cap_exceeded'
             ? 'Journey is over 50 stops, so this expansion used only this song.'
@@ -391,38 +398,22 @@ export default function App() {
   const hasGraph = g.nodes.length > 0
   const rootKind = g.graph.rootId ? g.graph.nodes.get(g.graph.rootId)?.kind : undefined
   const searchProps = { onSelect: onSelectSearch, onSelectTrack, mode: searchMode, onModeChange: setSearchMode }
-  const savedGraph = savedMap.status === 'ready' ? savedMap.snapshot.graph : undefined
-  const savedRoot = savedGraph?.nodes.get(savedGraph.rootId!)
-  const savedSongMap = savedRoot?.kind === 'track'
   const trailJourney = rootKind === 'track' ? g.graph.journey.filter((id) => g.graph.nodes.get(id)?.expanded) : g.graph.journey
 
   return (
     <div className={`app ${hasGraph ? 'app--graph' : 'app--empty'}`}>
       {!hasGraph ? (
-        <main className="hero">
-          <h1 className="hero__title">Explore music</h1>
-          <p className="hero__sub">Start from an artist or a song, then wander outward through who they're connected to.</p>
-          {savedMap.status !== 'none' && (
-            <section className="taste-import resume-card" aria-label="Resume last map">
-              <div>
-                <strong>{savedMap.status === 'ready' ? 'Pick up where you left off' : "Your last map couldn’t be restored"}</strong>
-                <p>{savedGraph
-                  ? `${savedSongMap ? 'Song' : 'Artist'} map from “${savedRoot?.name}” · ${savedGraph.nodes.size} ${savedSongMap ? 'songs' : 'artists'}${savedGraph.journey.length ? ` · ${savedGraph.journey.length} stops` : ''}`
-                  : 'It was damaged or too large to load.'}</p>
-              </div>
-              <div className="resume-card__actions">
-                {savedMap.status === 'ready' && <button className="btn btn--primary" onClick={resume}>Resume</button>}
-                <button className="btn btn--ghost" onClick={startFresh}>Start fresh</button>
-              </div>
-            </section>
-          )}
-          <SearchBar {...searchProps} autoFocus />
-          <button className="taste-entry" onClick={() => setTasteOpen(true)}>{taste ? 'Edit your music taste' : 'Add your music taste'}</button>
-          {(bookmarks.length > 0 || exclusions.length > 0) && <button className="link-btn saved-entry" onClick={() => setSavedOpen(true)}>Open saved discoveries ({bookmarks.length})</button>}
-          <p className="hero__hint">
-            {searchMode === 'song' ? 'Try “Creep”, “Glory Box”, or “Teardrop”.' : 'Try “Radiohead”, “Portishead”, or “Björk”.'}
-          </p>
-        </main>
+        <StartScreen
+          savedMap={savedMap}
+          search={searchProps}
+          libraryCount={bookmarks.length + exclusions.length}
+          libraryOpen={savedOpen}
+          onToggleLibrary={toggleSaved}
+          libraryButton={libraryButton}
+          onTaste={() => setTasteOpen(true)}
+          onResume={resume}
+          onStartFresh={startFresh}
+        />
       ) : (
         <>
           <header className="topbar">
@@ -437,9 +428,7 @@ export default function App() {
               <span className="brand__name">TuneGraph</span>
             </button>
             <SearchBar {...searchProps} compact />
-            <button className="taste-entry taste-entry--topbar saved-entry" aria-label="Library: saved discoveries and not suggested songs" onClick={() => setSavedOpen(true)}>
-              <span>Library</span><span className="library-count">{bookmarks.length + exclusions.length}</span>
-            </button>
+            <LibraryButton className="taste-entry--topbar saved-entry" count={bookmarks.length + exclusions.length} open={savedOpen} onToggle={toggleSaved} buttonRef={libraryButton} />
             <button className="taste-entry taste-entry--topbar header-taste" onClick={() => setTasteOpen(true)}>Taste</button>
             <button className="taste-entry taste-entry--topbar header-undo" aria-disabled={!g.graph.undo} onClick={() => { if (g.graph.undo) undoPrune() }}>Undo</button>
           </header>
@@ -512,7 +501,7 @@ export default function App() {
             </div>
           </div>
           <footer className="statusbar">
-            <span className="statusbar__counts" aria-live="polite">{g.nodes.length} {rootKind === 'track' ? 'songs' : 'artists'} · {g.edges.length} links</span>
+            <span className="statusbar__counts" aria-live="polite">{plural(g.nodes.length, rootKind === 'track' ? 'song' : 'artist')} · {plural(g.edges.length, 'link')}</span>
             <span className="statusbar__hints">Double-click expand · Del remove branch<span className="statusbar__extra"> · Esc deselect</span> · {UNDO_KEY} undo<span className="statusbar__extra"> · +/− zoom</span></span>
             <ZoomReadout listener={zoomListener} />
           </footer>
@@ -534,7 +523,7 @@ export default function App() {
           )}
         </div>
       )}
-      {savedOpen && <SavedDiscoveries exclusions={exclusions} onRemoveExclusion={(entry) => removeExclusions([entry])} onResetExclusions={() => removeExclusions(exclusionsRef.current)} entries={bookmarks} onOpen={openBookmark} onRemove={(entry) => removeBookmarks([entry])} onClear={() => removeBookmarks(bookmarksRef.current)} onClose={closeSaved} />}
+      {savedOpen && <LibraryDrawer exclusions={exclusions} onRemoveExclusion={(entry) => removeExclusions([entry])} onResetExclusions={() => removeExclusions(exclusionsRef.current)} entries={bookmarks} onOpen={openBookmark} onRemove={(entry) => removeBookmarks([entry])} onClear={() => removeBookmarks(bookmarksRef.current)} onClose={closeSaved} />}
       {tasteOpen && <TastePreferences profile={taste ?? emptyTaste()} onSave={saveTaste} onClear={clearTaste} onClose={() => setTasteOpen(false)} />}
     </div>
   )
