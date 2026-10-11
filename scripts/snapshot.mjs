@@ -414,8 +414,8 @@ const scenarios = [
       await waitForNodes(page, 3)
       await waitForPanel(page)
       await page.waitForSelector('.tags .tag')
-      await page.waitForFunction(() => document.querySelector('.panel__actions .btn--primary')?.textContent.includes('Connections expanded'))
-      if (viewport === MOBILE) await page.click('.panel__handle')
+      await page.waitForFunction(() => document.querySelector('.panel__expand')?.textContent.includes('Expanded'))
+      if (viewport === MOBILE) await page.click('.sheet__handle')
       if (settings.expanded) {
         if (await page.$('.steer-words')) throw new Error('an expanded song must not show the plain-word form')
         await waitForSettle(page)
