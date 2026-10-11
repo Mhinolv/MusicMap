@@ -19,7 +19,7 @@ symlinkSync(join(root, 'frontend/node_modules'), join(output, 'node_modules'), '
 const hookFile = join(output, 'graph/useMusicGraph.js')
 writeFileSync(hookFile, readFileSync(hookFile, 'utf8').replace("'../types'", "'../types.js'"))
 const { musicGraphReducer, artistNode, trackNode } = await import(pathToFileURL(hookFile).href)
-const { nodeMatches, onMapRows, matchLabel, matchFraction, journeyStops, stopNumber } = await import(pathToFileURL(join(output, 'graph/onMap.js')).href)
+const { nodeMatches, onMapRows, matchLabel, matchFraction, journeyStops, stopNumber, matchFact, matchText } = await import(pathToFileURL(join(output, 'graph/onMap.js')).href)
 
 const empty = { nodes: new Map(), edges: new Map(), journey: [] }
 const ref = (kind, id, name = `Name ${id}`) => kind === 'track'
@@ -139,4 +139,31 @@ test('journey stops: song maps list expanded songs only, artist maps list the wh
 
 test('stop numbers are two digits', () => {
   assert.deepEqual([0, 8, 9, 49, 98, 99].map(stopNumber), ['01', '09', '10', '50', '99', '100'])
+})
+
+// #32 inspector facts: MATCH and SHARED read the edge to the parent, like the On map score.
+test('inspector match fact: parent edge, shared tags, root and unknown matches', () => {
+  let graph = musicGraphReducer(reset('track', 'root'), { type: 'expand:success', id: 'root', children: [
+    { node: make('track', 'a', 'root', 'Glory Box'), similarity: 0.826, sharedTags: ['90s', 'alternative'] },
+    { node: make('track', 'n', 'root', 'No score') },
+  ] })
+  graph = expand(graph, 'track', 'a', [['b', 0.4], ['n', 0.99]])
+  assert.equal(matchFact(graph, 'root'), null, 'the root has no parent, so no MATCH row')
+  assert.equal(matchFact(graph, 'missing'), null)
+  assert.deepEqual(matchFact(graph, 'a'), { match: 0.826, parent: 'Name root', shared: ['90s', 'alternative'] })
+  assert.equal(matchText(matchFact(graph, 'a')), '83% to Name root')
+  assert.deepEqual(matchFact(graph, 'b'), { match: 0.4, parent: 'Glory Box', shared: [] })
+  // n keeps root as its parent; the stronger edge to a never becomes its MATCH.
+  assert.deepEqual(matchFact(graph, 'n'), { match: undefined, parent: 'Name root', shared: [] })
+  assert.equal(matchText(matchFact(graph, 'n')), null)
+  assert.equal(matchText(null), null)
+  assert.equal(matchText({ match: Number.NaN, parent: 'x', shared: [] }), null)
+  assert.equal(matchText({ match: 1.3, parent: 'x', shared: [] }), '100% to x')
+  assert.equal(matchText({ match: 0, parent: 'x', shared: [] }), '0% to x')
+  // Artist edges carry no shared tags; a removed parent drops the row.
+  const artist = expand(reset('artist', 'r'), 'artist', 'r', [['c', 0.5]])
+  assert.deepEqual(matchFact(artist, 'c'), { match: 0.5, parent: 'Name r', shared: [] })
+  const nodes = new Map(artist.nodes)
+  nodes.delete('r')
+  assert.equal(matchFact({ ...artist, nodes }, 'c'), null)
 })

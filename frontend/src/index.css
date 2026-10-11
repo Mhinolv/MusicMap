@@ -52,7 +52,7 @@ a:hover { color: var(--cyan-hover); }
 /* Uppercase is visual only; DOM copy and accessible names stay sentence case. */
 .btn, .icon-btn, .link-btn, .taste-entry, .search__mode button, .journey__follow,
 .journey__label, .toast__action, .links a, .brand,
-.panel__title, .panel__kicker, .panel__section h3, .taste-dialog h2,
+.panel__title, .panel__head-label, .panel__section h3, .taste-dialog h2,
 .taste-form label, .facts__list dt {
   font-family: var(--font-label);
   font-weight: 600;
@@ -94,8 +94,6 @@ a:hover { color: var(--cyan-hover); }
   min-height: 32px; padding: 0 10px; background: transparent; color: var(--text); font-size: 13px;
 }
 .taste-entry:hover { background: var(--raised); }
-.panel__header-actions { display: flex; align-items: center; flex: none; gap: 2px; }
-.bookmark-toggle { display: grid; place-items: center; }
 .toast { max-width: calc(100vw - 24px); }
 .taste-entry--topbar { flex: none; white-space: nowrap; background: transparent; }
 
@@ -200,28 +198,62 @@ a:hover { color: var(--cyan-hover); }
 }
 .panel__body {
   flex: 1; min-height: 0; overflow-y: auto;
-  padding: 18px;
-  display: flex; flex-direction: column; gap: 18px;
+  display: flex; flex-direction: column;
 }
+/* #32 inspector: a fixed head over a scrolling column of hairline-separated sections. */
+.panel__head {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 14px; border-bottom: 1px solid var(--hairline);
+}
+.panel__head-label { font-size: 13px; font-weight: 700; letter-spacing: 0.14em; color: var(--muted); }
+.panel__close { flex: none; width: 32px; height: 32px; padding: 0; border: 0; background: transparent; color: var(--muted); font: 500 16px var(--font-mono); }
+.panel__close:hover { background: var(--raised); color: var(--text); }
+.panel__section { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--hairline); min-width: 0; }
+.panel__section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.panel__count { color: var(--amber); font-variant-numeric: tabular-nums; }
 
 @keyframes slide-in { from { transform: translateX(16px); opacity: 0; } to { transform: none; opacity: 1; } }
-.panel__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.panel__title { margin: 0; font-size: 38px; font-weight: 700; letter-spacing: 0.04em; line-height: 1.15; }
-.panel__meta { color: var(--text-faint); font-size: 11px; margin-top: 3px; }
+.panel__header { gap: 4px; padding: 14px; }
+/* Two lines at most; uppercase is visual only. */
+.panel__title {
+  margin: 0; font-size: 38px; font-weight: 700; letter-spacing: 0.04em; line-height: 1;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere;
+}
+.panel__meta { color: var(--muted); font-size: 12px; }
+.panel__meta .link-btn { font: inherit; letter-spacing: normal; text-transform: none; }
 .panel__section h3 {
-  margin: 0 0 9px; font-size: 13px; font-weight: 700; letter-spacing: 0.14em;
+  margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--text-faint);
 }
-.panel__actions { display: flex; flex-direction: column; gap: 8px; }
-.panel__loading { display: flex; align-items: center; gap: 10px; color: var(--text-dim); }
-.panel__error { color: var(--muted); font-size: 13px; }
-.panel__bio { margin: 0; color: var(--text-dim); font-size: 13px; }
-.panel__empty { margin: 0; color: var(--text-faint); font-size: 13px; font-style: italic; }
-.taste-check { display: grid; gap: 9px; }
-.taste-check h3 { margin-bottom: 0; }
+.panel__loading { display: flex; flex-direction: row; align-items: center; gap: 10px; color: var(--text-dim); }
+.panel__error { color: var(--muted); font-size: 12px; }
+.panel__bio { margin: 0; color: var(--muted); font-size: 12px; }
+.panel__bio.is-clamped { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.panel__more { align-self: flex-start; }
+.panel__empty { margin: 0; color: var(--text-faint); font-size: 12px; font-style: italic; }
+/* Preview row: amber-outline play, a 4px progress track and the time. */
+.panel__preview { flex-direction: row; align-items: center; gap: 12px; }
+.panel__progress { flex: 1; height: 4px; background: var(--hairline); }
+.panel__progress span { display: block; height: 100%; background: var(--amber); }
+.panel__time { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* SAVE / DON'T SUGGEST AGAIN: one full-width toggle for artists, two equal columns for songs. */
+.panel__save { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.panel__save--pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.panel__save .btn[aria-pressed="true"] { background: transparent; }
+/* #21: hover only adds the raised background; the saved amber stays. */
+.panel__save .btn:hover { background: var(--raised); }
+.save-toggle[aria-pressed="true"] { color: var(--amber); border-color: var(--amber); }
+.exclusion-toggle[aria-pressed="true"] { color: var(--muted); }
+.panel__expand { width: 100%; min-height: 36px; }
+.panel__expand.is-expanded:disabled { background: transparent; border-color: var(--border); color: var(--muted); opacity: 1; }
+.taste-check { display: grid; gap: 8px; }
 .taste-toggle { display: grid; gap: 6px; }
 .taste-toggle .panel__hint { overflow-wrap: anywhere; }
-.taste-check__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.taste-toggle .btn[aria-pressed="true"] { background: transparent; color: var(--amber); }
+.taste-toggle .btn[aria-pressed="true"]:hover { background: var(--raised); }
+/* Owner decision 2026-10-10: the four YOUR TASTE buttons form an even 2x2 grid; labels wrap instead of widening a column. */
+.taste-check__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.taste-check__actions .btn { min-width: 0; padding: 4px 6px; white-space: normal; text-align: center; overflow-wrap: anywhere; }
 .taste-check__result {
   display: grid; gap: 2px; border: 1px solid var(--border);
   border-radius: var(--radius); padding: 10px 12px; background: var(--cyan-soft);
@@ -245,7 +277,6 @@ a:hover { color: var(--cyan-hover); }
 .taste-check__result.is-tentative.fit--conflict { border-left: 1px dashed var(--border); }
 /* minmax(0, 1fr): the nowrap song names must not widen the track past the panel. */
 .connections-check { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; }
-.connections-check h3 { margin-bottom: 0; }
 .connections-check__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .connections { list-style: none; margin: 0; padding: 0; counter-reset: connection; }
 /* #58: the fit label wraps under the song name at every width, so long bands never squeeze the name. */
@@ -337,20 +368,27 @@ a:hover { color: var(--cyan-hover); }
 .link-btn:hover { color: var(--cyan-hover); }
 
 .tags { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+/* Steering chips and plain expanded tags share one 3-column grid of 32px cells. */
+.panel__steer .tags { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.panel__steer .tags > li { min-width: 0; }
+.panel__steer .tag {
+  display: block; width: 100%; height: 32px; min-height: 0; padding: 0 6px; line-height: 30px; text-align: center;
+  font: 500 11px var(--font-mono); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .tag { display: inline-flex; align-items: center; background: transparent; border: 1px solid var(--border); border-radius: var(--radius); min-height: 24px; padding: 0 8px; font-size: 11px; font-weight: 500; color: var(--muted); }
 
 .tracks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.track { display: flex; align-items: center; gap: 10px; padding: 4px 6px 4px 0; border-radius: var(--radius); transition: background 0.15s; }
+.track { display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 0 6px 0 0; border-radius: var(--radius); transition: background 0.15s; }
 .track.is-playing { background: var(--amber-soft); padding-left: 4px; }
 .track__play {
-  flex: none; width: 30px; height: 30px; border-radius: var(--radius);
-  border: 1px solid var(--border); background: var(--raised);
+  flex: none; width: 32px; height: 32px; padding: 0; border-radius: var(--radius);
+  border: 1px solid var(--amber); background: transparent; color: var(--amber);
   display: inline-flex; align-items: center; justify-content: center; font-size: 10px;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  transition: background 0.15s;
 }
-.track__play:disabled { opacity: 0.35; cursor: default; }
-.track__play:not(:disabled):hover { border-color: var(--cyan); color: var(--cyan-hover); background: var(--cyan-soft); }
-.track.is-playing .track__play { background: var(--cyan-soft); border-color: var(--cyan); color: var(--cyan); }
+.track__play:disabled { opacity: 0.45; cursor: default; }
+.track__play:not(:disabled):hover { background: var(--raised); }
+.track.is-playing .track__play, .panel__preview.is-playing .track__play { background: var(--amber-soft); }
 .track__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .track__meta { color: var(--text-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
 
@@ -359,9 +397,9 @@ a:hover { color: var(--cyan-hover); }
 .now-playing__title { font-size: 13px; font-weight: 600; }
 .now-playing__meta { font-size: 11px; color: var(--text-faint); }
 
-.links { display: flex; flex-wrap: wrap; gap: 6px; }
+.links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .links a {
-  display: inline-flex; align-items: center; min-height: 32px;
+  display: inline-flex; align-items: center; justify-content: center; min-height: 32px; text-align: center;
   text-decoration: none; font-size: 13px; font-weight: 600;
   padding: 0 10px; border-radius: var(--radius); border: 1px solid var(--border); color: var(--cyan);
   background: transparent; transition: border-color 0.15s, color 0.15s, background 0.15s;
@@ -418,8 +456,7 @@ a:hover { color: var(--cyan-hover); }
 .search__sub { color: var(--text-faint); font-size: 12px; margin-left: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- prune actions ---------- */
-.panel__prune { display: flex; gap: 6px; }
-.panel__kicker { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--cyan); margin-bottom: 4px; }
+.panel__prune { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
 .panel__hint { margin: 0; color: var(--text-faint); font-size: 12px; }
 .btn--ghost { flex: 1; }
 .btn--danger:hover { background: var(--raised); }
@@ -486,14 +523,12 @@ a:hover { color: var(--cyan-hover); }
 }
 
 /* ---------- song facts ---------- */
-.facts { display: flex; gap: 12px; align-items: flex-start; }
-.facts__art { flex: none; border-radius: var(--radius); object-fit: cover; }
-.facts__list { margin: 0; display: grid; grid-template-columns: auto 1fr; column-gap: 12px; row-gap: 5px; font-size: 13px; min-width: 0; }
+.facts__list { margin: 0; display: grid; grid-template-columns: 92px minmax(0, 1fr); row-gap: 6px; font-size: 12px; }
 .facts__list > div { display: contents; }
-.facts__list dt { color: var(--text-faint); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; line-height: 20px; }
-.facts__list dd { margin: 0; color: var(--text); line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.facts__list dt { color: var(--text-faint); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; line-height: 18px; }
+.facts__list dd { margin: 0; color: var(--text); line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.facts__list dd.facts__wrap { white-space: normal; overflow-wrap: anywhere; }
 .facts__dim { color: var(--text-faint); }
-.panel__meta .link-btn { font-size: 12px; }
 
 /* =====================================================================
    Mobile & touch
@@ -581,10 +616,10 @@ a:hover { color: var(--cyan-hover); }
 .journey__follow.is-on { background: var(--cyan-soft); color: var(--cyan); border-color: var(--cyan); }
 .journey__follow[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 
-/* Song-only, one-expansion tag steering. */
-.tag--steering { min-height: 32px; padding: 6px 12px; cursor: pointer; }
-.tag--steering:hover { border-color: var(--border); color: var(--text); }
-.tag--steering[aria-pressed="true"] { background: var(--cyan-soft); border-color: var(--cyan); color: var(--cyan); }
+/* Song-only, one-expansion tag steering: selected chips are solid amber (#32). */
+.tag--steering { cursor: pointer; }
+.tag--steering:hover { background: var(--raised); }
+.panel__steer .tag--steering[aria-pressed="true"] { background: var(--amber); border-color: var(--amber); color: var(--on-amber); font-weight: 700; }
 .tag--steering[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 
 /* Plain-word steering (#38): proposes chips from the song's own tags. */
@@ -622,7 +657,7 @@ a:hover { color: var(--cyan-hover); }
     min-height: 44px;
   }
   .icon-btn, .track__play, .zoom-controls button { min-width: 44px; }
-  .tag--steering { min-height: 44px; }
+  .panel__steer .tag { height: 44px; line-height: 42px; }
   /* 16px stops iOS Safari from zooming the page when the field gets focus. */
   .steer-words__field { min-height: 44px; }
   .steer-words__field input { font-size: 16px; }
@@ -805,10 +840,14 @@ a:hover { color: var(--cyan-hover); }
 
   /* The #32 inspector and the #31 lists, reused as they are, with 44px rows and targets. */
   .sheet .panel { position: static; z-index: auto; flex: 1; width: auto; min-height: 0; border: 0; background: none; animation: none; }
-  .sheet .panel__body { padding: 2px 0 12px; gap: 14px; }
+  .sheet .panel__body { padding: 0 0 12px; }
+  .sheet .panel__head { padding: 0 0 0 4px; }
+  .sheet .panel__close { width: 44px; height: 44px; }
+  .sheet .panel__section { padding: 12px 0; }
   .sheet .inspector-empty { display: block; margin: 0; padding: 12px 0; color: var(--muted); }
   .sheet .inspector-empty p { margin: 0; }
-  .sheet .btn, .sheet .icon-btn, .sheet .links a, .sheet .tag--steering, .sheet .track__play { min-height: 44px; }
+  .sheet .btn, .sheet .icon-btn, .sheet .links a, .sheet .track__play { min-height: 44px; }
+  .sheet .panel__steer .tag { height: 44px; line-height: 42px; }
   .sheet .icon-btn, .sheet .track__play { min-width: 44px; }
   .sheet .nav-journey { flex: 1; max-height: none; }
   .sheet .nav-onmap { flex: 1; }

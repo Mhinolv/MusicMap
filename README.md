@@ -239,7 +239,7 @@ frontend/src/
 - Search by **Artist** or **Song** (toggle in the search field, or press Tab in the empty field). A song map is
   song-to-song: every node is a song (teal ♪, labelled with its artist) and expanding one fans out to similar songs.
   The song panel shows album, release date, length, listeners, tags, a description, a preview and outbound links,
-  plus an "open artist map" link to switch to that artist's graph.
+  plus an "artist map" link to switch to that artist's graph.
 - **Collapse** (panel or the × on a journey stop) undoes an expansion: everything explored from that node goes.
   **Remove** (panel, or Delete/Backspace with a node selected) drops the node and its branch too. Leaves that
   another expanded node also discovered are kept and re-homed to it. Both are undoable from the toast or with ⌘Z.

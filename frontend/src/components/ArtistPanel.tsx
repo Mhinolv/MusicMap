@@ -4,7 +4,8 @@ import { TasteCheck } from './TasteCheck'
 import { ConnectionsCheck } from './ConnectionsCheck'
 import { SteerWords } from './SteerWords'
 import type { ConnectionItem } from '../connections'
-import type { Artist, ArtistNode, ArtistRef, PreviewResult, PruneMode, TasteProfile, Track, TrackDetails } from '../types'
+import { matchText, type MatchFact } from '../graph/onMap'
+import type { Artist, ArtistNode, ArtistRef, ExternalUrls, PreviewResult, PruneMode, TasteProfile, Track, TrackDetails } from '../types'
 
 type Props = {
   emphasizedTags?: string[]
@@ -13,6 +14,10 @@ type Props = {
   journeyStops?: number
   node: ArtistNode
   isRoot: boolean
+  /** Two-digit journey stop number (`02`); only journey stops have one. */
+  stop?: string
+  /** MATCH / SHARED facts: the edge to the node this one was expanded from. */
+  match?: MatchFact | null
   /** How many artists collapsing / removing this node would take with it (null = not possible). */
   impact: Record<PruneMode, number | null>
   onExpand: (id: string) => void
@@ -21,6 +26,7 @@ type Props = {
   onTags: (id: string, tags: string[]) => void
   /** Song nodes: start a fresh artist-rooted map from the song's artist. */
   onOpenArtist: (artist: ArtistRef) => void
+  /** The YOUR TASTE add / not-my-taste controls (#27). */
   tasteActions: ReactNode
   taste: TasteProfile | null
   onEditTaste: () => void
@@ -37,12 +43,19 @@ type Props = {
 
 type Details = { artist?: Artist; tracks?: Track[]; error?: string }
 
-type ShellProps = { label: string; children: ReactNode }
+const MAX_STEERING = 3
 
-/** The panel chrome: the desktop inspector column, or the INSPECTOR tab of the phone sheet (#34). */
-function PanelShell({ label, children }: ShellProps) {
+type ShellProps = { label: string; kind: ArtistNode['kind']; stop?: string; onClose: () => void; children: ReactNode }
+
+/** The inspector chrome (#32): a fixed head and a scrolling body of sections.
+ *  The desktop dock and the INSPECTOR tab of the phone sheet (#34) both use it. */
+function PanelShell({ label, kind, stop, onClose, children }: ShellProps) {
   return (
     <aside className="panel" aria-label={label}>
+      <div className="panel__head">
+        <span className="panel__head-label">Inspector · {kind === 'track' ? 'Song' : 'Artist'}{stop && ` · Stop ${stop}`}</span>
+        <button type="button" className="panel__close" onClick={onClose} aria-label="Close inspector">×</button>
+      </div>
       <div className="panel__body">{children}</div>
     </aside>
   )
@@ -55,54 +68,59 @@ function fmt(n?: number | null): string {
   return String(n)
 }
 
-function PruneActions({ node, isRoot, impact, onPrune }: Pick<Props, 'node' | 'isRoot' | 'impact' | 'onPrune'>) {
-  const collapse = impact.collapse
-  const remove = impact.remove
-  if (collapse == null && remove == null) return null
-  const unit = node.kind === 'track' ? ['song', 'songs'] : ['artist', 'artists']
-  const branch = (n: number) => (n === 0 ? '' : ` · ${n} ${n === 1 ? unit[0] : unit[1]}`)
+function SaveActions({ node, saved, onToggleSave, excluded, onToggleExclusion }: Pick<Props, 'node' | 'saved' | 'onToggleSave' | 'excluded' | 'onToggleExclusion'>) {
   return (
-    <div className="panel__prune">
-      {collapse != null && (
-        <button
-          className="btn btn--ghost"
-          onClick={() => onPrune(node.id, 'collapse')}
-          title="Undo this expansion: remove everything explored from here"
-        >
-          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-            <path d="M6 3L2.5 6.5 6 10M3 6.5h6a4 4 0 0 1 0 8H7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Collapse{branch(collapse)}
-        </button>
-      )}
-      {remove != null && !isRoot && (
-        <button
-          className="btn btn--ghost btn--danger"
-          onClick={() => onPrune(node.id, 'remove')}
-          title="Remove this node and the branch explored from it (Delete)"
-        >
-          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-            <path d="M3 4h10M6 4V2.5h4V4M5 4l.6 9h4.8L11 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Remove{branch(remove - 1)}
+    <div className={`panel__section panel__save${node.kind === 'track' ? ' panel__save--pair' : ''}`}>
+      {/* #21: the saved state is amber text and border; hover only adds a background. */}
+      <button type="button" className="btn save-toggle" aria-pressed={saved} onClick={onToggleSave} title={saved ? 'Saved: click to remove' : 'Save'}>
+        {saved ? 'Saved' : 'Save'}
+      </button>
+      {node.kind === 'track' && (
+        <button type="button" className="btn exclusion-toggle" aria-pressed={excluded} onClick={onToggleExclusion}>
+          {excluded ? 'Suggest again' : "Don't suggest again"}
         </button>
       )}
     </div>
   )
 }
 
-function ExpandButton({ node, onExpand }: Pick<Props, 'node' | 'onExpand'>) {
+function PruneActions({ node, isRoot, impact, onPrune }: Pick<Props, 'node' | 'isRoot' | 'impact' | 'onPrune'>) {
+  const collapse = impact.collapse
+  const remove = impact.remove
+  if (collapse == null && (remove == null || isRoot)) return null
+  return (
+    <section className="panel__section" aria-labelledby={`branch-${node.id}`}>
+      <h3 id={`branch-${node.id}`}>Branch</h3>
+      <div className="panel__prune">
+        {collapse != null && (
+          <button className="btn" onClick={() => onPrune(node.id, 'collapse')} title="Undo this expansion: remove everything explored from here">
+            Collapse · {collapse}
+          </button>
+        )}
+        {remove != null && !isRoot && (
+          <button className="btn btn--danger" onClick={() => onPrune(node.id, 'remove')} title="Remove this node and the branch explored from it (Delete)">
+            Remove · {remove - 1}
+          </button>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function ExpandButton({ node, onExpand, steering = 0 }: Pick<Props, 'node' | 'onExpand'> & { steering?: number }) {
   return (
     <>
-      <button className="btn btn--primary" disabled={node.loading || node.expanded} onClick={() => onExpand(node.id)}>
+      <button className={`btn btn--primary panel__expand${node.expanded ? ' is-expanded' : ''}`} disabled={node.loading || node.expanded} onClick={() => onExpand(node.id)}>
         {node.loading ? (
           <>
             <span className="spinner spinner--sm" /> Expanding…
           </>
         ) : node.expanded ? (
-          'Connections expanded'
+          'Expanded'
+        ) : steering > 0 ? (
+          `Expand · ${steering} ${steering === 1 ? 'tag' : 'tags'}`
         ) : (
-          'Expand connections'
+          'Expand'
         )}
       </button>
       {node.error && (
@@ -117,10 +135,44 @@ function ExpandButton({ node, onExpand }: Pick<Props, 'node' | 'onExpand'>) {
   )
 }
 
+function OpenIn({ links, q }: { links?: ExternalUrls; q: string }) {
+  return (
+    <section className="panel__section">
+      <h3>Open in</h3>
+      <div className="links">
+        <a href={links?.apple_music ?? `https://music.apple.com/us/search?term=${q}`} target="_blank" rel="noreferrer">
+          Apple Music
+        </a>
+        <a href={links?.spotify ?? `https://open.spotify.com/search/${q}`} target="_blank" rel="noreferrer">
+          Spotify
+        </a>
+        <a href={links?.youtube ?? `https://www.youtube.com/results?search_query=${q}`} target="_blank" rel="noreferrer">
+          YouTube
+        </a>
+      </div>
+    </section>
+  )
+}
+
+/** Roughly six lines of 12px mono in the 360px dock; shorter text needs no More link. */
+const CLAMP_CHARS = 260
+
+/** Long text clamped to six lines with a More / Less toggle. */
+function Clamped({ text }: { text: string }) {
+  const [open, setOpen] = useState(false)
+  const long = text.length > CLAMP_CHARS
+  return (
+    <>
+      <p className={`panel__bio${long && !open ? ' is-clamped' : ''}`}>{text}</p>
+      {long && <button type="button" className="link-btn panel__more" aria-expanded={open} onClick={() => setOpen((o) => !o)}>{open ? 'Less' : 'More'}</button>}
+    </>
+  )
+}
+
 function fmtDuration(s?: number | null): string {
   if (s == null) return ''
   const m = Math.floor(s / 60)
-  return `${m}:${String(s % 60).padStart(2, '0')}`
+  return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 }
 
 /** "1992-09-21" -> "21 Sep 1992"; partial dates pass through as-is. */
@@ -132,8 +184,24 @@ function fmtDate(d?: string | null): string {
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 }
 
-/** Panel for a song node: album, release date, duration, tags, description, preview. */
-function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleExclusion, node, isRoot, impact, onExpand, onPrune, onClose, onOpenArtist, taste, tasteActions, onEditTaste, followJourney, journeyStops, saved, onToggleSave, connections = [], onSelectNode, mapKey = 0 }: Omit<Props, 'onTags'>) {
+/** The 32px amber-outline play button shared by the song preview row and artist top tracks. */
+function PlayButton({ name, state, onClick }: { name: string; state: 'idle' | 'resolving' | 'playing' | 'unavailable'; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="track__play"
+      onClick={onClick}
+      disabled={state === 'unavailable' || state === 'resolving'}
+      aria-label={state === 'playing' ? `Pause ${name}` : `Play preview of ${name}`}
+      title={state === 'unavailable' ? 'No preview available' : state === 'playing' ? 'Pause' : 'Play 30s preview'}
+    >
+      {state === 'resolving' ? <span className="spinner spinner--sm" /> : state === 'playing' ? '❚❚' : '▶'}
+    </button>
+  )
+}
+
+/** Inspector for a song node, in the artboard's order. */
+function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleExclusion, node, isRoot, stop, match, impact, onExpand, onPrune, onClose, onOpenArtist, taste, tasteActions, onEditTaste, followJourney, journeyStops, saved, onToggleSave, connections = [], onSelectNode, mapKey = 0 }: Omit<Props, 'onTags'>) {
   const [details, setDetails] = useState<TrackDetails | null>(null)
   // undefined = still looking it up, null = unknown.
   const [releaseDate, setReleaseDate] = useState<string | null | undefined>(undefined)
@@ -141,8 +209,10 @@ function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleE
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [state, setState] = useState<'idle' | 'resolving' | 'playing' | 'unavailable'>('idle')
+  // Whole seconds played: timeupdate fires a few times a second, so this re-renders at most once a second.
+  const [elapsed, setElapsed] = useState(0)
   const audioRef = useRef<HTMLAudioElement>(null)
-  const actionsRef = useRef<HTMLDivElement>(null)
+  const steerRef = useRef<HTMLElement>(null)
   const artistName = node.artist?.name ?? ''
 
   useEffect(() => {
@@ -184,6 +254,7 @@ function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleE
     } else {
       el.pause()
       el.removeAttribute('src')
+      setElapsed(0)
     }
   }, [state, preview])
 
@@ -202,36 +273,82 @@ function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleE
 
   const links = details?.external_urls
   const q = encodeURIComponent(`${artistName} ${node.name}`)
-  const art = details?.album?.image_url ?? preview?.artwork_url
+  const total = Math.round(preview?.duration_seconds ?? 30)
+  const tags = details?.tags ?? []
+  const atCap = emphasizedTags.length >= MAX_STEERING
+  const matchRow = matchText(match)
 
   return (
-    <PanelShell label={`${node.name} details`}>
-      <header className="panel__header">
-        <div>
-          <div className="panel__kicker">Song</div>
-          <h2 className="panel__title">{node.name}</h2>
-          <div className="panel__meta">
-            by {artistName}
-            {node.artist && (
-              <>
-                {' · '}
-                <button className="link-btn" onClick={() => onOpenArtist(node.artist!)} title={`Start a new map from ${artistName}`}>
-                  open artist map
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-        <div className="panel__header-actions">
-          <button className={`icon-btn bookmark-toggle ${saved ? 'is-saved' : ''}`} onClick={onToggleSave} aria-pressed={saved} aria-label={saved ? `Remove ${node.name} from saved` : `Save ${node.name}`} title={saved ? 'Saved: click to remove' : 'Save'}>
-            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z" fill={saved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
-          </button>
-          <button className="icon-btn" onClick={onClose} aria-label="Close inspector">×</button>
+    <PanelShell label={`${node.name} details`} kind="track" stop={stop} onClose={onClose}>
+      <header className="panel__section panel__header">
+        <h2 className="panel__title" title={node.name}>{node.name}</h2>
+        <div className="panel__meta">
+          {artistName}
+          {node.artist && (
+            <>
+              {' · '}
+              <button className="link-btn" onClick={() => onOpenArtist(node.artist!)} title={`Start a new map from ${artistName}`}>
+                artist map
+              </button>
+            </>
+          )}
         </div>
       </header>
 
-      <div className="panel__actions" ref={actionsRef}>
-        <ExpandButton node={node} onExpand={onExpand} />
+      <div className={`panel__section panel__preview${state === 'playing' ? ' is-playing' : ''}`}
+        title={state === 'playing' && preview?.provider ? `30s preview · ${preview.provider.replace('_', ' ')}` : undefined}>
+        <PlayButton name={node.name} state={state} onClick={toggle} />
+        <span className="panel__progress" aria-hidden="true">
+          <span style={{ width: `${total ? Math.min(100, (elapsed / total) * 100) : 0}%` }} />
+        </span>
+        <span className="panel__time">{state === 'unavailable' ? 'no preview' : `${fmtDuration(elapsed)}/${fmtDuration(total)}`}</span>
+      </div>
+
+      <SaveActions node={node} saved={saved} onToggleSave={onToggleSave} excluded={excluded} onToggleExclusion={onToggleExclusion} />
+
+      <section className="panel__section panel__steer" aria-labelledby={`steer-${node.id}`} ref={steerRef}>
+        <div className="panel__section-head">
+          <h3 id={`steer-${node.id}`}>{node.expanded ? 'Tags' : 'Steer next expand'}</h3>
+          {!node.expanded && emphasizedTags.length > 0 && <span className="panel__count">{emphasizedTags.length}/{MAX_STEERING}</span>}
+        </div>
+        {!node.expanded && tags.length > 0 && onEmphasizedTags && (
+          // Starting an expansion remounts it, which aborts and discards any interpretation.
+          <SteerWords key={String(node.loading)} itemId={node.id} tags={tags} disabled={node.loading}
+            onApply={(picked) => {
+              onEmphasizedTags?.(picked)
+              steerRef.current?.querySelector<HTMLButtonElement>('.btn--primary')?.focus()
+            }} />
+        )}
+        {loading ? (
+          <div className="panel__loading">
+            <span className="spinner spinner--sm" /> Loading…
+          </div>
+        ) : tags.length > 0 ? (
+          <ul className="tags">
+            {tags.map((t) => {
+              const pressed = emphasizedTags.includes(t)
+              return node.expanded ? <li key={t} className="tag" title={t}>{t}</li> : (
+                <li key={t}>
+                  <button className="tag tag--steering"
+                    title={!pressed && atCap ? 'Up to 3 tags' : t}
+                    aria-pressed={pressed}
+                    aria-disabled={node.loading || (!pressed && atCap)}
+                    onClick={() => {
+                      if (node.loading) return
+                      if (pressed) onEmphasizedTags?.(emphasizedTags.filter((tag) => tag !== t))
+                      else if (!atCap) onEmphasizedTags?.([...emphasizedTags, t])
+                    }}>
+                    {t}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        ) : (
+          !error && <p className="panel__empty">No tags listed for this song.</p>
+        )}
+        {!node.expanded && tags.length > 0 && <p className="panel__hint steer-hint">Pick up to 3 for more of that flavour. Tags come from Last.fm listeners.</p>}
+        <ExpandButton node={node} onExpand={onExpand} steering={emphasizedTags.length} />
         {node.ranking?.fallback_reason ? (
           <p className="panel__hint" role="status">{node.ranking.fallback_reason === 'cap_exceeded'
             ? 'Journey is over 50 stops, so this expansion used only this song.'
@@ -246,9 +363,72 @@ function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleE
         {emphasizedTags.length > 0 && (
           <p className="panel__hint" aria-live="polite">Steering: {emphasizedTags.join(', ')} · <button className="link-btn" disabled={node.loading} onClick={() => onEmphasizedTags?.([])}>Clear</button></p>
         )}
-        <PruneActions node={node} isRoot={isRoot} impact={impact} onPrune={onPrune} />
-        <button className="btn btn--ghost exclusion-toggle" aria-pressed={excluded} onClick={onToggleExclusion}>{excluded ? 'Suggest again' : "Don't suggest again"}</button>
-      </div>
+      </section>
+
+      {error ? (
+        <div className="panel__section">
+          <div className="panel__error" role="alert">{error}</div>
+        </div>
+      ) : (
+        (matchRow || details) && (
+          <dl className="panel__section facts__list">
+            {matchRow && (
+              <div>
+                <dt>Match</dt>
+                <dd title={matchRow}>{matchRow}</dd>
+              </div>
+            )}
+            {match && match.shared.length > 0 && (
+              <div>
+                <dt>Shared</dt>
+                <dd title={match.shared.join(', ')}>{match.shared.join(', ')}</dd>
+              </div>
+            )}
+            {details?.album && (
+              <div>
+                <dt>Album</dt>
+                <dd title={details.album.title}>{details.album.title}</dd>
+              </div>
+            )}
+            {details && (
+              <div>
+                <dt>Released</dt>
+                <dd title={releaseDate ?? undefined}>
+                  {releaseDate === undefined ? (
+                    <span className="facts__dim">Looking up…</span>
+                  ) : releaseDate ? (
+                    fmtDate(releaseDate)
+                  ) : (
+                    <span className="facts__dim">Unknown</span>
+                  )}
+                </dd>
+              </div>
+            )}
+            {details?.duration_seconds != null && (
+              <div>
+                <dt>Length</dt>
+                <dd>{fmtDuration(details.duration_seconds)}</dd>
+              </div>
+            )}
+            {details && (details.playcount != null || details.listeners != null) && (
+              <div>
+                <dt>Plays</dt>
+                <dd>
+                  {details.playcount != null && fmt(details.playcount)}
+                  {details.listeners != null && <span className="facts__dim">{details.playcount != null && ' · '}{fmt(details.listeners)} listeners</span>}
+                </dd>
+              </div>
+            )}
+          </dl>
+        )
+      )}
+
+      {details?.summary && (
+        <section className="panel__section">
+          <h3>About</h3>
+          <Clamped text={details.summary} />
+        </section>
+      )}
 
       <TasteCheck key={node.id} actions={tasteActions} kind="track" itemId={node.id} profile={taste} onEdit={onEditTaste} />
 
@@ -256,141 +436,10 @@ function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleE
         <ConnectionsCheck key={`${mapKey}:${node.id}`} parentId={node.id} items={connections} profile={taste} onSelect={onSelectNode} onEdit={onEditTaste} />
       )}
 
-      {loading ? (
-        <div className="panel__loading">
-          <span className="spinner" /> Loading…
-        </div>
-      ) : error ? (
-        <div className="panel__error" role="alert">
-          {error}
-        </div>
-      ) : (
-        details && (
-          <>
-            <section className="panel__section">
-              <div className="facts">
-                {art && <img className="facts__art" src={art} alt="" width={64} height={64} />}
-                <dl className="facts__list">
-                  {details.album && (
-                    <div>
-                      <dt>Album</dt>
-                      <dd>{details.album.title}</dd>
-                    </div>
-                  )}
-                  <div>
-                    <dt>Released</dt>
-                    <dd title={releaseDate ?? undefined}>
-                      {releaseDate === undefined ? (
-                        <span className="facts__dim">Looking up…</span>
-                      ) : releaseDate ? (
-                        fmtDate(releaseDate)
-                      ) : (
-                        <span className="facts__dim">Unknown</span>
-                      )}
-                    </dd>
-                  </div>
-                  {details.duration_seconds != null && (
-                    <div>
-                      <dt>Length</dt>
-                      <dd>{fmtDuration(details.duration_seconds)}</dd>
-                    </div>
-                  )}
-                  {details.listeners != null && (
-                    <div>
-                      <dt>Listeners</dt>
-                      <dd>
-                        {fmt(details.listeners)}
-                        {details.playcount != null && <span className="facts__dim"> · {fmt(details.playcount)} plays</span>}
-                      </dd>
-                    </div>
-                  )}
-                </dl>
-              </div>
-            </section>
-
-            <section className="panel__section">
-              <h3>{node.expanded ? 'Tags' : 'Tags · steer next expansion'}</h3>
-              {!node.expanded && details.tags.length > 0 && onEmphasizedTags && (
-                // Starting an expansion remounts it, which aborts and discards any interpretation.
-                <SteerWords key={String(node.loading)} itemId={node.id} tags={details.tags} disabled={node.loading}
-                  onApply={(tags) => {
-                    onEmphasizedTags?.(tags)
-                    actionsRef.current?.querySelector<HTMLButtonElement>('.btn--primary')?.focus()
-                  }} />
-              )}
-              {details.tags.length > 0 ? (
-                <ul className="tags">
-                  {details.tags.map((t) => (
-                    node.expanded ? <li key={t} className="tag">{t}</li> : (
-                      <li key={t}>
-                        <button className="tag tag--steering"
-                          aria-pressed={emphasizedTags.includes(t)}
-                          aria-disabled={node.loading || (!emphasizedTags.includes(t) && emphasizedTags.length >= 3)}
-                          title={!emphasizedTags.includes(t) && emphasizedTags.length >= 3 ? 'Up to 3 tags' : undefined}
-                          onClick={() => {
-                            if (node.loading) return
-                            if (emphasizedTags.includes(t)) onEmphasizedTags?.(emphasizedTags.filter((tag) => tag !== t))
-                            else if (emphasizedTags.length < 3) onEmphasizedTags?.([...emphasizedTags, t])
-                          }}>
-                          {emphasizedTags.includes(t) && <span aria-hidden="true">✓ </span>}{t}
-                        </button>
-                      </li>
-                    )
-                  ))}
-                </ul>
-              ) : (
-                <p className="panel__empty">No tags listed for this song.</p>
-              )}
-              {!node.expanded && details.tags.length > 0 && <p className="panel__hint steer-hint">Pick up to 3 for more of that flavour. Tags come from Last.fm listeners.</p>}
-            </section>
-
-            {details.summary && (
-              <section className="panel__section">
-                <h3>About</h3>
-                <p className="panel__bio">{details.summary}</p>
-              </section>
-            )}
-          </>
-        )
-      )}
-
-      <section className="panel__section">
-        <h3>Preview</h3>
-        <div className={`track ${state === 'playing' ? 'is-playing' : ''}`}>
-          <button
-            className="track__play"
-            onClick={toggle}
-            disabled={state === 'unavailable' || state === 'resolving'}
-            aria-label={state === 'playing' ? `Pause ${node.name}` : `Play preview of ${node.name}`}
-            title={state === 'unavailable' ? 'No preview available' : state === 'playing' ? 'Pause' : 'Play 30s preview'}
-          >
-            {state === 'resolving' ? <span className="spinner spinner--sm" /> : state === 'playing' ? '❚❚' : state === 'unavailable' ? '·' : '▶'}
-          </button>
-          <span className="track__name">{node.name}</span>
-          {state === 'unavailable' && <span className="track__meta">no preview</span>}
-        </div>
-        {state === 'playing' && preview && (
-          <div className="now-playing__meta" style={{ marginTop: 6 }}>
-            30s preview · {preview.provider?.replace('_', ' ')}
-          </div>
-        )}
-      </section>
-
-      <section className="panel__section">
-        <h3>Open in</h3>
-        <div className="links">
-          <a href={links?.apple_music ?? `https://music.apple.com/us/search?term=${q}`} target="_blank" rel="noreferrer">
-            Apple Music
-          </a>
-          <a href={links?.spotify ?? `https://open.spotify.com/search/${q}`} target="_blank" rel="noreferrer">
-            Spotify
-          </a>
-          <a href={links?.youtube ?? `https://www.youtube.com/results?search_query=${q}`} target="_blank" rel="noreferrer">
-            YouTube
-          </a>
-        </div>
-      </section>
-      <audio ref={audioRef} onEnded={() => setState('idle')} onError={() => setState('idle')} preload="none" />
+      <PruneActions node={node} isRoot={isRoot} impact={impact} onPrune={onPrune} />
+      <OpenIn links={links} q={q} />
+      <audio ref={audioRef} onTimeUpdate={(e) => setElapsed(Math.floor(e.currentTarget.currentTime))}
+        onEnded={() => setState('idle')} onError={() => setState('idle')} preload="none" />
     </PanelShell>
   )
 }
@@ -400,7 +449,7 @@ export function ArtistPanel(props: Props) {
   return <ArtistDetails {...props} />
 }
 
-function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTags, taste, tasteActions, onEditTaste, saved, onToggleSave }: Omit<Props, 'onOpenArtist'>) {
+function ArtistDetails({ node, isRoot, stop, match, impact, onExpand, onPrune, onClose, onTags, taste, tasteActions, onEditTaste, saved, onToggleSave, excluded, onToggleExclusion }: Omit<Props, 'onOpenArtist'>) {
   const [details, setDetails] = useState<Details>({})
   const [loading, setLoading] = useState(true)
   const [playing, setPlaying] = useState<{ track: string; preview: PreviewResult } | null>(null)
@@ -473,61 +522,46 @@ function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTag
   const name = artist?.name ?? node.name
   const links = artist?.external_urls
   const q = encodeURIComponent(name)
+  const matchRow = matchText(match)
 
   return (
-    <PanelShell label={`${name} details`}>
-      <header className="panel__header">
-        <div>
-          <h2 className="panel__title">{name}</h2>
-          {artist?.listeners != null && <div className="panel__meta">{fmt(artist.listeners)} listeners on Last.fm</div>}
-        </div>
-        <div className="panel__header-actions">
-          <button className={`icon-btn bookmark-toggle ${saved ? 'is-saved' : ''}`} onClick={onToggleSave} aria-pressed={saved} aria-label={saved ? `Remove ${node.name} from saved` : `Save ${node.name}`} title={saved ? 'Saved: click to remove' : 'Save'}>
-            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z" fill={saved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
-          </button>
-          <button className="icon-btn" onClick={onClose} aria-label="Close inspector">×</button>
-        </div>
+    <PanelShell label={`${name} details`} kind="artist" stop={stop} onClose={onClose}>
+      <header className="panel__section panel__header">
+        <h2 className="panel__title" title={name}>{name}</h2>
+        {artist?.listeners != null && <div className="panel__meta">{fmt(artist.listeners)} listeners on Last.fm</div>}
       </header>
 
-      <div className="panel__actions">
+      <SaveActions node={node} saved={saved} onToggleSave={onToggleSave} excluded={excluded} onToggleExclusion={onToggleExclusion} />
+
+      <div className="panel__section panel__steer">
         <ExpandButton node={node} onExpand={onExpand} />
-        <PruneActions node={node} isRoot={isRoot} impact={impact} onPrune={onPrune} />
       </div>
 
-      <TasteCheck key={node.id} actions={tasteActions} kind="artist" itemId={node.id} profile={taste} onEdit={onEditTaste} />
-
       {loading ? (
-        <div className="panel__loading">
+        <div className="panel__section panel__loading">
           <span className="spinner" /> Loading…
         </div>
       ) : details.error ? (
-        <div className="panel__error" role="alert">
-          {details.error}
+        <div className="panel__section">
+          <div className="panel__error" role="alert">{details.error}</div>
         </div>
       ) : (
         <>
-          {artist && (
-            <section className="panel__section">
-              <h3>Tags</h3>
-              {artist.tags.length > 0 ? (
-                <ul className="tags">
-                  {artist.tags.map((t) => (
-                    <li key={t} className="tag">
-                      {t}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="panel__empty">No tags listed for this artist.</p>
+          {(matchRow || artist) && (
+            <dl className="panel__section facts__list">
+              {matchRow && (
+                <div>
+                  <dt>Match</dt>
+                  <dd title={matchRow}>{matchRow}</dd>
+                </div>
               )}
-            </section>
-          )}
-
-          {artist?.summary && (
-            <section className="panel__section">
-              <h3>Profile</h3>
-              <p className="panel__bio">{artist.summary}</p>
-            </section>
+              {artist && (
+                <div>
+                  <dt>Tags</dt>
+                  <dd className="facts__wrap">{artist.tags.length > 0 ? artist.tags.join(', ') : <span className="facts__dim">No tags listed</span>}</dd>
+                </div>
+              )}
+            </dl>
           )}
 
           {details.tracks && details.tracks.length > 0 && (
@@ -536,18 +570,10 @@ function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTag
               <ul className="tracks">
                 {details.tracks.map((t) => {
                   const isPlaying = playing?.track === t.name
-                  const noPreview = unavailable.has(t.name)
                   return (
                     <li key={t.name} className={`track ${isPlaying ? 'is-playing' : ''}`}>
-                      <button
-                        className="track__play"
-                        onClick={() => togglePreview(t)}
-                        disabled={noPreview || resolving === t.name}
-                        aria-label={isPlaying ? `Pause ${t.name}` : `Play preview of ${t.name}`}
-                        title={noPreview ? 'No preview available' : isPlaying ? 'Pause' : 'Play 30s preview'}
-                      >
-                        {resolving === t.name ? <span className="spinner spinner--sm" /> : isPlaying ? '❚❚' : noPreview ? '·' : '▶'}
-                      </button>
+                      <PlayButton name={t.name} onClick={() => togglePreview(t)}
+                        state={resolving === t.name ? 'resolving' : isPlaying ? 'playing' : unavailable.has(t.name) ? 'unavailable' : 'idle'} />
                       <span className="track__name">{t.name}</span>
                       {t.listeners != null && <span className="track__meta">{fmt(t.listeners)}</span>}
                     </li>
@@ -566,22 +592,18 @@ function ArtistDetails({ node, isRoot, impact, onExpand, onPrune, onClose, onTag
             </section>
           )}
 
-          <section className="panel__section">
-            <h3>Open in</h3>
-            <div className="links">
-              <a href={links?.apple_music ?? `https://music.apple.com/us/search?term=${q}`} target="_blank" rel="noreferrer">
-                Apple Music
-              </a>
-              <a href={links?.spotify ?? `https://open.spotify.com/search/${q}`} target="_blank" rel="noreferrer">
-                Spotify
-              </a>
-              <a href={links?.youtube ?? `https://www.youtube.com/results?search_query=${q}`} target="_blank" rel="noreferrer">
-                YouTube
-              </a>
-            </div>
-          </section>
+          {artist?.summary && (
+            <section className="panel__section">
+              <h3>Profile</h3>
+              <Clamped text={artist.summary} />
+            </section>
+          )}
         </>
       )}
+
+      <TasteCheck key={node.id} actions={tasteActions} kind="artist" itemId={node.id} profile={taste} onEdit={onEditTaste} />
+      <PruneActions node={node} isRoot={isRoot} impact={impact} onPrune={onPrune} />
+      <OpenIn links={links} q={q} />
       <audio ref={audioRef} onEnded={() => setPlaying(null)} onError={() => setPlaying(null)} preload="none" />
     </PanelShell>
   )

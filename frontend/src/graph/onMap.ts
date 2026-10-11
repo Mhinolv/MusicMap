@@ -53,6 +53,26 @@ export function matchFraction(match?: number): number {
   return match == null || !Number.isFinite(match) ? 0 : Math.min(1, Math.max(0, match))
 }
 
+export type MatchFact = { match?: number; parent: string; shared: string[] }
+
+/** The inspector's MATCH and SHARED facts (#32): the edge to the node this one was expanded from; null without a parent. */
+export function matchFact(graph: Pick<MusicGraph, 'nodes' | 'edges'>, id: string): MatchFact | null {
+  const parentId = graph.nodes.get(id)?.parentId
+  const parent = parentId ? graph.nodes.get(parentId) : undefined
+  if (!parent) return null
+  let edge: MatchEdge & { sharedTags?: string[] } | undefined
+  for (const e of graph.edges.values()) {
+    if ((e.source === id && e.target === parent.id) || (e.source === parent.id && e.target === id)) edge = e
+  }
+  return { match: edge?.similarity ?? undefined, parent: parent.name, shared: edge?.sharedTags ?? [] }
+}
+
+/** `82% to Creep`; null when the match is unknown so the row is omitted. */
+export function matchText(fact: MatchFact | null | undefined): string | null {
+  if (!fact || fact.match == null || !Number.isFinite(fact.match)) return null
+  return `${Math.round(matchFraction(fact.match) * 100)}% to ${fact.parent}`
+}
+
 /** Journey stops in order; song maps only list expanded songs, as the floating trail does. */
 export function journeyStops(graph: Pick<MusicGraph, 'nodes' | 'journey' | 'rootId'>): ArtistNode[] {
   const songMode = graph.rootId ? graph.nodes.get(graph.rootId)?.kind === 'track' : false
