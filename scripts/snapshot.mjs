@@ -75,8 +75,7 @@ async function waitForSettle(page, { maxMs = 10000, quietMs = 600, tolerance = 0
   const read = () =>
     page.$$eval('g.node', (els) =>
       els.map((el) => {
-        // #71: an artist photo hides the star core, so measure whichever one shows.
-        const r = (el.querySelector('.node__photo') ?? el.querySelector('.node__body'))?.getBoundingClientRect()
+        const r = el.querySelector('.node__body')?.getBoundingClientRect()
         return r ? [r.x, r.y, r.width] : [0, 0, 0]
       }),
     )
@@ -101,11 +100,11 @@ async function waitForPanel(page) {
   await sleep(400) // slide-in transition
 }
 
-/** Finds a visible, unexpanded neighbour whose photo or star core is actually hit at its centre. */
+/** Finds a visible, unexpanded neighbour whose .node__body is actually hit at its centre. */
 async function neighbourPoint(page) {
   return page.evaluate(() => {
     for (const g of document.querySelectorAll('g.node:not(.is-root)')) {
-      const body = g.querySelector('.node__photo') ?? g.querySelector('.node__body')
+      const body = g.querySelector('.node__body')
       if (!body) continue
       const r = body.getBoundingClientRect()
       const x = r.x + r.width / 2
@@ -717,8 +716,8 @@ const scenarios = [
       return `panel: ${await page.$eval('.panel__title', (el) => el.textContent)}`
     },
   },
-  // #71: artist photos on nodes and in the panel header. Mock photos are inline SVGs;
-  // Portishead's neighbours mix fixture artists (photo) and unknown names (star).
+  // #73: artist photos show in the panel header only. Mock neighbours carry fixture
+  // photos (inline SVGs) in their node data, but every node still draws the star core.
   {
     name: 'artist-photos',
     viewport: DESKTOP,
@@ -729,11 +728,12 @@ const scenarios = [
       await page.waitForSelector('.panel .panel__photo', { visible: true })
       await waitForSettle(page)
       const counts = await page.$$eval('g.node', (els) => ({
-        photos: els.filter((g) => g.querySelector('.node__photo')).length,
-        stars: els.filter((g) => !g.querySelector('.node__photo')).length,
+        photos: els.filter((g) => g.querySelector('.node__photo, image')).length,
+        stars: els.filter((g) => g.querySelector('.node__body')).length,
+        nodes: els.length,
       }))
-      if (!counts.photos || !counts.stars) throw new Error(`expected photos and stars, got ${JSON.stringify(counts)}`)
-      return `${counts.photos} photo nodes, ${counts.stars} star nodes; panel photo 72px`
+      if (counts.photos || counts.stars !== counts.nodes) throw new Error(`expected star nodes only, got ${JSON.stringify(counts)}`)
+      return `${counts.stars} star nodes, 0 photo nodes; panel photo 72px`
     },
   },
   {
