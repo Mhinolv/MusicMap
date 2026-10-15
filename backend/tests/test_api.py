@@ -76,6 +76,7 @@ async def test_song_seeded_map(client):
     assert body["name"] == "Creep"
     assert body["album"]["title"] == "Pablo Honey"
     assert body["release_date"] == "1992-09-21"  # mock details carry it; live mode uses /release-date
+    assert body["external_urls"]["apple_music"].startswith("https://music.apple.com/us/search?term=")  # mock: no Apple lookup
     r = await client.get(f"/api/tracks/{track_id}/release-date")
     assert r.status_code == 200 and r.json()["release_date"] == "1992-09-21"
     assert body["duration_seconds"] == 238
