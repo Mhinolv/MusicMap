@@ -429,32 +429,11 @@ async def test_one_apple_search_serves_link_and_photo(monkeypatch, es256_key):
 
     install(monkeypatch, handler)
     monkeypatch.setattr(links.spotify, "find_artist_url", _none)
-    refs = await links.with_artwork([ArtistRef(id="nm:radiohead", name="Radiohead")])
-    assert refs[0].image_url == RADIOHEAD_PHOTO
-    artist = await links.enrich_links(Artist(id="nm:radiohead", name="Radiohead"))
-    assert artist.image_url == RADIOHEAD_PHOTO
-    assert artist.external_urls.apple_music == "https://music.apple.com/us/artist/radiohead/657515"
+    for _ in range(2):
+        artist = await links.enrich_links(Artist(id="nm:radiohead", name="Radiohead"))
+        assert artist.image_url == RADIOHEAD_PHOTO
+        assert artist.external_urls.apple_music == "https://music.apple.com/us/artist/radiohead/657515"
     assert len(calls) == 1
-
-
-async def test_with_artwork_keeps_lastfm_images_and_skips_misses(monkeypatch, es256_key):
-    _apple_env(monkeypatch, es256_key[0])
-    seen = []
-
-    def handler(req: httpx.Request):
-        seen.append(req.url.params["term"])
-        return httpx.Response(200, json=_apple_artists(RADIOHEAD_APPLE))
-
-    install(monkeypatch, handler)
-    refs = [
-        SimilarArtist(id="nm:radiohead", name="Radiohead", similarity=0.9),
-        SimilarArtist(id="nm:portishead", name="Portishead", image_url="https://lastfm/p.png", similarity=0.7),
-        SimilarArtist(id="nm:unknown", name="Unknown Band", similarity=0.5),
-    ]
-    out = await links.with_artwork(refs)
-    assert [r.image_url for r in out] == [RADIOHEAD_PHOTO, "https://lastfm/p.png", None]
-    assert [r.similarity for r in out] == [0.9, 0.7, 0.5]
-    assert sorted(seen) == ["Radiohead", "Unknown Band"]  # no lookup for an artist that has an image
 
 
 async def test_enrich_links_keeps_an_existing_image(monkeypatch, es256_key):
@@ -477,8 +456,9 @@ async def test_enrich_links_keeps_an_existing_image(monkeypatch, es256_key):
 async def test_artist_photo_is_none_on_apple_error_or_slow(monkeypatch, es256_key):
     _apple_env(monkeypatch, es256_key[0])
     install(monkeypatch, lambda req: httpx.Response(503))
-    out = await links.with_artwork([ArtistRef(id="nm:radiohead", name="Radiohead")])
-    assert out[0].image_url is None
+    monkeypatch.setattr(links.spotify, "find_artist_url", _none)
+    out = await links.enrich_links(Artist(id="nm:radiohead", name="Radiohead"))
+    assert out.image_url is None
 
     cache.clear()
     monkeypatch.setattr(links, "ARTWORK_TIMEOUT", 0.05)
@@ -487,16 +467,15 @@ async def test_artist_photo_is_none_on_apple_error_or_slow(monkeypatch, es256_ke
         await asyncio.sleep(1)
 
     monkeypatch.setattr(apple_music, "find_artist", slow)
-    out = await links.with_artwork([ArtistRef(id="nm:radiohead", name="Radiohead")])
-    assert out[0].image_url is None
+    out = await links.enrich_links(Artist(id="nm:radiohead", name="Radiohead"))
+    assert out.image_url is None
 
 
 async def test_no_artist_photo_lookup_without_musickit(monkeypatch):
     monkeypatch.setenv("TUNEGRAPH_MOCK", "0")
     get_settings.cache_clear()
     install(monkeypatch, lambda req: pytest.fail("Apple must not be called"))
-    out = await links.with_artwork([ArtistRef(id="nm:radiohead", name="Radiohead")])
-    assert out[0].image_url is None
+    assert await links.apple_artist("Radiohead") == {}
 
 
 async def test_no_apple_artist_lookup_in_mock_mode(monkeypatch, es256_key):
@@ -575,8 +554,7 @@ async def test_concurrent_artist_lookups_are_limited(monkeypatch, es256_key):
         return httpx.Response(200, json=_apple_artists(RADIOHEAD_APPLE))
 
     install(monkeypatch, handler)
-    refs = [ArtistRef(id=f"nm:a{i}", name=f"Artist {i}") for i in range(8)]
-    await links.with_artwork(refs)
+    await asyncio.gather(*(links.apple_artist(f"Artist {i}") for i in range(8)))
     assert len(terms) == 8
     assert peak == apple_music.ARTIST_LOOKUP_LIMIT
 
@@ -593,3 +571,44 @@ async def test_search_route_makes_no_apple_lookup(monkeypatch, es256_key):
     install(monkeypatch, lambda req: pytest.fail("search must not call Apple"))
     out = await artists_route.search_artists(q="radiohead", limit=8)
     assert out.artists[0].image_url is None
+
+
+async def test_similar_route_makes_no_apple_lookup(monkeypatch, es256_key):
+    """#73: expand shows the Last.fm similar artists at once; photos are for the panel only."""
+    from app.api.routes import artists as artists_route
+
+    _apple_env(monkeypatch, es256_key[0])
+
+    async def get_similar(artist_id, limit):
+        return [
+            SimilarArtist(id="nm:radiohead", name="Radiohead", similarity=0.9),
+            SimilarArtist(id="nm:portishead", name="Portishead", image_url="https://lastfm/p.png", similarity=0.7),
+        ]
+
+    monkeypatch.setattr(artists_route.lastfm, "get_similar", get_similar)
+    install(monkeypatch, lambda req: pytest.fail("similar must not call Apple"))
+    out = await artists_route.get_similar("nm:thom", limit=8)
+    assert [a.image_url for a in out.artists] == [None, "https://lastfm/p.png"]
+
+
+async def test_artist_route_still_finds_the_panel_photo(monkeypatch, es256_key):
+    """#73: the panel photo comes from GET /api/artists/{id} through enrich_links."""
+    from app.api.routes import artists as artists_route
+
+    _apple_env(monkeypatch, es256_key[0])
+    calls = []
+
+    def handler(req: httpx.Request):
+        calls.append(req)
+        return httpx.Response(200, json=_apple_artists(RADIOHEAD_APPLE))
+
+    async def get_artist(artist_id):
+        return Artist(id=artist_id, name="Radiohead")
+
+    monkeypatch.setattr(artists_route.lastfm, "get_artist", get_artist)
+    monkeypatch.setattr(links.spotify, "find_artist_url", _none)
+    install(monkeypatch, handler)
+    out = await artists_route.get_artist("nm:radiohead")
+    assert out.image_url == RADIOHEAD_PHOTO
+    assert out.external_urls.apple_music == "https://music.apple.com/us/artist/radiohead/657515"
+    assert len(calls) == 1

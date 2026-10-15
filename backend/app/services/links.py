@@ -5,10 +5,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TypeVar
 from urllib.parse import quote_plus
 
-from app.models.artist import Artist, ArtistRef, ExternalUrls
+from app.models.artist import Artist, ExternalUrls
 from app.models.track import TrackDetails
 from app.services import apple_music, itunes, musicbrainz, preview, spotify
 from app.services.errors import ProviderError
@@ -16,9 +15,7 @@ from app.services.errors import ProviderError
 log = logging.getLogger(__name__)
 
 SONG_URL_TIMEOUT = 3.0  # seconds; the song panel must not wait long for the Apple lookup
-ARTWORK_TIMEOUT = 3.0  # seconds; expand must not wait long for artist photos
-
-RefT = TypeVar("RefT", bound=ArtistRef)
+ARTWORK_TIMEOUT = 3.0  # seconds; the artist panel must not wait long for the Apple lookup
 
 
 async def _safe(coro):
@@ -45,19 +42,6 @@ async def apple_artist(name: str) -> dict[str, str | None]:
     except Exception:
         log.exception("apple music artist lookup crashed")
         return {}
-
-
-async def with_artwork(refs: list[RefT]) -> list[RefT]:
-    """Fill a missing image_url from the Apple artist artwork. One cached lookup per name, run concurrently."""
-    missing = [i for i, r in enumerate(refs) if not r.image_url]
-    if not missing:
-        return refs
-    found = await asyncio.gather(*(apple_artist(refs[i].name) for i in missing))
-    out = list(refs)
-    for i, apple in zip(missing, found):
-        if apple.get("artwork_url"):
-            out[i] = refs[i].model_copy(update={"image_url": apple["artwork_url"]})
-    return out
 
 
 async def enrich_links(artist: Artist) -> Artist:

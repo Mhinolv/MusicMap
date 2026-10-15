@@ -152,7 +152,7 @@ a:hover { color: var(--cyan-hover); }
 .node { cursor: pointer; outline: none; }
 .node.is-dimmed { opacity: 0.45; }
 .node__hit { pointer-events: all; }
-.node__body, .node__glow, .node__ring, .node__outer, .node__focus, .node__photo { pointer-events: none; }
+.node__body, .node__glow, .node__ring, .node__outer, .node__focus { pointer-events: none; }
 .node__ring, .node__outer, .node__focus { fill: none; }
 .node__outer { stroke: rgba(111,195,232,.35); stroke-width: 1px; }
 .node__focus { stroke: var(--cyan); stroke-width: 2px; visibility: hidden; }

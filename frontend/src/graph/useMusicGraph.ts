@@ -18,7 +18,6 @@ type Action =
   | { type: 'expand:success'; id: string; children: ExpandedChild[]; ranking?: TrackRankingContext }
   | { type: 'expand:failure'; id: string; error: string }
   | { type: 'node:tags'; id: string; tags: string[] }
-  | { type: 'node:image'; id: string; imageUrl: string }
   | { type: 'prune'; id: string; mode: PruneMode }
   | { type: 'undo' }
 
@@ -228,14 +227,6 @@ export function musicGraphReducer(state: MusicGraph, action: Action): MusicGraph
       nodes.set(action.id, { ...node, tags: action.tags })
       return { ...state, nodes }
     }
-    case 'node:image': {
-      // The panel found a photo that the expansion missed. Only fill a gap: never replace one.
-      const node = state.nodes.get(action.id)
-      if (!node || node.kind !== 'artist' || node.imageUrl) return state
-      const nodes = new Map(state.nodes)
-      nodes.set(action.id, { ...node, imageUrl: action.imageUrl })
-      return { ...state, nodes }
-    }
     case 'prune':
       return prune(state, action.id, action.mode, ++pruneSeq)
     case 'undo':
@@ -269,7 +260,6 @@ export function useMusicGraph() {
   )
   const expandFailure = useCallback((id: string, error: string) => dispatch({ type: 'expand:failure', id, error }), [])
   const setTags = useCallback((id: string, tags: string[]) => dispatch({ type: 'node:tags', id, tags }), [])
-  const setImage = useCallback((id: string, imageUrl: string) => dispatch({ type: 'node:image', id, imageUrl }), [])
   const prune = useCallback((id: string, mode: PruneMode) => dispatch({ type: 'prune', id, mode }), [])
   const undo = useCallback(() => dispatch({ type: 'undo' }), [])
 
@@ -286,7 +276,6 @@ export function useMusicGraph() {
     expandSuccess,
     expandFailure,
     setTags,
-    setImage,
     prune,
     undo,
   }

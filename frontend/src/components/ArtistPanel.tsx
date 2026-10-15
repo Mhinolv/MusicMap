@@ -24,8 +24,6 @@ type Props = {
   onPrune: (id: string, mode: PruneMode) => void
   onClose: () => void
   onTags: (id: string, tags: string[]) => void
-  /** Artist nodes: the panel found a photo, so the graph node can show it too (#71). */
-  onImage: (id: string, imageUrl: string) => void
   /** Song nodes: start a fresh artist-rooted map from the song's artist. */
   onOpenArtist: (artist: ArtistRef) => void
   /** The YOUR TASTE add / not-my-taste controls (#27). */
@@ -203,7 +201,7 @@ function PlayButton({ name, state, onClick }: { name: string; state: 'idle' | 'r
 }
 
 /** Inspector for a song node, in the artboard's order. */
-function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleExclusion, node, isRoot, stop, match, impact, onExpand, onPrune, onClose, onOpenArtist, taste, tasteActions, onEditTaste, followJourney, journeyStops, saved, onToggleSave, connections = [], onSelectNode, mapKey = 0 }: Omit<Props, 'onTags' | 'onImage'>) {
+function TrackPanel({ emphasizedTags = [], onEmphasizedTags, excluded, onToggleExclusion, node, isRoot, stop, match, impact, onExpand, onPrune, onClose, onOpenArtist, taste, tasteActions, onEditTaste, followJourney, journeyStops, saved, onToggleSave, connections = [], onSelectNode, mapKey = 0 }: Omit<Props, 'onTags'>) {
   const [details, setDetails] = useState<TrackDetails | null>(null)
   // undefined = still looking it up, null = unknown.
   const [releaseDate, setReleaseDate] = useState<string | null | undefined>(undefined)
@@ -451,7 +449,7 @@ export function ArtistPanel(props: Props) {
   return <ArtistDetails {...props} />
 }
 
-function ArtistDetails({ node, isRoot, stop, match, impact, onExpand, onPrune, onClose, onTags, onImage, taste, tasteActions, onEditTaste, saved, onToggleSave, excluded, onToggleExclusion }: Omit<Props, 'onOpenArtist'>) {
+function ArtistDetails({ node, isRoot, stop, match, impact, onExpand, onPrune, onClose, onTags, taste, tasteActions, onEditTaste, saved, onToggleSave, excluded, onToggleExclusion }: Omit<Props, 'onOpenArtist'>) {
   const [details, setDetails] = useState<Details>({})
   const [loading, setLoading] = useState(true)
   const [playing, setPlaying] = useState<{ track: string; preview: PreviewResult } | null>(null)
@@ -473,7 +471,6 @@ function ArtistDetails({ node, isRoot, stop, match, impact, onExpand, onPrune, o
         if (a.status === 'fulfilled') {
           next.artist = a.value
           onTags(node.id, a.value.tags)
-          if (a.value.image_url) onImage(node.id, a.value.image_url)
         }
         if (t.status === 'fulfilled') next.tracks = t.value
         if (a.status === 'rejected' && t.status === 'rejected') {
@@ -488,7 +485,7 @@ function ArtistDetails({ node, isRoot, stop, match, impact, onExpand, onPrune, o
       },
     )
     return () => ctrl.abort()
-  }, [node.id, onTags, onImage])
+  }, [node.id, onTags])
 
   useEffect(() => {
     const el = audioRef.current
