@@ -9,10 +9,12 @@ from urllib.parse import quote_plus
 
 from app.models.artist import Artist, ExternalUrls
 from app.models.track import TrackDetails
-from app.services import apple_music, musicbrainz, spotify
+from app.services import apple_music, musicbrainz, preview, spotify
 from app.services.errors import ProviderError
 
 log = logging.getLogger(__name__)
+
+SONG_URL_TIMEOUT = 3.0  # seconds; the song panel must not wait long for the Apple lookup
 
 
 async def _safe(coro):
@@ -68,11 +70,29 @@ async def release_date_for(track: TrackDetails) -> str | None:
     )
 
 
+async def apple_song_url(artist: str, track: str) -> str | None:
+    """The song's own Apple Music page, from the cached preview lookup the play button
+    also uses (one Apple request serves both). None when not found or Apple is slow."""
+    try:
+        result = await asyncio.wait_for(preview.resolve_preview(artist, track), SONG_URL_TIMEOUT)
+    except asyncio.TimeoutError:
+        log.warning("apple music song lookup timed out")
+        return None
+    except Exception:
+        log.exception("apple music song lookup crashed")
+        return None
+    if result.available and result.provider == apple_music.PROVIDER:
+        return result.track_url
+    return None
+
+
 async def enrich_track(track: TrackDetails) -> TrackDetails:
-    """Keyless search links for a song. The release date is served separately because
-    MusicBrainz is throttled to one request per second and must not delay the rest."""
+    """Song links: the Apple Music song page when the catalog has it, keyless search
+    links otherwise. The release date is served separately because MusicBrainz is
+    throttled to one request per second and must not delay the rest."""
     urls = track.external_urls.model_copy()
     term = f"{track.artist.name} {track.name}"
+    urls.apple_music = urls.apple_music or await apple_song_url(track.artist.name, track.name)
     urls.spotify = urls.spotify or spotify.search_url(term)
     urls.apple_music = urls.apple_music or apple_music.search_url(term)
     urls.youtube = urls.youtube or f"https://www.youtube.com/results?search_query={quote_plus(term)}"

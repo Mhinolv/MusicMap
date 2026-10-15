@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 import jwt
 import pytest
@@ -10,7 +12,9 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from app.cache.cache import cache
 from app.config import get_settings
-from app.services import apple_music, http as http_mod, musicbrainz, preview
+from app.models.artist import ArtistRef
+from app.models.track import TrackDetails
+from app.services import apple_music, http as http_mod, links, musicbrainz, preview
 
 
 @pytest.fixture
@@ -105,6 +109,75 @@ async def test_preview_unavailable_when_nothing_configured(monkeypatch):
     get_settings.cache_clear()
     result = await preview.resolve_preview("Radiohead", "Creep")
     assert result == preview.UNAVAILABLE
+
+
+def _apple_env(monkeypatch, pem):
+    monkeypatch.setenv("TUNEGRAPH_MOCK", "0")
+    monkeypatch.setenv("APPLE_MUSIC_TEAM_ID", "T")
+    monkeypatch.setenv("APPLE_MUSIC_KEY_ID", "K")
+    monkeypatch.setenv("APPLE_MUSIC_PRIVATE_KEY", pem)
+    get_settings.cache_clear()
+
+
+def _creep() -> TrackDetails:
+    return TrackDetails(id="tr:radiohead|creep", name="Creep", artist=ArtistRef(id="ar:radiohead", name="Radiohead"))
+
+
+SEARCH_PREFIX = "https://music.apple.com/us/search?term="
+
+
+async def test_song_link_opens_the_apple_song(monkeypatch, es256_key):
+    _apple_env(monkeypatch, es256_key[0])
+    calls = []
+
+    def handler(req: httpx.Request):
+        calls.append(req)
+        return httpx.Response(200, json={"results": {"songs": {"data": [
+            {"attributes": {"name": "Creep", "artistName": "Radiohead",
+                            "url": "https://music.apple.com/us/album/creep/1097861387?i=1097861703",
+                            "previews": [{"url": "https://x/real.m4a"}]}},
+        ]}}})
+
+    install(monkeypatch, handler)
+    track = await links.enrich_track(_creep())
+    assert track.external_urls.apple_music == "https://music.apple.com/us/album/creep/1097861387?i=1097861703"
+    # The play button reuses the same cached lookup: no second Apple request.
+    result = await preview.resolve_preview("Radiohead", "Creep")
+    assert result.preview_url == "https://x/real.m4a"
+    assert len(calls) == 1
+
+
+async def test_song_link_falls_back_to_search_when_apple_has_no_match(monkeypatch, es256_key):
+    _apple_env(monkeypatch, es256_key[0])
+    install(monkeypatch, lambda req: httpx.Response(200, json={"results": {}}))
+    track = await links.enrich_track(_creep())
+    assert track.external_urls.apple_music.startswith(SEARCH_PREFIX)
+
+
+async def test_song_link_falls_back_to_search_on_apple_error(monkeypatch, es256_key):
+    _apple_env(monkeypatch, es256_key[0])
+    install(monkeypatch, lambda req: httpx.Response(503))
+    track = await links.enrich_track(_creep())
+    assert track.external_urls.apple_music.startswith(SEARCH_PREFIX)
+
+
+async def test_song_link_falls_back_to_search_when_apple_is_slow(monkeypatch, es256_key):
+    _apple_env(monkeypatch, es256_key[0])
+    monkeypatch.setattr(links, "SONG_URL_TIMEOUT", 0.05)
+
+    async def slow(artist, track):
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(apple_music, "search_song_preview", slow)
+    track = await links.enrich_track(_creep())
+    assert track.external_urls.apple_music.startswith(SEARCH_PREFIX)
+
+
+async def test_song_link_is_search_without_keys(monkeypatch):
+    monkeypatch.setenv("TUNEGRAPH_MOCK", "0")
+    get_settings.cache_clear()
+    track = await links.enrich_track(_creep())
+    assert track.external_urls.apple_music.startswith(SEARCH_PREFIX)
 
 
 async def test_musicbrainz_links(monkeypatch):
