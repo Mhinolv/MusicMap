@@ -16,7 +16,7 @@ from app.services.errors import ProviderError
 log = logging.getLogger(__name__)
 
 SONG_URL_TIMEOUT = 3.0  # seconds; the song panel must not wait long for the Apple lookup
-ARTWORK_TIMEOUT = 3.0  # seconds; search and expand must not wait long for artist photos
+ARTWORK_TIMEOUT = 3.0  # seconds; expand must not wait long for artist photos
 
 RefT = TypeVar("RefT", bound=ArtistRef)
 

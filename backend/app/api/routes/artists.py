@@ -14,7 +14,7 @@ async def search_artists(
     q: str = Query(..., min_length=1, max_length=200),
     limit: int = Query(8, ge=1, le=25),
 ) -> SearchResponse:
-    return SearchResponse(artists=await links.with_artwork(await lastfm.search(q.strip(), limit)))
+    return SearchResponse(artists=await lastfm.search(q.strip(), limit))
 
 
 @router.get("/{artist_id}", response_model=Artist)

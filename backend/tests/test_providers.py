@@ -505,3 +505,91 @@ async def test_no_apple_artist_lookup_in_mock_mode(monkeypatch, es256_key):
     get_settings.cache_clear()
     install(monkeypatch, lambda req: pytest.fail("Apple must not be called"))
     assert await apple_music.find_artist("Radiohead") is None
+
+
+async def test_rate_limited_artist_lookup_is_not_cached_for_a_day(monkeypatch, es256_key):
+    _apple_env(monkeypatch, es256_key[0])
+    responses = [httpx.Response(429), httpx.Response(200, json=_apple_artists(RADIOHEAD_APPLE))]
+    calls = []
+
+    def handler(req: httpx.Request):
+        calls.append(req)
+        return responses[len(calls) - 1]
+
+    install(monkeypatch, handler)
+    assert await apple_music.find_artist("Radiohead") is None
+    expires_at, _ = cache._data["apple:artist:radiohead"]
+    assert expires_at - time.monotonic() <= apple_music.ERROR_TTL  # short entry, not ttl_artist
+
+    cache.delete("apple:artist:radiohead")  # the ERROR_TTL entry has expired
+    found = await apple_music.find_artist("Radiohead")
+    assert found and found["artwork_url"] == RADIOHEAD_PHOTO
+    assert len(calls) == 2  # the second call asked Apple again
+
+
+async def test_failed_artist_lookup_is_kept_only_for_the_error_ttl(monkeypatch, es256_key):
+    _apple_env(monkeypatch, es256_key[0])
+    calls = []
+
+    def handler(req: httpx.Request):
+        calls.append(req)
+        return httpx.Response(503)
+
+    install(monkeypatch, handler)
+    assert await apple_music.find_artist("Radiohead") is None
+    assert await apple_music.find_artist("Radiohead") is None
+    assert len(calls) == 1  # a burst of panel opens does not hammer Apple
+    expires_at, _ = cache._data["apple:artist:radiohead"]
+    assert expires_at - time.monotonic() <= apple_music.ERROR_TTL
+
+
+async def test_real_artist_no_match_is_cached(monkeypatch, es256_key):
+    _apple_env(monkeypatch, es256_key[0])
+    calls = []
+
+    def handler(req: httpx.Request):
+        calls.append(req)
+        return httpx.Response(200, json=_apple_artists({"name": "Someone Else"}))
+
+    install(monkeypatch, handler)
+    assert await apple_music.find_artist("Radiohead") is None
+    assert await apple_music.find_artist("Radiohead") is None
+    assert len(calls) == 1
+    expires_at, _ = cache._data["apple:artist:radiohead"]
+    assert expires_at - time.monotonic() > apple_music.ERROR_TTL  # kept for ttl_artist
+
+
+async def test_concurrent_artist_lookups_are_limited(monkeypatch, es256_key):
+    _apple_env(monkeypatch, es256_key[0])
+    running = 0
+    peak = 0
+    terms = []
+
+    async def handler(req: httpx.Request):
+        nonlocal running, peak
+        running += 1
+        peak = max(peak, running)
+        await asyncio.sleep(0.01)
+        running -= 1
+        terms.append(req.url.params["term"])
+        return httpx.Response(200, json=_apple_artists(RADIOHEAD_APPLE))
+
+    install(monkeypatch, handler)
+    refs = [ArtistRef(id=f"nm:a{i}", name=f"Artist {i}") for i in range(8)]
+    await links.with_artwork(refs)
+    assert len(terms) == 8
+    assert peak == apple_music.ARTIST_LOOKUP_LIMIT
+
+
+async def test_search_route_makes_no_apple_lookup(monkeypatch, es256_key):
+    from app.api.routes import artists as artists_route
+
+    _apple_env(monkeypatch, es256_key[0])
+
+    async def search(q, limit):
+        return [ArtistRef(id="nm:radiohead", name="Radiohead")]
+
+    monkeypatch.setattr(artists_route.lastfm, "search", search)
+    install(monkeypatch, lambda req: pytest.fail("search must not call Apple"))
+    out = await artists_route.search_artists(q="radiohead", limit=8)
+    assert out.artists[0].image_url is None

@@ -7,8 +7,10 @@ developer token alone.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
+import weakref
 from typing import Any
 from urllib.parse import quote_plus
 
@@ -26,8 +28,13 @@ log = logging.getLogger(__name__)
 API_ROOT = "https://api.music.apple.com/v1"
 PROVIDER = "apple_music"
 TOKEN_TTL = 12 * 3600  # Apple allows up to 6 months; we rotate daily-ish.
+ERROR_TTL = 120  # seconds; a failed artist lookup is retried after this, not after ttl_artist
+ARTIST_LOOKUP_LIMIT = 3  # concurrent artist searches; 8 at once gave HTTP 429
 
 _token: tuple[float, str] | None = None
+_artist_semaphores: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = (
+    weakref.WeakKeyDictionary()
+)
 
 
 def developer_token() -> str:
@@ -142,6 +149,19 @@ def _artwork_url(attrs: dict[str, Any], size: int = 300) -> str | None:
     return url.replace("{w}", str(size)).replace("{h}", str(size))
 
 
+class _LookupFailed(Exception):
+    """The Apple request failed, so the cache must not keep the miss for ttl_artist."""
+
+
+def _artist_slots() -> asyncio.Semaphore:
+    """The semaphore for the running event loop (a semaphore must not cross loops)."""
+    loop = asyncio.get_running_loop()
+    slots = _artist_semaphores.get(loop)
+    if slots is None:
+        slots = _artist_semaphores[loop] = asyncio.Semaphore(ARTIST_LOOKUP_LIMIT)
+    return slots
+
+
 async def find_artist(artist: str) -> dict[str, str | None] | None:
     """The catalog artist whose name matches exactly: its page URL and 300x300 artwork.
     One cached search serves both the outbound link and the artist photo."""
@@ -152,23 +172,29 @@ async def find_artist(artist: str) -> dict[str, str | None] | None:
 
     async def fetch() -> dict[str, str | None] | None:
         try:
-            data = await _get(
-                f"/catalog/{settings.apple_music_storefront}/search",
-                term=artist,
-                types="artists",
-                limit=3,
-            )
+            async with _artist_slots():
+                data = await _get(
+                    f"/catalog/{settings.apple_music_storefront}/search",
+                    term=artist,
+                    types="artists",
+                    limit=3,
+                )
         except ProviderError as exc:
-            log.warning("apple music artist lookup failed: %s", exc)
-            return None
+            raise _LookupFailed from exc
         items = (((data.get("results") or {}).get("artists") or {}).get("data")) or []
         for item in items:
             attrs = item.get("attributes") or {}
             if _norm(attrs.get("name", "")) == _norm(artist):
                 return {"url": attrs.get("url"), "artwork_url": _artwork_url(attrs)}
-        return None
+        return None  # a real "no exact match": cached for ttl_artist
 
-    return await cache.get_or_set(key, settings.ttl_artist, fetch)
+    try:
+        return await cache.get_or_set(key, settings.ttl_artist, fetch)
+    except _LookupFailed as exc:
+        # A failed request (429, 5xx, network) is not a real miss: retry after ERROR_TTL.
+        log.warning("apple music artist lookup failed: %s", exc.__cause__)
+        cache.set(key, None, ERROR_TTL)
+        return None
 
 
 def search_url(artist: str) -> str:
