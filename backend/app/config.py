@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     # Alternatively point at the .p8 file on disk.
     apple_music_private_key_path: str = Field(default="", alias="APPLE_MUSIC_PRIVATE_KEY_PATH")
     apple_music_storefront: str = Field(default="us", alias="APPLE_MUSIC_STOREFRONT")
+    # Keyless iTunes Search previews, used after MusicKit. Set ITUNES_PREVIEWS=0 to turn off.
+    itunes_previews: bool = Field(default=True, alias="ITUNES_PREVIEWS")
 
     # --- Spotify (optional: nicer outbound links) ------------------------------
     spotify_client_id: str = Field(default="", alias="SPOTIFY_CLIENT_ID")

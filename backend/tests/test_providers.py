@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 import httpx
 import jwt
@@ -14,7 +15,7 @@ from app.cache.cache import cache
 from app.config import get_settings
 from app.models.artist import ArtistRef
 from app.models.track import TrackDetails
-from app.services import apple_music, http as http_mod, links, musicbrainz, preview
+from app.services import apple_music, http as http_mod, itunes, links, musicbrainz, preview
 
 
 @pytest.fixture
@@ -178,6 +179,123 @@ async def test_song_link_is_search_without_keys(monkeypatch):
     get_settings.cache_clear()
     track = await links.enrich_track(_creep())
     assert track.external_urls.apple_music.startswith(SEARCH_PREFIX)
+
+
+def _itunes_env(monkeypatch):
+    monkeypatch.setenv("TUNEGRAPH_MOCK", "0")
+    monkeypatch.setenv("ITUNES_PREVIEWS", "1")
+    get_settings.cache_clear()
+
+
+def _song(artist, name, url="https://music.apple.com/us/album/x/1?i=2&uo=4", preview_url="https://audio/p.m4a"):
+    return {"wrapperType": "track", "kind": "song", "artistName": artist, "trackName": name, "previewUrl": preview_url,
+            "trackViewUrl": url, "artworkUrl100": "https://art/100x100bb.jpg"}
+
+
+def _itunes(monkeypatch, results, calls=None):
+    def handler(req: httpx.Request):
+        assert req.url.host == "itunes.apple.com"
+        if calls is not None:
+            calls.append(req)
+        return httpx.Response(200, json={"resultCount": len(results), "results": results},
+                              headers={"content-type": "text/javascript; charset=utf-8"})
+
+    install(monkeypatch, handler)
+
+
+async def test_itunes_preview_without_keys(monkeypatch):
+    _itunes_env(monkeypatch)
+    _itunes(monkeypatch, [
+        _song("Massive Attack", "Teardrop (Mad Professor Mazaruni Vocal Mix)", preview_url="https://audio/remix.m4a"),
+        _song("Massive Attack", "Teardrop", url="https://music.apple.com/us/album/teardrop/724466069?i=724466291&uo=4"),
+    ])
+    result = await preview.resolve_preview("Massive Attack", "Teardrop")
+    assert result.available and result.provider == "itunes"
+    assert result.preview_url == "https://audio/p.m4a"
+    assert result.track_url == "https://music.apple.com/us/album/teardrop/724466069?i=724466291"
+    assert result.artwork_url == "https://art/300x300bb.jpg"
+
+
+async def test_itunes_song_link_reuses_the_preview_lookup(monkeypatch):
+    _itunes_env(monkeypatch)
+    calls = []
+    _itunes(monkeypatch, [_song("Radiohead", "Creep", url="https://music.apple.com/us/album/creep/1?i=9&uo=4")], calls)
+    track = await links.enrich_track(_creep())
+    assert track.external_urls.apple_music == "https://music.apple.com/us/album/creep/1?i=9"
+    assert (await preview.resolve_preview("Radiohead", "Creep")).available
+    assert len(calls) == 1
+
+
+async def test_itunes_never_plays_a_wrong_artist_cover(monkeypatch):
+    _itunes_env(monkeypatch)
+    _itunes(monkeypatch, [_song("Daniel Chuer", "Creep (Radiohead Cover)"), _song("Lena Hall", "Creep"),
+                          _song("Stone Temple Pilots", "Creep")])
+    assert await preview.resolve_preview("Radiohead", "Creep") == preview.UNAVAILABLE
+
+
+async def test_itunes_prefers_the_original_over_variants():
+    original, live, acoustic = (_song("Portishead", n) for n in ("Glory Box", "Glory Box (Live / Remastered 2023)", "Glory Box (Acoustic)"))
+    assert itunes.score(original, "Portishead", "Glory Box") > itunes.score(live, "Portishead", "Glory Box")
+    assert itunes.score(original, "Portishead", "Glory Box") > itunes.score(acoustic, "Portishead", "Glory Box")
+    # Only a variant exists: same artist and base name still plays.
+    assert itunes.score(acoustic, "Radiohead", "Glory Box") is None
+    assert itunes.score(_song("Radiohead", "Creep (Acoustic)"), "Radiohead", "Creep") is not None
+    # Asking for the live version does not penalise it.
+    assert itunes.score(live, "Portishead", "Glory Box (Live / Remastered 2023)") > itunes.score(original, "Portishead", "Glory Box (Live / Remastered 2023)")
+
+
+def test_itunes_artist_credits():
+    weeknd = _song("The Weeknd & ROSALÍA", "Blinding Lights (Remix)")
+    assert itunes.score(weeknd, "The Weeknd", "Blinding Lights") is not None
+    assert itunes.score(_song("Simon & Garfunkel", "The Boxer"), "Simon and Garfunkel", "The Boxer") is not None
+    assert itunes.score(_song("Radiohead", "Creep", preview_url=None), "Radiohead", "Creep") is None
+
+
+@pytest.mark.parametrize("status", [403, 429, 503])
+async def test_itunes_error_is_cached_briefly(monkeypatch, status):
+    _itunes_env(monkeypatch)
+    install(monkeypatch, lambda req: httpx.Response(status))
+    assert await preview.resolve_preview("Radiohead", "Creep") == preview.UNAVAILABLE
+    key = "preview:radiohead::creep"
+    expires_at, _ = cache._data[key]
+    assert expires_at - time.monotonic() <= preview.ERROR_TTL
+    # After the short TTL the next call asks iTunes again.
+    cache.delete(key)
+    _itunes(monkeypatch, [_song("Radiohead", "Creep")])
+    assert (await preview.resolve_preview("Radiohead", "Creep")).available
+
+
+async def test_itunes_off_switch(monkeypatch):
+    _itunes_env(monkeypatch)
+    monkeypatch.setenv("ITUNES_PREVIEWS", "0")
+    get_settings.cache_clear()
+    install(monkeypatch, lambda req: pytest.fail("iTunes must not be called"))
+    assert await preview.resolve_preview("Radiohead", "Creep") == preview.UNAVAILABLE
+
+
+async def test_itunes_not_called_in_mock_mode(monkeypatch):
+    monkeypatch.setenv("TUNEGRAPH_MOCK", "1")
+    monkeypatch.setenv("ITUNES_PREVIEWS", "1")
+    get_settings.cache_clear()
+    install(monkeypatch, lambda req: pytest.fail("iTunes must not be called"))
+    assert await preview.resolve_preview("Radiohead", "Creep") == preview.UNAVAILABLE
+
+
+async def test_musickit_goes_before_itunes(monkeypatch, es256_key):
+    _apple_env(monkeypatch, es256_key[0])
+    monkeypatch.setenv("ITUNES_PREVIEWS", "1")
+    get_settings.cache_clear()
+    hosts = []
+
+    def handler(req: httpx.Request):
+        hosts.append(req.url.host)
+        return httpx.Response(200, json={"results": {"songs": {"data": [
+            {"attributes": {"name": "Creep", "artistName": "Radiohead", "url": "https://music.apple.com/us/song/1",
+                            "previews": [{"url": "https://x/real.m4a"}]}}]}}})
+
+    install(monkeypatch, handler)
+    result = await preview.resolve_preview("Radiohead", "Creep")
+    assert result.provider == "apple_music" and hosts == ["api.music.apple.com"]
 
 
 async def test_musicbrainz_links(monkeypatch):
