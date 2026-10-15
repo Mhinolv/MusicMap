@@ -25,7 +25,8 @@ async def get_artist(artist_id: str) -> Artist:
 
 @router.get("/{artist_id}/similar", response_model=SimilarResponse)
 async def get_similar(artist_id: str, limit: int = Query(8, ge=1, le=20)) -> SimilarResponse:
-    return SimilarResponse(artist_id=artist_id, artists=await lastfm.get_similar(artist_id, limit))
+    similar = await links.with_artwork(await lastfm.get_similar(artist_id, limit))
+    return SimilarResponse(artist_id=artist_id, artists=similar)
 
 
 @router.get("/{artist_id}/tracks", response_model=TracksResponse)

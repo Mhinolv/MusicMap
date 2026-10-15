@@ -467,6 +467,7 @@ export default function App() {
       onPrune={prune}
       onClose={() => select(undefined)}
       onTags={g.setTags}
+      onImage={g.setImage}
       onOpenArtist={onSelectSearch}
       taste={taste}
       tasteActions={<TasteToggle node={selected} profile={taste} onToggle={togglePanelTaste} />}

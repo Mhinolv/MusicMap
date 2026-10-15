@@ -75,7 +75,8 @@ async function waitForSettle(page, { maxMs = 10000, quietMs = 600, tolerance = 0
   const read = () =>
     page.$$eval('g.node', (els) =>
       els.map((el) => {
-        const r = el.querySelector('.node__body')?.getBoundingClientRect()
+        // #71: an artist photo hides the star core, so measure whichever one shows.
+        const r = (el.querySelector('.node__photo') ?? el.querySelector('.node__body'))?.getBoundingClientRect()
         return r ? [r.x, r.y, r.width] : [0, 0, 0]
       }),
     )
@@ -100,11 +101,11 @@ async function waitForPanel(page) {
   await sleep(400) // slide-in transition
 }
 
-/** Finds a visible, unexpanded neighbour whose .node__body is actually hit at its centre. */
+/** Finds a visible, unexpanded neighbour whose photo or star core is actually hit at its centre. */
 async function neighbourPoint(page) {
   return page.evaluate(() => {
     for (const g of document.querySelectorAll('g.node:not(.is-root)')) {
-      const body = g.querySelector('.node__body')
+      const body = g.querySelector('.node__photo') ?? g.querySelector('.node__body')
       if (!body) continue
       const r = body.getBoundingClientRect()
       const x = r.x + r.width / 2
@@ -714,6 +715,44 @@ const scenarios = [
       await waitForPanel(page)
       await waitForSettle(page)
       return `panel: ${await page.$eval('.panel__title', (el) => el.textContent)}`
+    },
+  },
+  // #71: artist photos on nodes and in the panel header. Mock photos are inline SVGs;
+  // Portishead's neighbours mix fixture artists (photo) and unknown names (star).
+  {
+    name: 'artist-photos',
+    viewport: DESKTOP,
+    async run(page) {
+      await search(page, 'artist', 'Portishead', 'Portishead')
+      await waitForNodes(page, 3)
+      await waitForPanel(page)
+      await page.waitForSelector('.panel .panel__photo', { visible: true })
+      await waitForSettle(page)
+      const counts = await page.$$eval('g.node', (els) => ({
+        photos: els.filter((g) => g.querySelector('.node__photo')).length,
+        stars: els.filter((g) => !g.querySelector('.node__photo')).length,
+      }))
+      if (!counts.photos || !counts.stars) throw new Error(`expected photos and stars, got ${JSON.stringify(counts)}`)
+      return `${counts.photos} photo nodes, ${counts.stars} star nodes; panel photo 72px`
+    },
+  },
+  {
+    name: 'artist-photos-mobile',
+    viewport: MOBILE,
+    userAgent: MOBILE_UA,
+    extraMedia: [
+      { name: 'hover', value: 'none' },
+      { name: 'pointer', value: 'coarse' },
+    ],
+    async run(page) {
+      await search(page, 'artist', 'Portishead', 'Portishead')
+      await waitForNodes(page, 3)
+      await waitForPanel(page)
+      await page.waitForSelector('.panel .panel__photo', { visible: true })
+      await waitForSettle(page)
+      const size = await page.$eval('.panel .panel__photo', (el) => el.getBoundingClientRect().width)
+      if (Math.round(size) !== 56) throw new Error(`phone panel photo is ${size}px, expected 56px`)
+      return 'bottom sheet photo 56px'
     },
   },
   {
