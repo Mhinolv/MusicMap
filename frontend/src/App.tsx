@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from './api'
 import { ArtistPanel } from './components/ArtistPanel'
+import { BrandMark } from './components/BrandMark'
 import { ForceGraph } from './components/ForceGraph'
 import { JourneyTrail } from './components/JourneyTrail'
 import { JourneyList, MapNavPane, OnMapList } from './components/MapNavPane'
@@ -517,13 +518,7 @@ export default function App() {
         <>
           <header className="topbar">
             <button className="brand" onClick={() => { persistenceStopped.current = true; clearMap(); window.location.reload() }} title="Start over" aria-label="TuneGraph: start over">
-              <svg className="brand__mark" viewBox="0 0 32 32" width="22" height="22" aria-hidden="true">
-                <circle cx="16" cy="16" r="14" fill="#151a2c" />
-                <path d="M9 11l4 3M23 20l-4-2" stroke="#6b7286" strokeWidth="1.5" />
-                <circle cx="16" cy="16" r="6" fill="#f0b35b" />
-                <circle cx="7" cy="9" r="3" fill="#4f7cff" />
-                <circle cx="25" cy="22" r="3" fill="#4f7cff" />
-              </svg>
+              <BrandMark />
               <span className="brand__name">TuneGraph</span>
             </button>
             {narrow ? (

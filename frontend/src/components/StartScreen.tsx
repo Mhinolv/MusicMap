@@ -2,6 +2,7 @@ import { useMemo, type ComponentProps, type Ref } from 'react'
 import type { SavedMap } from '../graph/mapSnapshot'
 import { miniMap, resumeSummary } from '../startScreen'
 import type { MusicGraph } from '../types'
+import { BrandMark } from './BrandMark'
 import { LibraryButton } from './LibraryDrawer'
 import { SearchBar } from './SearchBar'
 import { StartBackdrop } from './StartBackdrop'
@@ -37,10 +38,7 @@ export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onTog
   return (
     <>
       <header className="start-header">
-        <svg className="brand__mark" aria-hidden="true" width="22" height="22" viewBox="0 0 26 26" fill="none">
-          <circle cx="5" cy="19" r="3" fill="#FFB547" /><circle cx="20" cy="6" r="2.2" fill="#C9CBCF" /><circle cx="21" cy="20" r="1.6" fill="#C9CBCF" />
-          <path d="M5 19L20 6M5 19L21 20" stroke="#4A4F59" strokeWidth="1" />
-        </svg>
+        <BrandMark />
         <span className="start-header__name" aria-hidden="true">TuneGraph</span>
         <span className="start-header__spacer" />
         <LibraryButton count={libraryCount} open={libraryOpen} onToggle={onToggleLibrary} buttonRef={libraryButton} />
