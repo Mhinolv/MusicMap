@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import TypeVar
 from urllib.parse import quote_plus
 
-from app.models.artist import Artist, ExternalUrls
+from app.models.artist import Artist, ArtistRef, ExternalUrls
 from app.models.track import TrackDetails
 from app.services import apple_music, itunes, musicbrainz, preview, spotify
 from app.services.errors import ProviderError
@@ -15,6 +16,9 @@ from app.services.errors import ProviderError
 log = logging.getLogger(__name__)
 
 SONG_URL_TIMEOUT = 3.0  # seconds; the song panel must not wait long for the Apple lookup
+ARTWORK_TIMEOUT = 3.0  # seconds; search and expand must not wait long for artist photos
+
+RefT = TypeVar("RefT", bound=ArtistRef)
 
 
 async def _safe(coro):
@@ -28,8 +32,37 @@ async def _safe(coro):
         return None
 
 
+async def apple_artist(name: str) -> dict[str, str | None]:
+    """The Apple Music artist lookup (page URL and artwork), or {} when not found or Apple is slow."""
+    try:
+        return await asyncio.wait_for(apple_music.find_artist(name), ARTWORK_TIMEOUT) or {}
+    except asyncio.TimeoutError:
+        log.warning("apple music artist lookup timed out")
+        return {}
+    except ProviderError as exc:
+        log.warning("apple music artist lookup skipped: %s", exc)
+        return {}
+    except Exception:
+        log.exception("apple music artist lookup crashed")
+        return {}
+
+
+async def with_artwork(refs: list[RefT]) -> list[RefT]:
+    """Fill a missing image_url from the Apple artist artwork. One cached lookup per name, run concurrently."""
+    missing = [i for i, r in enumerate(refs) if not r.image_url]
+    if not missing:
+        return refs
+    found = await asyncio.gather(*(apple_artist(refs[i].name) for i in missing))
+    out = list(refs)
+    for i, apple in zip(missing, found):
+        if apple.get("artwork_url"):
+            out[i] = refs[i].model_copy(update={"image_url": apple["artwork_url"]})
+    return out
+
+
 async def enrich_links(artist: Artist) -> Artist:
     urls = artist.external_urls.model_copy()
+    image_url = artist.image_url
     if artist.mbid:
         mb = await _safe(musicbrainz.get_artist_links(artist.mbid)) or {}
         urls.spotify = urls.spotify or mb.get("spotify")
@@ -40,12 +73,17 @@ async def enrich_links(artist: Artist) -> Artist:
     lookups = []
     if not urls.spotify:
         lookups.append(("spotify", spotify.find_artist_url(artist.name)))
-    if not urls.apple_music:
-        lookups.append(("apple_music", apple_music.find_artist_url(artist.name)))
+    # One cached Apple search gives both the artist page and the artist photo.
+    if not urls.apple_music or not image_url:
+        lookups.append(("apple", apple_artist(artist.name)))
     if lookups:
         results = await asyncio.gather(*(_safe(c) for _, c in lookups))
         for (field, _), value in zip(lookups, results):
-            if value:
+            if field == "apple":
+                apple = value or {}
+                urls.apple_music = urls.apple_music or apple.get("url")
+                image_url = image_url or apple.get("artwork_url")
+            elif value:
                 setattr(urls, field, value)
 
     # Guaranteed fallbacks: search pages need no keys at all.
@@ -54,7 +92,7 @@ async def enrich_links(artist: Artist) -> Artist:
     urls.youtube = urls.youtube or f"https://www.youtube.com/results?search_query={quote_plus(artist.name)}"
     urls.lastfm = urls.lastfm or artist.lastfm_url
 
-    return artist.model_copy(update={"external_urls": ExternalUrls(**urls.model_dump())})
+    return artist.model_copy(update={"external_urls": ExternalUrls(**urls.model_dump()), "image_url": image_url})
 
 
 async def release_date_for(track: TrackDetails) -> str | None:

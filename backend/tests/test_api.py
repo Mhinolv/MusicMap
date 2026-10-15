@@ -50,6 +50,29 @@ async def test_full_flow(client):
     assert r.status_code == 200 and r.json()["available"] is False
 
 
+async def test_mock_artist_photos_are_fixtures(client, monkeypatch):
+    from app.services import http as http_mod
+
+    async def no_network(*_args, **_kwargs):
+        raise AssertionError("mock mode must not call the network")
+
+    monkeypatch.setattr(http_mod.get_client(), "get", no_network)
+    r = await client.get("/api/artists/search", params={"q": "radiohead"})
+    photo = r.json()["artists"][0]["image_url"]
+    assert photo.startswith("data:image/svg+xml,")
+    artist_id = r.json()["artists"][0]["id"]
+
+    r = await client.get(f"/api/artists/{artist_id}")
+    assert r.json()["image_url"] == photo  # stable across calls
+
+    r = await client.get(f"/api/artists/{artist_id}/similar", params={"limit": 8})
+    by_name = {a["name"]: a["image_url"] for a in r.json()["artists"]}
+    assert by_name["Portishead"].startswith("data:image/svg+xml,")
+    # Names outside the fixture set keep the no-photo look.
+    r = await client.get("/api/artists/search", params={"q": "zzz unknown"})
+    assert r.json()["artists"][0]["image_url"] is None
+
+
 async def test_unknown_artist_404(client):
     r = await client.get("/api/artists/nm:definitely-not-real")
     assert r.status_code == 404

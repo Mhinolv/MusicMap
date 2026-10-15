@@ -20,6 +20,8 @@ type SimNode = d3.SimulationNodeDatum & {
   parentId?: string
   subtitle?: string
   match?: number
+  /** Artist nodes only: the photo that replaces the star core (#71). */
+  imageUrl?: string
 }
 
 type SimLink = d3.SimulationLinkDatum<SimNode> & {
@@ -63,6 +65,9 @@ const SPAWN_FAN = Math.PI * 0.9 // total arc new children are spread across
 // Touch: holding a finger on a node this long expands it (the double-click equivalent).
 const LONG_PRESS_MS = 450
 const LONG_PRESS_SLOP = 12
+// Artist photos that failed to load: those nodes show the star again and never retry.
+const failedPhotos = new Set<string>()
+const PHOTO_CLIP = 'node-photo-clip'
 
 function baseRadius(d: SimNode): number {
   const r = NODE_MIN_R + Math.sqrt(d.degree) * 4.5
@@ -134,6 +139,8 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
   const labelPositionsRef = useRef(new Map<string, LabelPosition>())
   // One long-press can be pending at a time; a second finger or any movement cancels it.
   const pressRef = useRef<{ timer: number; x: number; y: number; fired: boolean } | null>(null)
+  // Inputs of the forces; data changes that leave it alone (tags, photos) must not move nodes.
+  const layoutKeyRef = useRef('')
 
   const tiers = useMemo(() => computeTiers(focusId, nodes, edges), [focusId, nodes, edges])
 
@@ -142,6 +149,8 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
     const svg = d3.select(svgRef.current!)
     svg.selectAll('*').remove()
 
+    svg.append('defs').append('clipPath').attr('id', PHOTO_CLIP).attr('clipPathUnits', 'objectBoundingBox')
+      .append('circle').attr('cx', 0.5).attr('cy', 0.5).attr('r', 0.5)
     svg.append('rect').attr('class', 'backdrop').attr('width', '100%').attr('height', '100%').attr('fill', 'transparent')
     const field = svg.append('g').attr('class', 'star-field').attr('aria-hidden', 'true').style('pointer-events', 'none')
     const media = window.matchMedia('(prefers-reduced-motion: reduce), (max-width: 640px), (pointer: coarse)')
@@ -212,15 +221,33 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
         const core = starRadius(d.match, d.degree, TIER_SCALE[Math.min(d.tier, MAX_TIER)], selected, stop)
         const ring = selected ? 22 : stop ? 15 : 13
         const color = selected ? 'var(--cyan)' : stop ? 'var(--amber)' : 'var(--star)'
+        const photo = d.imageUrl && !failedPhotos.has(d.imageUrl) ? d.imageUrl : undefined
         g.classed('is-selected', selected).classed('is-journey', stops.has(d.id)).attr('aria-pressed', selected)
         g.selectAll('circle').attr('transform', `scale(${1 / k})`)
         g.select('.node__hit').attr('r', 22)
-        g.select('.node__body').attr('r', core).attr('fill', color)
+        let img = g.select<SVGImageElement>('.node__photo')
+        if (photo) {
+          if (img.empty()) {
+            img = g.insert<SVGImageElement>('image', '.node__body').attr('class', 'node__photo')
+              .attr('preserveAspectRatio', 'xMidYMid slice').attr('clip-path', `url(#${PHOTO_CLIP})`)
+          }
+          if (img.attr('href') !== photo) {
+            img.attr('href', photo).on('error', () => {
+              failedPhotos.add(photo)
+              renderRef.current()
+            })
+          }
+          const r = ring - 2
+          img.attr('x', -r).attr('y', -r).attr('width', r * 2).attr('height', r * 2).attr('transform', `scale(${1 / k})`)
+        } else {
+          img.remove()
+        }
+        g.select('.node__body').attr('r', core).attr('fill', color).style('display', photo ? 'none' : '')
         g.select('.node__ring').attr('r', ring).attr('stroke', selected || stop ? color : `rgba(201,203,207,${d.parentId === focusId ? 0.4 : 0.22})`).attr('stroke-width', selected ? 1.5 : 1)
         g.select('.node__outer').attr('r', SELECTED_OUTER_RING).style('display', selected ? '' : 'none')
         g.select('.node__focus').attr('r', ring + 4)
         g.select('.node__glow').attr('r', core + (selected ? 10 : 5)).attr('fill', color)
-          .attr('opacity', selected ? 0.25 : 0.12).style('display', media.matches || (stop && !selected) ? 'none' : '')
+          .attr('opacity', selected ? 0.25 : 0.12).style('display', photo || media.matches || (stop && !selected) ? 'none' : '')
         g.select('.node__label').attr('transform', `scale(${1 / k})`)
         if (!labels) return
         const lines = labelLines(d.name, d.subtitle, d.match, d.isRoot, mobile)
@@ -419,6 +446,7 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
         s = {
           id: n.id, name: n.name, kind: n.kind, subtitle: n.subtitle, match: matches.get(n.id), expanded: n.expanded, loading: n.loading, error: n.error,
           degree: degree.get(n.id) ?? 0, isRoot: n.id === rootId, isNew: true, tier, parentId: n.parentId,
+          imageUrl: n.kind === 'artist' ? n.imageUrl : undefined,
           x: (anchor?.x ?? 0) + Math.cos(angle) * dist,
           y: (anchor?.y ?? 0) + Math.sin(angle) * dist,
         }
@@ -427,6 +455,7 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
         Object.assign(s, {
           name: n.name, kind: n.kind, subtitle: n.subtitle, match: matches.get(n.id), expanded: n.expanded, loading: n.loading, error: n.error,
           degree: degree.get(n.id) ?? 0, isRoot: n.id === rootId, isNew: false, tier, parentId: n.parentId,
+          imageUrl: n.kind === 'artist' ? n.imageUrl : undefined,
         })
       }
       return s
@@ -573,7 +602,12 @@ export function ForceGraph({ nodes, edges, degree, selectedId, rootId, focusId, 
     sim.force<d3.ForceLink<SimNode, SimLink>>('link')!.links(simLinks)
     sim.force<d3.ForceManyBody<SimNode>>('charge')!.initialize(simNodes, Math.random)
     const anyNew = simNodes.some((n) => n.isNew)
-    sim.alpha(anyNew ? 0.9 : 0.3).restart()
+    const layoutKey = [
+      ...simNodes.map((n) => `${n.id}|${n.expanded}|${n.parentId}|${n.degree}|${n.tier}|${n.isRoot}`),
+      ...simLinks.map((l) => `${l.id}|${l.kind}|${l.similarity}`),
+    ].join(';')
+    if (anyNew || layoutKey !== layoutKeyRef.current) sim.alpha(anyNew ? 0.9 : 0.3).restart()
+    layoutKeyRef.current = layoutKey
     renderRef.current(true)
   }, [nodes, edges, degree, rootId, focusId, tiers])
 

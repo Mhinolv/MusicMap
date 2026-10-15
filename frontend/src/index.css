@@ -152,7 +152,7 @@ a:hover { color: var(--cyan-hover); }
 .node { cursor: pointer; outline: none; }
 .node.is-dimmed { opacity: 0.45; }
 .node__hit { pointer-events: all; }
-.node__body, .node__glow, .node__ring, .node__outer, .node__focus { pointer-events: none; }
+.node__body, .node__glow, .node__ring, .node__outer, .node__focus, .node__photo { pointer-events: none; }
 .node__ring, .node__outer, .node__focus { fill: none; }
 .node__outer { stroke: rgba(111,195,232,.35); stroke-width: 1px; }
 .node__focus { stroke: var(--cyan); stroke-width: 2px; visibility: hidden; }
@@ -214,6 +214,13 @@ a:hover { color: var(--cyan-hover); }
 
 @keyframes slide-in { from { transform: translateX(16px); opacity: 0; } to { transform: none; opacity: 1; } }
 .panel__header { gap: 4px; padding: 14px; }
+.panel__header-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+/* #71: the artist photo sits left of the name; square corners like every other surface. */
+.panel__header--photo { flex-direction: row; align-items: center; gap: 12px; }
+.panel__photo {
+  flex: none; width: 72px; height: 72px; object-fit: cover;
+  background: var(--raised); border: 1px solid var(--hairline); border-radius: var(--radius);
+}
 /* Two lines at most; uppercase is visual only. */
 .panel__title {
   margin: 0; font-size: 38px; font-weight: 700; letter-spacing: 0.04em; line-height: 1;
@@ -562,6 +569,7 @@ a:hover { color: var(--cyan-hover); }
   }
 
   .panel__title { font-size: 26px; }
+  .panel__photo { width: 56px; height: 56px; }
   /* Sheet rows: 44px targets; the stacked label layout comes from the base rules (#58). */
   .connections__row { min-height: 44px; }
 

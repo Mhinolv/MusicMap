@@ -122,9 +122,7 @@ async def search_song_preview(artist: str, track: str) -> PreviewResult | None:
         url = previews[0].get("url") if previews else None
         if not url:
             continue
-        artwork = (attrs.get("artwork") or {}).get("url")
-        if artwork:
-            artwork = artwork.replace("{w}", "300").replace("{h}", "300")
+        artwork = _artwork_url(attrs)
         return PreviewResult(
             available=True,
             preview_url=url,
@@ -136,13 +134,23 @@ async def search_song_preview(artist: str, track: str) -> PreviewResult | None:
     return None
 
 
-async def find_artist_url(artist: str) -> str | None:
+def _artwork_url(attrs: dict[str, Any], size: int = 300) -> str | None:
+    """MusicKit artwork URLs are templates with {w} and {h} placeholders."""
+    url = (attrs.get("artwork") or {}).get("url")
+    if not url:
+        return None
+    return url.replace("{w}", str(size)).replace("{h}", str(size))
+
+
+async def find_artist(artist: str) -> dict[str, str | None] | None:
+    """The catalog artist whose name matches exactly: its page URL and 300x300 artwork.
+    One cached search serves both the outbound link and the artist photo."""
     settings = get_settings()
     if not settings.apple_music_enabled or settings.mock_providers:
         return None
-    key = f"apple:artist_url:{artist.lower()}"
+    key = f"apple:artist:{artist.lower()}"
 
-    async def fetch() -> str | None:
+    async def fetch() -> dict[str, str | None] | None:
         try:
             data = await _get(
                 f"/catalog/{settings.apple_music_storefront}/search",
@@ -157,7 +165,7 @@ async def find_artist_url(artist: str) -> str | None:
         for item in items:
             attrs = item.get("attributes") or {}
             if _norm(attrs.get("name", "")) == _norm(artist):
-                return attrs.get("url")
+                return {"url": attrs.get("url"), "artwork_url": _artwork_url(attrs)}
         return None
 
     return await cache.get_or_set(key, settings.ttl_artist, fetch)

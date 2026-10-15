@@ -6,6 +6,8 @@ Radiohead with hand-written similarity scores.
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from app.models.artist import Artist, ArtistRef, ExternalUrls, SimilarArtist
 from app.models.graph import make_artist_id, make_track_id, normalize_name, parse_track_id
 from app.models.track import PreviewResult, SimilarTrack, Track, TrackAlbum, TrackDetails, TrackRef
@@ -55,6 +57,27 @@ _MB_LINKS = {
 }
 
 
+# Fixture artist photos: inline SVG data URLs, so mock mode makes no network calls.
+_PHOTO_COLORS = ["#2E5A88", "#7A3E6B", "#3E7A5A", "#8A6A2E", "#4B4E8C", "#7A4A3E"]
+
+
+def _photo_url(key: str) -> str | None:
+    """A stable 300x300 placeholder photo with the artist's initials. None for names
+    outside the fixture set, so mock mode also shows the no-photo look."""
+    data = _ARTISTS.get(key)
+    if data is None:
+        return None
+    initials = "".join(w[0] for w in data["name"].split()[:2]).upper()
+    color = _PHOTO_COLORS[sum(map(ord, key)) % len(_PHOTO_COLORS)]
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">'
+        f'<rect width="300" height="300" fill="{color}"/>'
+        '<text x="150" y="150" dy=".35em" text-anchor="middle" font-family="sans-serif" '
+        f'font-size="120" font-weight="700" fill="#F4F5F7">{initials}</text></svg>'
+    )
+    return "data:image/svg+xml," + quote(svg)
+
+
 def _by_key(artist_id: str) -> tuple[str, dict] | None:
     for key, data in _ARTISTS.items():
         if make_artist_id(mbid=data["mbid"], lastfm_url=None, name=data["name"]) == artist_id:
@@ -72,6 +95,7 @@ def _ref(key: str) -> ArtistRef:
         mbid=data.get("mbid"),
         name=name,
         lastfm_url=f"https://www.last.fm/music/{name.replace(' ', '+')}",
+        image_url=_photo_url(key),
     )
 
 
