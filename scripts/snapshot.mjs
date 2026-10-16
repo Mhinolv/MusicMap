@@ -636,6 +636,61 @@ const scenarios = [
       return `Taste dialog, signed in: ${expect}`
     },
   })),
+  // #79: Library sync. Each scenario empties the mock account's Library and signs out first,
+  // then starts from the known local fixture. `cloud` fills the account before sign-in.
+  ...[
+    { name: 'library-sync-signed-out', viewport: DESKTOP },
+    { name: 'library-sync-signed-out-mobile', viewport: MOBILE, userAgent: MOBILE_UA },
+    { name: 'library-sync-synced', viewport: DESKTOP, signIn: true },
+    { name: 'library-sync-synced-mobile', viewport: MOBILE, userAgent: MOBILE_UA, signIn: true },
+    { name: 'library-sync-failed', viewport: DESKTOP, signIn: true, respond: 502 },
+    { name: 'library-sync-failed-mobile', viewport: MOBILE, userAgent: MOBILE_UA, signIn: true, respond: 502 },
+    { name: 'library-sync-merge-cap', viewport: DESKTOP, signIn: true, cloud: 199 },
+    { name: 'library-sync-merge-cap-mobile', viewport: MOBILE, userAgent: MOBILE_UA, signIn: true, cloud: 199 },
+  ].map((options) => ({
+    ...options,
+    async run(page) {
+      await page.evaluate(async (cloud) => {
+        const put = (list, items) => fetch(`/api/user/library/${list}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 1, items }) })
+        await fetch('/api/auth/mock', { method: 'POST' })
+        await fetch('/api/user/taste', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+        await put('bookmarks', Array.from({ length: cloud }, (_, i) => ({ kind: 'artist', item: { id: `cloud-${i}`, name: `Cloud artist ${i + 1}` }, savedAt: 1000 + i })))
+        await put('exclusions', [])
+        await fetch('/api/auth/signout', { method: 'POST' })
+        localStorage.removeItem('tunegraph:library-sync:v1')
+        localStorage.removeItem('tunegraph:taste-sync:v1')
+        localStorage.removeItem('tunegraph:taste:v1')
+      }, options.cloud ?? 0)
+      await libraryFixture(page)
+      if (options.respond) {
+        await page.setRequestInterception(true)
+        page.on('request', (request) => request.url().includes('/api/user/library')
+          ? request.respond({ status: options.respond, contentType: 'application/json', body: JSON.stringify({ error: 'store error', provider: 'upstash' }) })
+          : request.continue())
+      }
+      const account = '.start-header .account-button'
+      if (options.signIn) {
+        await page.waitForSelector(account, { visible: true })
+        await page.click(account)
+        await page.waitForSelector('#account-menu .account-menu__mock', { visible: true })
+        await page.click('#account-menu .account-menu__mock')
+        await page.waitForFunction(() => document.querySelector('.start-header .account-button')?.textContent === 'Mock')
+      }
+      if (options.cloud) {
+        await page.waitForFunction(() => document.querySelector('.toast')?.textContent?.includes("Some items didn't fit. Saved keeps 200 and Not suggested keeps 100."))
+        return 'Merge toast after the first sign-in: Added line and the cap line'
+      }
+      await page.click('.start-header .library-button')
+      await page.waitForSelector('.library-drawer', { visible: true })
+      if (!options.signIn) {
+        await page.waitForFunction(() => document.querySelector('#saved-list ~ .library-drawer__note')?.textContent?.startsWith('Kept on this device.'))
+        return 'Library drawer, signed out: Kept on this device.'
+      }
+      const expect = options.respond ? "Couldn't sync. Saved on this device." : 'Synced'
+      await page.waitForFunction((text) => document.querySelector('.library-drawer .taste-sync')?.textContent === text, {}, expect)
+      return `Library drawer, signed in: ${expect}`
+    },
+  })),
   // #46: the static Contour backdrop behind each start-screen state.
   ...[
     { name: 'start-desktop', viewport: DESKTOP },

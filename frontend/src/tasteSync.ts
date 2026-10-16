@@ -11,6 +11,10 @@ export const SYNC_TEXT: Record<SyncStatus, string> = {
   failed: "Couldn't sync. Saved on this device.",
 }
 export const syncWarns = (status: SyncStatus) => status === 'offline' || status === 'failed'
+const SYNC_RANK: SyncStatus[] = ['synced', 'saving', 'offline', 'failed']
+/** The account popover shows the worst state of taste, history and Library (#79). */
+export const worstSync = (...statuses: SyncStatus[]): SyncStatus =>
+  statuses.reduce((worst, status) => (SYNC_RANK.indexOf(status) > SYNC_RANK.indexOf(worst) ? status : worst), 'synced')
 
 export const MERGE_ADDED = 'Added your taste from this device to your account.'
 export const MERGE_CAPPED = `Some entries didn't fit. Each list keeps ${TASTE_LIMIT}.`

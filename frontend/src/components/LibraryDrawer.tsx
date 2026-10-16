@@ -3,6 +3,9 @@ import type { ExcludedSong } from '../exclusions'
 import { bookmarkKey, type Bookmark } from '../bookmarks'
 import { savedWhen } from '../startScreen'
 import { HISTORY_BAD_MAP, HISTORY_EMPTY, HISTORY_FAILED, HISTORY_LOADING, historyNote, historySub, sessionMap, type HistoryStatus, type MapSession } from '../history'
+import { libraryNote } from '../librarySync'
+import type { SyncStatus } from '../tasteSync'
+import { SyncStatusLine } from './SyncStatusLine'
 
 export const LIBRARY_DRAWER_ID = 'library-drawer'
 
@@ -34,6 +37,8 @@ type Props = {
   history: MapSession[]
   historyStatus: HistoryStatus
   signedIn: boolean
+  /** Saved and Not suggested sync state while signed in (#79). */
+  syncStatus?: SyncStatus
   /** Session of the map on screen, if any: its row shows a disabled "Open now". */
   openSessionId: string | null
   onResumeSession: (session: MapSession) => void
@@ -52,7 +57,7 @@ type Props = {
 const sub = (who: string, savedAt: number) => [who, savedWhen(savedAt)].filter(Boolean).join(' · ')
 
 /** Non-modal: the map, header and undo toasts stay reachable while it is open. */
-export function LibraryDrawer({ initialTab = 'saved', history, historyStatus, signedIn, openSessionId, onResumeSession, onRemoveSession, onClearHistory,
+export function LibraryDrawer({ initialTab = 'saved', history, historyStatus, signedIn, syncStatus = 'synced', openSessionId, onResumeSession, onRemoveSession, onClearHistory,
   exclusions, onRemoveExclusion, onResetExclusions, entries, onOpen, onRemove, onClear, onClose }: Props) {
   const [tab, setTab] = useState<LibraryTab>(initialTab)
   const drawer = useRef<HTMLElement>(null)
@@ -158,7 +163,8 @@ export function LibraryDrawer({ initialTab = 'saved', history, historyStatus, si
           </div>
         </div>
         {tab === 'history' ? <p className="library-drawer__note">{historyNote(signedIn)}</p> : <>
-          <p className="library-drawer__note">Kept on this device. Songs marked "Don't suggest again" move to Not suggested, where you can restore them.</p>
+          {signedIn && <SyncStatusLine status={syncStatus} className="library-drawer__note" />}
+          <p className="library-drawer__note">{libraryNote(signedIn)}</p>
           <p className="library-drawer__note">Saving doesn't change your taste profile.</p>
         </>}
       </div>
