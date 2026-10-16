@@ -178,8 +178,11 @@ test('row copy: today with 24-hour time, older days use the Library words, stops
   assert.equal(h.historySub({ ...session('a', at), stops: 3 }, now), 'Artist · 3 stops · today, 14:32')
   assert.equal(h.historySub({ ...session('a', at), mode: 'track', stops: 1 }, now), 'Song · 1 stop · today, 14:32')
   assert.equal(h.historySub({ ...session('a', 0), stops: 0 }, now), 'Artist · 0 stops')
-  assert.equal(h.historyNote(false), 'Kept on this device. The last 5 maps save on their own.')
-  assert.equal(h.historyNote(true), 'Synced to your account. The last 5 maps save on their own.')
+  // #86: the note follows the history status, not sign-in.
+  assert.equal(h.historyNote('local'), 'Kept on this device. The last 5 maps save on their own.')
+  assert.equal(h.historyNote('failed'), 'Kept on this device. The last 5 maps save on their own.')
+  assert.equal(h.historyNote('synced'), 'Synced to your account. The last 5 maps save on their own.')
+  assert.equal(h.historyNote('loading'), 'The last 5 maps save on their own.')
 })
 
 test('new session ids pass the server id rule', () => {

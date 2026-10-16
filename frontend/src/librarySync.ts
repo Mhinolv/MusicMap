@@ -12,8 +12,9 @@ export type LibraryMerge = LibraryLists & { added: number; capped: LibraryList[]
 export const LIBRARY_MERGE_ADDED = 'Added your Library from this device to your account.'
 export const LIBRARY_MERGE_CAPPED = `Some items didn't fit. Saved keeps ${BOOKMARK_LIMIT} and Not suggested keeps ${EXCLUSION_LIMIT}.`
 export const LIBRARY_SYNC_FAILED_TOAST = "Couldn't sync your Library. It's saved on this device."
+/** Signed in, `SyncStatusLine` is the only sync statement (#86), so the note makes no sync claim. */
 export const libraryNote = (signedIn: boolean) =>
-  `${signedIn ? 'Synced to your account.' : 'Kept on this device.'} Songs marked "Don't suggest again" move to Not suggested, where you can restore them.`
+  `${signedIn ? '' : 'Kept on this device. '}Songs marked "Don't suggest again" move to Not suggested, where you can restore them.`
 
 /** Which account this device's lists belong to, and which lists have edits the account lacks. */
 export const LIBRARY_SYNC_KEY = 'tunegraph:library-sync:v1'

@@ -326,7 +326,7 @@ test('signed in: Saved and Not suggested show the sync line above the account no
     const synced = renderDrawer({ tab, signedIn: true })
     const p = line(synced)
     assert.deepEqual([p.props.className, p.props.role, text(p)], ['library-drawer__note taste-sync', 'status', 'Synced'])
-    assert.deepEqual(notes(synced), ['Synced to your account. Songs marked "Don\'t suggest again" move to Not suggested, where you can restore them.',
+    assert.deepEqual(notes(synced), ['Songs marked "Don\'t suggest again" move to Not suggested, where you can restore them.',
       "Saving doesn't change your taste profile."])
     // The line comes before the notes in the drawer body.
     const order = synced.elements.filter((el) => el.type === SyncStatusLine || el.props?.className === 'library-drawer__note')
@@ -334,9 +334,14 @@ test('signed in: Saved and Not suggested show the sync line above the account no
   }
   const states = { saving: ['Saving…', false], offline: ['Offline. Saved on this device.', true], failed: ["Couldn't sync. Saved on this device.", true] }
   for (const [status, [copy, warn]] of Object.entries(states)) {
-    const p = line(renderDrawer({ signedIn: true, syncStatus: status }))
-    assert.equal(text(p), copy)
-    assert.equal(p.props.className.includes('taste-sync--warn'), warn)
+    for (const tab of ['saved', 'excluded']) {
+      const drawer = renderDrawer({ tab, signedIn: true, syncStatus: status })
+      const p = line(drawer)
+      assert.equal(text(p), copy)
+      assert.equal(p.props.className.includes('taste-sync--warn'), warn)
+      // #86: a failed or offline sync must not also say "Synced to your account."
+      assert.ok(!notes(drawer).some((note) => note.includes('Synced')), `${tab} ${status}: ${notes(drawer)}`)
+    }
   }
   assert.equal(line(renderDrawer({ tab: 'history', signedIn: true, syncStatus: 'failed' })), undefined)
 })
@@ -401,10 +406,14 @@ test('history states: empty, loading, load failed, and the device or account not
   const loading = renderDrawer({ tab: 'history', sessions: [mapSession('s1')], historyStatus: 'loading', signedIn: true })
   assert.ok(text(panel(loading)).includes('Loading history…'))
   assert.equal(rowCount(loading), 0)
-  assert.deepEqual(notes(loading), ['Synced to your account. The last 5 maps save on their own.'])
+  assert.deepEqual(notes(loading), ['The last 5 maps save on their own.'])
   const failed = renderDrawer({ tab: 'history', sessions: [mapSession('s1')], historyStatus: 'failed', signedIn: true })
   assert.ok(text(panel(failed)).startsWith("Couldn't load history. Showing maps from this device."))
   assert.equal(rowCount(failed), 1)
+  // #86: the footnote follows historyStatus; the amber HISTORY_FAILED line stays.
+  assert.deepEqual(notes(failed), ['Kept on this device. The last 5 maps save on their own.'])
+  const synced = renderDrawer({ tab: 'history', sessions: [mapSession('s1')], historyStatus: 'synced', signedIn: true })
+  assert.deepEqual(notes(synced), ['Synced to your account. The last 5 maps save on their own.'])
 })
 
 test('three tabs keep their ids, and arrows, Home and End are handled on each', () => {
