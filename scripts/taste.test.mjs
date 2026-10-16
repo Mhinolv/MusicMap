@@ -148,6 +148,7 @@ function panelHarness(initial = null, writable = true) {
     },
     './taste': { ...t, readTaste: () => initial, writeTaste: next => { if (writable) writes.push(next); return writable } },
     './graph/mapSnapshot': { readMap: () => ({ status: 'none' }) },
+    './history': { readHistory: () => [] },
     './graph/useMusicGraph': { useMusicGraph: () => ({ graph, nodes: [node], edges: [] }), planPrune: () => null },
     './graph/journey': { journeyContext: () => [] },
     './graph/onMap': { onMapRows: () => ({ count: 1, rows: [] }), journeyStops: () => [], matchFact: () => null, stopNumber: String },

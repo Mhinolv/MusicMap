@@ -19,6 +19,10 @@ type Props = {
   account?: ReactNode
   onResume: () => void
   onStartFresh: () => void
+  /** Map sessions in history (#77); 2 or more add the "All recent maps" link. */
+  historyCount: number
+  synced: boolean
+  onAllRecent: () => void
 }
 
 const TONE = { amber: 'var(--amber)', cyan: 'var(--cyan)', star: 'var(--star)' }
@@ -34,7 +38,11 @@ function MiniMapThumb({ graph }: { graph: MusicGraph }) {
   )
 }
 
-export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onToggleLibrary, libraryButton, onTaste, account, onResume, onStartFresh }: Props) {
+export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onToggleLibrary, libraryButton, onTaste, account, onResume, onStartFresh,
+  historyCount, synced, onAllRecent }: Props) {
+  const allRecent = historyCount >= 2 && (
+    <button type="button" className="link-btn resume__all" onClick={onAllRecent}>All recent maps · {historyCount}</button>
+  )
   const resumable = savedMap.status === 'ready'
   const summary = resumable ? resumeSummary(savedMap.snapshot.graph) : undefined
   return (
@@ -70,7 +78,7 @@ export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onTog
           <section className="start-panel resume-card resume-card--ready" aria-labelledby="resume-title">
             <div className="start-panel__head">
               <h2 id="resume-title">Resume where you left off</h2>
-              <span className="start-panel__aside">autosaved on this device</span>
+              <span className="start-panel__aside">{synced ? 'synced to your account' : 'autosaved on this device'}</span>
             </div>
             <div className="start-panel__body resume">
               <MiniMapThumb graph={savedMap.snapshot.graph} />
@@ -86,6 +94,7 @@ export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onTog
               <div className="resume__actions">
                 <button type="button" className="btn btn--primary resume__go" onClick={onResume}>Resume</button>
                 <button type="button" className="btn resume__discard" onClick={onStartFresh} aria-label="Discard saved map and start fresh">Discard</button>
+                {allRecent}
               </div>
             </div>
           </section>
@@ -98,6 +107,7 @@ export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onTog
             <div className="start-panel__body resume">
               <p className="resume__damaged">It was damaged or too large to load.</p>
               <button type="button" className="btn resume__discard" onClick={onStartFresh}>Start fresh</button>
+              {allRecent}
             </div>
           </section>
         )}

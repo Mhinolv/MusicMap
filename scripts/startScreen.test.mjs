@@ -16,6 +16,8 @@ const load = (path, mocks = {}) => {
   return exports
 }
 const helpers = load('startScreen.ts')
+const snapshot = load('graph/mapSnapshot.ts')
+const history = load('history.ts', { './graph/mapSnapshot': snapshot, './startScreen': helpers })
 const { plural, savedWhen, resumeSummary, miniMap, MINI_MAP_CAP } = helpers
 
 const graphOf = ({ kind = 'track', count = 3, journey, selected, edges = true, parents } = {}) => {
@@ -148,7 +150,7 @@ const reactMock = (state = {}) => ({
   useRef: (current) => ({ current }), useMemo: (fn) => fn(), useEffect: () => {}, useCallback: (fn) => fn,
 })
 
-function renderStart(savedMap, { mode = 'artist', libraryCount = 0, libraryOpen = false } = {}) {
+function renderStart(savedMap, { mode = 'artist', libraryCount = 0, libraryOpen = false, historyCount = 1, synced = false } = {}) {
   const SearchBar = () => null, LibraryButton = () => null, StartBackdrop = () => null
   const { StartScreen } = load('components/StartScreen.tsx', {
     react: reactMock(), '../startScreen': helpers, './StartBackdrop': { StartBackdrop },
@@ -157,7 +159,8 @@ function renderStart(savedMap, { mode = 'artist', libraryCount = 0, libraryOpen 
   const calls = []
   const tree = StartScreen({ savedMap, search: { mode, onSelect() {}, onSelectTrack() {}, onModeChange() {} }, libraryCount, libraryOpen,
     onToggleLibrary: () => calls.push('library'), libraryButton: { current: null }, onTaste: () => calls.push('taste'),
-    onResume: () => calls.push('resume'), onStartFresh: () => calls.push('fresh') })
+    onResume: () => calls.push('resume'), onStartFresh: () => calls.push('fresh'),
+    historyCount, synced, onAllRecent: () => calls.push('history') })
   const elements = visit(tree)
   const button = (label) => elements.find((el) => el.type === 'button' && text(el) === label)
   return { elements, calls, button, SearchBar, LibraryButton, StartBackdrop, sections: elements.filter((el) => el.type === 'section') }
@@ -249,34 +252,38 @@ test('invalid snapshot: grey panel, recoverable copy, only START FRESH, MAP IT p
   assert.deepEqual(app.calls, ['fresh'])
 })
 
-function renderDrawer({ tab = 'saved', entries = [], exclusions = [] } = {}) {
+function renderDrawer({ tab = 'saved', entries = [], exclusions = [], sessions = [], historyStatus = 'local', signedIn = false, openSessionId = null } = {}) {
   const { LibraryDrawer, LibraryButton } = load('components/LibraryDrawer.tsx', {
-    react: reactMock({ value: tab }), '../startScreen': helpers,
+    react: reactMock({ value: tab }), '../startScreen': helpers, '../history': history,
     '../bookmarks': { bookmarkKey: (entry) => `${entry.kind}:${entry.item.id}` },
   })
   const calls = []
-  const record = (name) => (entry) => calls.push([name, entry?.item?.id])
+  const record = (name) => (entry) => calls.push([name, entry?.item?.id ?? entry?.id])
   const tree = LibraryDrawer({ entries, exclusions, onOpen: record('open'), onRemove: record('remove'), onClear: record('clear'),
-    onRemoveExclusion: record('restore'), onResetExclusions: record('reset'), onClose: record('close') })
+    onRemoveExclusion: record('restore'), onResetExclusions: record('reset'), onClose: record('close'),
+    history: sessions, historyStatus, signedIn, openSessionId,
+    onResumeSession: record('resume'), onRemoveSession: record('forget'), onClearHistory: record('clear-history') })
   return { elements: visit(tree), calls, tree, LibraryButton }
 }
+const mapText = (root = 'radiohead') => JSON.stringify({ version: 1, rootId: root, journey: [root], nodes: [{ id: root, name: 'Radiohead', kind: 'artist' }], edges: [] })
+const mapSession = (id, extra = {}) => ({ id, seed: `Seed ${id}`, mode: 'artist', stops: 2, updatedAt: Date.now(), map: mapText(), ...extra })
 const artistEntry = { kind: 'artist', item: { id: 'a1', name: 'Portishead' }, savedAt: Date.now() }
 const songEntry = { kind: 'track', item: { id: 't1', name: 'Glory Box', artist: { id: 'a1', name: 'Portishead' } }, savedAt: 0 }
 const yesterdayNoon = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 12).getTime()
 const excluded = { kind: 'track', item: { id: 't2', name: 'Teardrop', artist: { id: 'a2', name: 'Massive Attack' } }, savedAt: yesterdayNoon }
 
 test('library drawer is a non-modal aside with tab counts and the selected tab focusable', () => {
-  for (const tab of ['saved', 'excluded']) {
-    const drawer = renderDrawer({ tab, entries: [artistEntry, songEntry], exclusions: [excluded] })
+  for (const tab of ['saved', 'excluded', 'history']) {
+    const drawer = renderDrawer({ tab, entries: [artistEntry, songEntry], exclusions: [excluded], sessions: [mapSession('s1')] })
     assert.equal(drawer.tree.type, 'aside')
     assert.equal(drawer.tree.props['aria-label'], 'Library')
     assert.equal(drawer.tree.props.role, undefined)
     assert.equal(drawer.tree.props['aria-modal'], undefined)
     const tabs = drawer.elements.filter((el) => el.props?.role === 'tab')
-    assert.deepEqual(tabs.map(text), ['Saved · 2', 'Not suggested · 1'])
-    assert.deepEqual(tabs.map((el) => el.props['aria-selected']), [tab === 'saved', tab === 'excluded'])
-    assert.deepEqual(tabs.map((el) => el.props.tabIndex), tab === 'saved' ? [0, -1] : [-1, 0])
-    assert.deepEqual(drawer.elements.filter((el) => el.props?.role === 'tabpanel').map((el) => el.props.hidden), [tab !== 'saved', tab !== 'excluded'])
+    assert.deepEqual(tabs.map(text), ['Saved · 2', 'Not suggested · 1', 'History · 1'])
+    assert.deepEqual(tabs.map((el) => el.props['aria-selected']), [tab === 'saved', tab === 'excluded', tab === 'history'])
+    assert.deepEqual(tabs.map((el) => el.props.tabIndex), ['saved', 'excluded', 'history'].map((value) => value === tab ? 0 : -1))
+    assert.deepEqual(drawer.elements.filter((el) => el.props?.role === 'tabpanel').map((el) => el.props.hidden), [tab !== 'saved', tab !== 'excluded', tab !== 'history'])
     const close = drawer.elements.find((el) => el.props?.['aria-label'] === 'Close library')
     close.props.onClick()
     assert.deepEqual(drawer.calls, [['close', undefined]])
@@ -305,7 +312,8 @@ test('saved rows: sub line with age, MAP IT opens, × removes; not-suggested row
 test('empty lists keep today\'s copy and disable CLEAR ALL / RESET ALL', () => {
   const drawer = renderDrawer()
   const copy = drawer.elements.filter((el) => el.type === 'p' && el.props.className?.includes('saved-empty')).map(text)
-  assert.deepEqual(copy, ['Nothing saved yet. Use the bookmark on any artist or song panel.', 'No excluded songs. Use “Don\'t suggest again” on a song panel.'])
+  assert.deepEqual(copy, ['Nothing saved yet. Use the bookmark on any artist or song panel.', 'No excluded songs. Use “Don\'t suggest again” on a song panel.',
+    'No maps yet. Search an artist or song to start one.'])
   const buttons = drawer.elements.filter((el) => el.type === 'button' && ['Clear all', 'Reset all'].includes(text(el)))
   assert.deepEqual(buttons.map((el) => el.props.disabled), [true, true])
   const full = renderDrawer({ entries: [artistEntry], exclusions: [excluded] })
@@ -322,4 +330,75 @@ test('LIBRARY button hides the badge at 0 and reports expanded state', () => {
     assert.equal(button.props['aria-expanded'], open)
     assert.equal(button.props['aria-controls'], open ? 'library-drawer' : undefined)
   }
+})
+
+// ---- #77: map session history --------------------------------------------------------
+
+test('history rows: seed, mode, stops and time; Resume and × act on the row; the open map shows Open now', () => {
+  const at = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 14, 32).getTime()
+  const sessions = [mapSession('s1', { updatedAt: at, stops: 3 }), mapSession('s2', { mode: 'track', stops: 1, updatedAt: yesterdayNoon }),
+    mapSession('s3', { map: '{broken' })]
+  const drawer = renderDrawer({ tab: 'history', sessions, openSessionId: 's2' })
+  const rows = visit(drawer.elements.find((el) => el.props?.id === 'history-list')).filter((el) => el.type === 'li')
+  assert.deepEqual(rows.map((row) => text(visit(row).find((el) => el.props?.className === 'saved-item__name'))), ['Seed s1', 'Seed s2', 'Seed s3'])
+  assert.deepEqual(rows.map((row) => text(visit(row).find((el) => el.props?.className === 'saved-item__sub'))),
+    ['Artist · 3 stops · today, 14:32', 'Song · 1 stop · yesterday', "Couldn't restore this map."])
+  const buttons = rows.map((row) => visit(row).filter((el) => el.type === 'button'))
+  assert.deepEqual(buttons.map((row) => row.map(text)), [['Resume', '×'], ['Open now', '×'], ['Resume', '×']])
+  assert.deepEqual(buttons.map((row) => row[0].props.disabled), [false, true, true])
+  assert.equal(buttons[0][0].props.className, 'btn')
+  assert.equal(buttons[0][1].props.className, 'icon-btn')
+  assert.equal(buttons[2][1].props['aria-label'], 'Remove Seed s3 from history')
+  buttons[0][0].props.onClick()
+  buttons[2][1].props.onClick()
+  const clear = drawer.elements.find((el) => el.type === 'button' && text(el) === 'Clear history')
+  assert.equal(clear.props.className, 'btn btn--danger')
+  assert.equal(clear.props.disabled, false)
+  clear.props.onClick()
+  assert.deepEqual(drawer.calls, [['resume', 's1'], ['forget', 's3'], ['clear-history', undefined]])
+})
+
+test('history states: empty, loading, load failed, and the device or account note', () => {
+  const panel = (drawer) => drawer.elements.find((el) => el.props?.id === 'history-list')
+  const rowCount = (drawer) => visit(panel(drawer)).filter((el) => el.type === 'li').length
+  const notes = (drawer) => drawer.elements.filter((el) => el.props?.className === 'library-drawer__note').map(text)
+  const empty = renderDrawer({ tab: 'history' })
+  assert.ok(text(panel(empty)).includes('No maps yet. Search an artist or song to start one.'))
+  assert.equal(empty.elements.find((el) => el.type === 'button' && text(el) === 'Clear history').props.disabled, true)
+  assert.deepEqual(notes(empty), ['Kept on this device. The last 5 maps save on their own.'])
+  const loading = renderDrawer({ tab: 'history', sessions: [mapSession('s1')], historyStatus: 'loading', signedIn: true })
+  assert.ok(text(panel(loading)).includes('Loading history…'))
+  assert.equal(rowCount(loading), 0)
+  assert.deepEqual(notes(loading), ['Synced to your account. The last 5 maps save on their own.'])
+  const failed = renderDrawer({ tab: 'history', sessions: [mapSession('s1')], historyStatus: 'failed', signedIn: true })
+  assert.ok(text(panel(failed)).startsWith("Couldn't load history. Showing maps from this device."))
+  assert.equal(rowCount(failed), 1)
+})
+
+test('three tabs keep their ids, and arrows, Home and End are handled on each', () => {
+  const drawer = renderDrawer({ tab: 'excluded' })
+  const tabs = drawer.elements.filter((el) => el.props?.role === 'tab')
+  assert.deepEqual(tabs.map((el) => el.props.id), ['saved-tab', 'excluded-tab', 'history-tab'])
+  for (const [index, key] of [[0, 'ArrowLeft'], [2, 'ArrowRight'], [1, 'Home'], [1, 'End']]) {
+    let prevented = false
+    tabs[index].props.onKeyDown({ key, preventDefault: () => { prevented = true } })
+    assert.equal(prevented, true, key)
+  }
+})
+
+test('start screen: account wording, and the All recent maps link for 2 or more maps', () => {
+  for (const [count, synced] of [[1, false], [2, false], [5, true]]) {
+    const app = renderStart(ready(graphOf()), { historyCount: count, synced })
+    const aside = visit(app.sections[1]).find((el) => el.props?.className === 'start-panel__aside')
+    assert.equal(text(aside), synced ? 'synced to your account' : 'autosaved on this device')
+    const link = app.elements.find((el) => el.type === 'button' && text(el).startsWith('All recent maps'))
+    assert.equal(!!link, count >= 2)
+    if (!link) continue
+    assert.equal(text(link), `All recent maps · ${count}`)
+    assert.equal(link.props.className, 'link-btn resume__all')
+    link.props.onClick()
+    assert.deepEqual(app.calls, ['history'])
+  }
+  const invalid = renderStart({ status: 'invalid' }, { historyCount: 3 })
+  assert.ok(invalid.elements.some((el) => el.type === 'button' && text(el) === 'All recent maps · 3'))
 })

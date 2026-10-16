@@ -7,7 +7,7 @@ import { JourneyTrail } from './components/JourneyTrail'
 import { JourneyList, MapNavPane, OnMapList } from './components/MapNavPane'
 import { MobileSheet } from './components/MobileSheet'
 import { SearchBar, type SearchMode } from './components/SearchBar'
-import { LibraryButton, LibraryDrawer } from './components/LibraryDrawer'
+import { LibraryButton, LibraryDrawer, type LibraryTab } from './components/LibraryDrawer'
 import { StartScreen } from './components/StartScreen'
 import { plural } from './startScreen'
 import { addBookmark, bookmarkKey, BOOKMARK_FULL_MESSAGE, nodeBookmark, readBookmarks, restoreBookmarks, writeBookmarks, type Bookmark } from './bookmarks'
@@ -18,21 +18,24 @@ import { finishSpotifyImport } from './spotifyImport'
 import { artistNode, planPrune, trackNode, useMusicGraph, type ExpandedChild } from './graph/useMusicGraph'
 import { JOURNEY_CAP, journeyContext } from './graph/journey'
 import { journeyStops, matchFact, onMapRows, stopNumber } from './graph/onMap'
-import type { ArtistRef, AuthConfig, AuthUser, PruneMode, TasteProfile, TrackRankingContext, TrackRef } from './types'
+import type { ArtistRef, AuthConfig, AuthUser, MusicGraph, PruneMode, TasteProfile, TrackRankingContext, TrackRef } from './types'
 import { AccountButton, AccountMenu } from './components/AccountMenu'
 import { signedInToast } from './account'
 import { addExclusion, EXCLUSION_FULL_MESSAGE, readExclusions, restoreExclusions, writeExclusions, type ExcludedSong } from './exclusions'
 
-import { clearMap, readMap, saveMap } from './graph/mapSnapshot'
+import { clearMap, decodeMap, encodeMap, saveMap, type SavedMap } from './graph/mapSnapshot'
+import { mergeSessions, newSessionId, pullSessions, readHistory, restoreSessions, sessionFromGraph, sessionMap, upsertSession, writeHistory, type HistoryStatus, type MapSession } from './history'
 
 import { zoomShortcut } from './graph/zoomShortcut'
 import { expansionChildren } from './connections'
 import { inspectorView, NARROW_QUERY, resizeSheet, sheetForSelection, type SheetGesture, type SheetTab, type SheetView } from './sheet'
 
 const EXPAND_LIMIT = 7
+// The cloud copy follows the local save a few seconds after the last change (#77).
+const CLOUD_SAVE_MS = 2500
 
 /** `lines` stack under `msg` in the same toast (#24). */
-type Toast = { source?: 'bookmarks' | 'exclusions' | 'taste'; msg: string; lines?: string[]; action?: { label: string; run: () => void } }
+type Toast = { source?: 'bookmarks' | 'exclusions' | 'taste' | 'history'; msg: string; lines?: string[]; action?: { label: string; run: () => void } }
 
 const UNDO_KEY = /Mac|iPhone|iPad/.test(typeof navigator === 'undefined' ? '' : navigator.platform) ? '⌘Z' : 'Ctrl+Z'
 
@@ -49,7 +52,17 @@ function ZoomReadout({ listener }: { listener: { current: ((k: number) => void) 
 
 export default function App() {
   const g = useMusicGraph()
-  const [savedMap, setSavedMap] = useState(readMap)
+  // Map session history (#77): newest first. The start screen offers entry 0.
+  const [history, setHistory] = useState(readHistory)
+  const historyRef = useRef(history)
+  const [historyStatus, setHistoryStatus] = useState<HistoryStatus>('local')
+  // The session the map on screen saves into; a new search starts a new one.
+  const [openSessionId, setOpenSessionId] = useState<string | null>(null)
+  const sessionId = useRef(openSessionId)
+  // The last map text saved for that session, so an unchanged map (just resumed) does not save again.
+  const lastSaved = useRef<string | null>(null)
+  const pendingSave = useRef<(() => void) | null>(null)
+  const cloudTimer = useRef(0)
   const warnedMapSize = useRef(false)
   const persistenceStopped = useRef(false)
   const zoomControl = useRef<(factor: number) => void>(() => {})
@@ -104,15 +117,19 @@ export default function App() {
   const [exclusions, setExclusions] = useState(readExclusions)
   const exclusionsRef = useRef(exclusions)
   const [savedOpen, setSavedOpen] = useState(false)
+  const [libraryTab, setLibraryTab] = useState<LibraryTab>('saved')
   const libraryButton = useRef<HTMLButtonElement>(null)
   const closeSaved = useCallback(() => {
     setSavedOpen(false)
     libraryButton.current?.focus()
   }, [])
   // The account popover and the Library drawer close each other (#75).
-  const toggleSaved = () => { setAccountOpen(false); setSavedOpen((open) => !open) }
+  const toggleSaved = () => { setAccountOpen(false); setLibraryTab('saved'); setSavedOpen((open) => !open) }
+  const openHistory = () => { setAccountOpen(false); setLibraryTab('history'); setSavedOpen(true) }
   const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null)
   const [user, setUser] = useState<AuthUser | null>(null)
+  const userRef = useRef(user)
+  userRef.current = user
   const [accountOpen, setAccountOpen] = useState(false)
   const accountButton = useRef<HTMLButtonElement>(null)
   const closeAccount = useCallback((refocus: boolean) => {
@@ -120,11 +137,6 @@ export default function App() {
     if (refocus) accountButton.current?.focus()
   }, [])
   const toggleAccount = () => { setSavedOpen(false); setAccountOpen((open) => !open) }
-  // Sign-in is optional: a failed config or session check leaves the signed-out app as it was.
-  useEffect(() => {
-    api.authConfig().then(setAuthConfig, () => {})
-    api.authMe().then(setUser, () => {})
-  }, [])
   const inflight = useRef(new Set<string>())
   const toastTimer = useRef<number>(0)
 
@@ -134,37 +146,137 @@ export default function App() {
     toastTimer.current = window.setTimeout(() => setToast((cur) => (cur === t ? null : cur)), ms)
   }, [])
 
+  // ---- map session history (#77): local always; signed in, the account is the source of truth ----
+  const updateHistory = useCallback((next: MapSession[]) => {
+    historyRef.current = next
+    setHistory(next)
+    return writeHistory(next)
+  }, [])
+  /** The cloud confirmed `saved`: clear its pending mark unless a newer save replaced it. */
+  const settleSession = useCallback((saved: MapSession) => {
+    const current = historyRef.current
+    if (!current.some((s) => s.id === saved.id && s.updatedAt === saved.updatedAt && s.pending)) return
+    updateHistory(current.map((s) => {
+      if (s.id !== saved.id) return s
+      const { pending: _pending, ...rest } = s
+      return rest
+    }))
+  }, [updateHistory])
+  const cloudSave = useCallback((session: MapSession) => api.historySave(session).then(() => settleSession(session), (err) => {
+    // A map the server refuses (too large or malformed) stays on this device only; do not retry it.
+    if (err instanceof ApiError && (err.status === 413 || err.status === 422)) settleSession(session)
+  }), [settleSession])
+  /** Push unconfirmed saves (all local maps on sign-in), then take the account's list and fetch maps it lacks. */
+  const syncHistory = useCallback(async (merge: boolean) => {
+    if (merge) updateHistory(historyRef.current.map((s) => ({ ...s, pending: true })))
+    setHistoryStatus('loading')
+    try {
+      for (const session of historyRef.current.filter((s) => s.pending)) await cloudSave(session)
+      const pulled = await pullSessions(await api.historyList(), historyRef.current, api.historyGet)
+      // Signed out during the sync: local history is already clear and must stay clear.
+      if (!userRef.current) return
+      // Saves made during the sync, or not yet accepted, stay until the cloud confirms them.
+      updateHistory(mergeSessions(pulled, historyRef.current.filter((s) => s.pending)))
+      setHistoryStatus('synced')
+    } catch { setHistoryStatus('failed') }
+  }, [cloudSave, updateHistory])
+
+  // Sign-in is optional: a failed config or session check leaves the signed-out app as it was.
+  useEffect(() => {
+    api.authConfig().then(setAuthConfig, () => {})
+    api.authMe().then((signedIn) => {
+      userRef.current = signedIn
+      setUser(signedIn)
+      void syncHistory(false)
+    }, () => {})
+  }, [syncHistory])
+
+  /** Record the map on screen in its session; the newest 5 stay. Unchanged maps do not save. */
+  const recordSession = useCallback((graph: MusicGraph, raw: string) => {
+    const id = sessionId.current
+    if (!id || raw === lastSaved.current) return
+    lastSaved.current = raw
+    const signedIn = !!userRef.current
+    const session: MapSession = { ...sessionFromGraph(id, graph, raw), ...(signedIn ? { pending: true } : {}) }
+    updateHistory(upsertSession(historyRef.current, session))
+    if (!signedIn) return
+    window.clearTimeout(cloudTimer.current)
+    cloudTimer.current = window.setTimeout(() => {
+      const latest = historyRef.current.find((s) => s.id === id && s.pending)
+      if (latest && userRef.current) void cloudSave(latest)
+    }, CLOUD_SAVE_MS)
+  }, [cloudSave, updateHistory])
+
   // Save only reducer changes, never force-simulation ticks. Flush the latest state on exit.
   useEffect(() => {
     if (!g.graph.nodes.size || persistenceStopped.current) return
     const save = () => {
+      pendingSave.current = null
       if (persistenceStopped.current) return
-      const result = saveMap(g.graph, followJourney)
+      const raw = encodeMap(g.graph, followJourney)
+      if (raw === lastSaved.current) return
+      const result = saveMap(g.graph, followJourney, raw)
       if (result === 'too-large' && !warnedMapSize.current) {
         warnedMapSize.current = true
         showToast({ msg: 'This map is too large to keep for next time.' }, 7000)
       }
+      if (raw !== 'too-large' && raw !== 'unavailable') recordSession(g.graph, raw)
     }
-    const timer = window.setTimeout(save, 300)
+    pendingSave.current = save
+    // A flush (before a new search or resume) already ran this save; the old map must not save again.
+    const timer = window.setTimeout(() => { if (pendingSave.current === save) save() }, 300)
     const flush = () => { if (!persistenceStopped.current) save() }
     window.addEventListener('pagehide', flush)
     return () => { window.clearTimeout(timer); window.removeEventListener('pagehide', flush) }
-  }, [g.graph, followJourney, showToast])
+  }, [g.graph, followJourney, showToast, recordSession])
+  /** Save the map on screen now, before another map replaces it. */
+  const flushSave = () => pendingSave.current?.()
+  const beginSession = (id: string, saved: string | null) => {
+    flushSave()
+    sessionId.current = id
+    lastSaved.current = saved
+    setOpenSessionId(id)
+  }
 
-  const startFresh = () => { clearMap(); setSavedMap({ status: 'none' }) }
-  const resume = () => {
-    if (savedMap.status !== 'ready') return
+  const removeSessions = (removed: MapSession[], all = false) => {
+    const ids = new Set(removed.map((s) => s.id))
+    updateHistory(historyRef.current.filter((s) => !ids.has(s.id)))
+    // The single-map save could bring a removed map back on the next load.
+    clearMap()
+    if (userRef.current) {
+      if (all) api.historyClear().catch(() => {})
+      else removed.forEach((s) => { api.historyDelete(s.id).catch(() => {}) })
+    }
+    showToast({ source: 'history', msg: removed.length === 1 ? `Removed “${removed[0].seed}” from history.` : `Cleared ${removed.length} maps from history.`,
+      action: { label: 'Undo', run: () => {
+        const restored = restoreSessions(historyRef.current, removed)
+        updateHistory(restored)
+        if (userRef.current) restored.filter((s) => ids.has(s.id)).forEach((s) => { void cloudSave(s) })
+      } } }, 7000)
+  }
+
+  const resumeSession = (session: MapSession) => {
+    // Decode a fresh copy: the reducer must never share node objects with the history cache.
+    const saved = decodeMap(session.map)
+    if (saved.status !== 'ready') return
+    const { graph, followJourney: follow } = saved.snapshot
+    const raw = encodeMap(graph, follow)
+    beginSession(session.id, raw === 'too-large' || raw === 'unavailable' ? null : raw)
     pendingRoot.current = null
     mapEpoch.current += 1
     inflight.current.clear()
-    g.restore(savedMap.snapshot.graph)
-    setFollowJourney(savedMap.snapshot.followJourney)
-    setSearchMode(savedMap.snapshot.graph.nodes.get(savedMap.snapshot.graph.rootId!)?.kind === 'track' ? 'song' : 'artist')
-    setSavedMap({ status: 'none' })
+    g.restore(graph)
+    setFollowJourney(follow)
+    setSearchMode(graph.nodes.get(graph.rootId!)?.kind === 'track' ? 'song' : 'artist')
+    setSavedOpen(false)
     setResumeFit(true)
     setResetKey((k) => k + 1)
     showToast({ msg: 'Map restored.' }, 4000)
   }
+  const savedMap: SavedMap = history[0] ? sessionMap(history[0]) : { status: 'none' }
+  const resume = () => { if (history[0]) resumeSession(history[0]) }
+  // Start-screen Discard removes that session from history, with Undo; "Start over" keeps history.
+  const startFresh = () => { if (historyRef.current[0]) removeSessions([historyRef.current[0]]) }
 
   const updateBookmarks = (next: Bookmark[]) => {
     if (!writeBookmarks(next)) {
@@ -275,7 +387,7 @@ export default function App() {
   const onSelectSearch = (artist: ArtistRef) => {
     setSearchOpen(false)
     updateSteering(null)
-    startFresh()
+    beginSession(newSessionId(), null)
     setResumeFit(false)
     mapEpoch.current += 1
     setFollowJourney(false)
@@ -287,7 +399,7 @@ export default function App() {
   const onSelectTrack = (track: TrackRef) => {
     setSearchOpen(false)
     updateSteering(null)
-    startFresh()
+    beginSession(newSessionId(), null)
     setResumeFit(false)
     mapEpoch.current += 1
     setFollowJourney(false)
@@ -367,14 +479,27 @@ export default function App() {
 
   const signIn = async (credential?: string) => {
     const signedIn = credential ? await api.authGoogle(credential) : await api.authMock()
+    userRef.current = signedIn
     setUser(signedIn)
     closeAccount(true)
     showToast({ msg: signedInToast(signedIn) })
+    // Maps made while signed out merge into the account (#77).
+    void syncHistory(true)
   }
-  // Local taste and maps stay until #76/#77 add the cloud copy (see the PR for the owner decision).
+  // Local taste stays until #76 adds the cloud copy. Local map history clears on sign-out (#77 owner decision).
   const signOut = () => {
     api.authSignOut().then(() => {
+      userRef.current = null
       setUser(null)
+      window.clearTimeout(cloudTimer.current)
+      updateHistory([])
+      clearMap()
+      setHistoryStatus('local')
+      // The map on screen, if any, saves on its next change as a new signed-out session.
+      if (sessionId.current) {
+        sessionId.current = newSessionId()
+        setOpenSessionId(sessionId.current)
+      }
       closeAccount(true)
       showToast({ msg: 'Signed out.' })
     }, () => showToast({ msg: "Couldn't sign out. Try again." }, 7000))
@@ -551,11 +676,14 @@ export default function App() {
           account={accountEntry({ className: 'start-header__account' })}
           onResume={resume}
           onStartFresh={startFresh}
+          historyCount={history.length}
+          synced={!!user}
+          onAllRecent={openHistory}
         />
       ) : (
         <>
           <header className="topbar">
-            <button className="brand" onClick={() => { persistenceStopped.current = true; clearMap(); window.location.reload() }} title="Start over" aria-label="TuneGraph: start over">
+            <button className="brand" onClick={() => { flushSave(); persistenceStopped.current = true; clearMap(); window.location.reload() }} title="Start over" aria-label="TuneGraph: start over">
               <BrandMark />
               <span className="brand__name">TuneGraph</span>
             </button>
@@ -670,7 +798,9 @@ export default function App() {
           )}
         </div>
       )}
-      {savedOpen && <LibraryDrawer exclusions={exclusions} onRemoveExclusion={(entry) => removeExclusions([entry])} onResetExclusions={() => removeExclusions(exclusionsRef.current)} entries={bookmarks} onOpen={openBookmark} onRemove={(entry) => removeBookmarks([entry])} onClear={() => removeBookmarks(bookmarksRef.current)} onClose={closeSaved} />}
+      {savedOpen && <LibraryDrawer initialTab={libraryTab} history={history} historyStatus={historyStatus} signedIn={!!user}
+        openSessionId={hasGraph ? openSessionId : null} onResumeSession={resumeSession} onRemoveSession={(session) => removeSessions([session])}
+        onClearHistory={() => removeSessions(historyRef.current, true)} exclusions={exclusions} onRemoveExclusion={(entry) => removeExclusions([entry])} onResetExclusions={() => removeExclusions(exclusionsRef.current)} entries={bookmarks} onOpen={openBookmark} onRemove={(entry) => removeBookmarks([entry])} onClear={() => removeBookmarks(bookmarksRef.current)} onClose={closeSaved} />}
       {accountOpen && authConfig && <AccountMenu user={user} config={authConfig} anchor={accountButton} onSignIn={signIn} onSignOut={signOut} onClose={closeAccount} />}
       {tasteOpen && <TastePreferences profile={taste ?? emptyTaste()} onSave={saveTaste} onClear={clearTaste} onClose={() => setTasteOpen(false)} />}
     </div>

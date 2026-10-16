@@ -1,4 +1,5 @@
-import type { Artist, ArtistRef, AuthConfig, AuthUser, PreviewResult, SimilarArtist, SimilarTrack, TasteConnections, TasteEvaluation, TasteProfile, TasteSteer, Track,TrackDetails, TrackRankingContext, TrackRef } from './types'
+import type { MapSession, SessionMeta } from './history'
+import type { Artist,ArtistRef, AuthConfig, AuthUser, PreviewResult, SimilarArtist, SimilarTrack, TasteConnections, TasteEvaluation, TasteProfile, TasteSteer, Track,TrackDetails, TrackRankingContext, TrackRef } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -33,11 +34,11 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await res.json()) as T
 }
 
-async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+async function post<T>(path: string, body: unknown, signal?: AbortSignal, method: 'POST' | 'PUT' | 'DELETE' = 'POST'): Promise<T> {
   let res: Response
   try {
     res = await fetch(path, {
-      method: 'POST',
+      method,
       signal,
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -116,4 +117,12 @@ export const api = {
   authGoogle: (credential: string) => post<{ user: AuthUser }>('/api/auth/google', { credential }).then((r) => r.user),
   authMock: () => post<{ user: AuthUser }>('/api/auth/mock', {}).then((r) => r.user),
   authSignOut: () => post<{ ok: boolean }>('/api/auth/signout', {}),
+
+  // ---- map session history (#77): signed-in users only; signed-out history stays in the browser ----
+  historyList: (signal?: AbortSignal) => get<{ sessions: SessionMeta[] }>('/api/history', signal).then((r) => r.sessions),
+  historyGet: (id: string) => get<SessionMeta & { map: string }>(`/api/history/${enc(id)}`).then((r) => r.map),
+  historySave: (session: MapSession) =>
+    post<{ sessions: SessionMeta[] }>(`/api/history/${enc(session.id)}`, { seed: session.seed, mode: session.mode, stops: session.stops, updated_at: session.updatedAt, map: session.map }, undefined, 'PUT'),
+  historyDelete: (id: string) => post<{ sessions: SessionMeta[] }>(`/api/history/${enc(id)}`, {}, undefined, 'DELETE'),
+  historyClear: () => post<{ sessions: SessionMeta[] }>('/api/history', {}, undefined, 'DELETE'),
 }

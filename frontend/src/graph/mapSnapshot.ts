@@ -69,14 +69,20 @@ export function clearMap(): void {
   try { localStorage.removeItem(MAP_STORAGE_KEY) } catch { /* Storage may be disabled. */ }
 }
 
-/** A single bounded snapshot; no simulation coordinates, undo history, or API caches. */
-export function saveMap(graph: MusicGraph, followJourney: boolean): 'saved' | 'too-large' | 'unavailable' {
+/** A single bounded snapshot as JSON text; no simulation coordinates, undo history, or API caches. */
+export function encodeMap(graph: MusicGraph, followJourney: boolean): string | 'too-large' | 'unavailable' {
   if (!graph.rootId || !graph.nodes.size) return 'unavailable'
-  if (graph.nodes.size > MAP_NODE_LIMIT) { clearMap(); return 'too-large' }
+  if (graph.nodes.size > MAP_NODE_LIMIT) return 'too-large'
   const raw = JSON.stringify({ version: 1, rootId: graph.rootId, focusId: graph.focusId,
     selectedNodeId: graph.selectedNodeId, journey: graph.journey, followJourney,
     nodes: [...graph.nodes.values()].map(({ loading: _loading, error: _error, ...node }) => node),
     edges: [...graph.edges.values()] })
-  if (bytes(raw) > MAP_BYTE_LIMIT) { clearMap(); return 'too-large' }
+  return bytes(raw) > MAP_BYTE_LIMIT ? 'too-large' : raw
+}
+
+/** `raw` lets a caller that already encoded the map (history, #77) skip a second encode. */
+export function saveMap(graph: MusicGraph, followJourney: boolean, raw = encodeMap(graph, followJourney)): 'saved' | 'too-large' | 'unavailable' {
+  if (raw === 'unavailable') return raw
+  if (raw === 'too-large') { clearMap(); return raw }
   try { localStorage.setItem(MAP_STORAGE_KEY, raw); return 'saved' } catch { clearMap(); return 'unavailable' }
 }

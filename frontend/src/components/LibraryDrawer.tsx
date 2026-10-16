@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type Ref } from 'react'
 import type { ExcludedSong } from '../exclusions'
 import { bookmarkKey, type Bookmark } from '../bookmarks'
 import { savedWhen } from '../startScreen'
+import { HISTORY_BAD_MAP, HISTORY_EMPTY, HISTORY_FAILED, HISTORY_LOADING, historyNote, historySub, sessionMap, type HistoryStatus, type MapSession } from '../history'
 
 export const LIBRARY_DRAWER_ID = 'library-drawer'
 
@@ -24,7 +25,20 @@ export function LibraryButton({ count, open, onToggle, buttonRef, className = ''
   )
 }
 
+export type LibraryTab = 'saved' | 'excluded' | 'history'
+const TABS: LibraryTab[] = ['saved', 'excluded', 'history']
+
 type Props = {
+  /** Tab shown when the drawer opens; the start screen's "All recent maps" link opens History (#77). */
+  initialTab?: LibraryTab
+  history: MapSession[]
+  historyStatus: HistoryStatus
+  signedIn: boolean
+  /** Session of the map on screen, if any: its row shows a disabled "Open now". */
+  openSessionId: string | null
+  onResumeSession: (session: MapSession) => void
+  onRemoveSession: (session: MapSession) => void
+  onClearHistory: () => void
   exclusions: ExcludedSong[]
   onRemoveExclusion: (entry: ExcludedSong) => void
   onResetExclusions: () => void
@@ -38,8 +52,9 @@ type Props = {
 const sub = (who: string, savedAt: number) => [who, savedWhen(savedAt)].filter(Boolean).join(' · ')
 
 /** Non-modal: the map, header and undo toasts stay reachable while it is open. */
-export function LibraryDrawer({ exclusions, onRemoveExclusion, onResetExclusions, entries, onOpen, onRemove, onClear, onClose }: Props) {
-  const [tab, setTab] = useState<'saved' | 'excluded'>('saved')
+export function LibraryDrawer({ initialTab = 'saved', history, historyStatus, signedIn, openSessionId, onResumeSession, onRemoveSession, onClearHistory,
+  exclusions, onRemoveExclusion, onResetExclusions, entries, onOpen, onRemove, onClear, onClose }: Props) {
+  const [tab, setTab] = useState<LibraryTab>(initialTab)
   const drawer = useRef<HTMLElement>(null)
   useEffect(() => {
     drawer.current?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')?.focus()
@@ -62,17 +77,18 @@ export function LibraryDrawer({ exclusions, onRemoveExclusion, onResetExclusions
         <button type="button" className="library-drawer__close" onClick={onClose} aria-label="Close library">×</button>
       </div>
       <div className="library-tabs" role="tablist" aria-label="Library lists">
-        {(['saved', 'excluded'] as const).map((value) => (
+        {TABS.map((value, index) => (
           <button key={value} type="button" id={`${value}-tab`} role="tab" aria-selected={tab === value} aria-controls={`${value}-list`} tabIndex={tab === value ? 0 : -1}
             onClick={() => setTab(value)}
             onKeyDown={(e) => {
               if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
               e.preventDefault()
-              const next = e.key === 'Home' ? 'saved' : e.key === 'End' ? 'excluded' : tab === 'saved' ? 'excluded' : 'saved'
+              const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? TABS.length - 1 : 0
+              const next = e.key === 'Home' ? TABS[0] : e.key === 'End' ? TABS[TABS.length - 1] : TABS[(index + step) % TABS.length]
               setTab(next)
               drawer.current?.querySelector<HTMLButtonElement>(`#${next}-tab`)?.focus()
             }}>
-            {value === 'saved' ? `Saved · ${entries.length}` : `Not suggested · ${exclusions.length}`}
+            {value === 'saved' ? `Saved · ${entries.length}` : value === 'excluded' ? `Not suggested · ${exclusions.length}` : `History · ${history.length}`}
           </button>
         ))}
       </div>
@@ -116,8 +132,35 @@ export function LibraryDrawer({ exclusions, onRemoveExclusion, onResetExclusions
             <button type="button" className="btn" onClick={onResetExclusions} disabled={!exclusions.length}>Reset all</button>
           </div>
         </div>
-        <p className="library-drawer__note">Kept on this device. Songs marked "Don't suggest again" move to Not suggested, where you can restore them.</p>
-        <p className="library-drawer__note">Saving doesn't change your taste profile.</p>
+        <div hidden={tab !== 'history'} id="history-list" role="tabpanel" aria-labelledby="history-tab">
+          {historyStatus === 'failed' && <p className="library-drawer__note history-status" role="status">{HISTORY_FAILED}</p>}
+          {historyStatus === 'loading' ? <p className="panel__empty saved-empty" role="status">{HISTORY_LOADING}</p> : history.length ? (
+            <ul className="saved-list">
+              {history.map((session) => {
+                const ok = sessionMap(session).status === 'ready'
+                const open = session.id === openSessionId
+                return (
+                  <li key={session.id}>
+                    <span className="saved-list__dot" aria-hidden="true" />
+                    <div className="saved-item">
+                      <span className="saved-item__name">{session.seed}</span>
+                      <span className="saved-item__sub">{ok ? historySub(session) : HISTORY_BAD_MAP}</span>
+                    </div>
+                    <button type="button" className="btn" disabled={!ok || open} onClick={() => onResumeSession(session)}>{open ? 'Open now' : 'Resume'}</button>
+                    <button type="button" className="icon-btn" onClick={() => onRemoveSession(session)} aria-label={`Remove ${session.seed} from history`}>×</button>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : <p className="panel__empty saved-empty">{HISTORY_EMPTY}</p>}
+          <div className="library-drawer__actions">
+            <button type="button" className="btn btn--danger" onClick={onClearHistory} disabled={!history.length || historyStatus === 'loading'}>Clear history</button>
+          </div>
+        </div>
+        {tab === 'history' ? <p className="library-drawer__note">{historyNote(signedIn)}</p> : <>
+          <p className="library-drawer__note">Kept on this device. Songs marked "Don't suggest again" move to Not suggested, where you can restore them.</p>
+          <p className="library-drawer__note">Saving doesn't change your taste profile.</p>
+        </>}
       </div>
     </aside>
   )
