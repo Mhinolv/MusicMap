@@ -182,6 +182,31 @@ async function libraryFixture(page, { saved = true, excluded = true } = {}) {
   await page.reload({ waitUntil: 'networkidle0' })
 }
 
+/** #77: `count` map sessions in history (one damaged if `bad`); reload so the start screen reads them. */
+async function historyFixture(page, { count = 5, bad = false } = {}) {
+  await page.evaluate(({ count, bad }) => {
+    const now = Date.now(), hour = 3600000
+    const seeds = [['radiohead', 'Radiohead', 'artist'], ['creep', 'Creep', 'track'], ['portishead', 'Portishead', 'artist'],
+      ['teardrop', 'Teardrop', 'track'], ['bjork', 'Björk', 'artist']]
+    const map = (id, name, kind) => JSON.stringify({ version: 1, rootId: id, focusId: id, selectedNodeId: id, journey: [id, `${id}-1`],
+      nodes: [{ id, name, kind, expanded: true, ...(kind === 'track' ? { artist: { id: 'artist', name: 'Artist' } } : {}) },
+        ...[1, 2, 3].map((i) => ({ id: `${id}-${i}`, name: `${name} ${i}`, kind, parentId: id, ...(kind === 'track' ? { artist: { id: 'artist', name: 'Artist' } } : {}) }))],
+      edges: [1, 2, 3].map((i) => ({ id: `${id}::${id}-${i}`, source: id, target: `${id}-${i}` })) })
+    localStorage.setItem('tunegraph:history:v1', JSON.stringify({ version: 1, sessions: seeds.slice(0, count).map(([id, name, kind], i) => ({
+      id: `session-${i}`, seed: name, mode: kind, stops: 2, updatedAt: now - i * 26 * hour,
+      map: bad && i === 1 ? '{broken' : map(id, name, kind) })) }))
+  }, { count, bad })
+  await page.reload({ waitUntil: 'networkidle0' })
+}
+
+/** Opens Library on the History tab from the start screen. */
+async function openHistoryTab(page) {
+  await page.click('.start-header .library-button')
+  await page.waitForSelector('.library-drawer', { visible: true })
+  await page.click('#history-tab')
+  await page.waitForSelector('#history-list:not([hidden])')
+}
+
 // ---- scenarios ---------------------------------------------------------------------
 
 const scenarios = [
@@ -478,6 +503,49 @@ const scenarios = [
       await page.waitForSelector('.library-drawer', { visible: true })
       await page.waitForFunction(() => document.activeElement?.id === 'saved-tab')
       return 'Start screen with the library drawer open on Saved'
+    },
+  })),
+  // #77: map session history in the Library drawer and the start-screen link.
+  ...[
+    { name: 'history-list', viewport: DESKTOP, count: 5 },
+    { name: 'history-list-mobile', viewport: MOBILE, userAgent: MOBILE_UA, count: 5 },
+    { name: 'history-empty', viewport: DESKTOP, count: 0 },
+    { name: 'history-empty-mobile', viewport: MOBILE, userAgent: MOBILE_UA, count: 0 },
+    { name: 'history-bad-payload', viewport: DESKTOP, count: 3, bad: true },
+    { name: 'history-bad-payload-mobile', viewport: MOBILE, userAgent: MOBILE_UA, count: 3, bad: true },
+    { name: 'history-load-failed', viewport: DESKTOP, count: 2, failed: true },
+    { name: 'history-load-failed-mobile', viewport: MOBILE, userAgent: MOBILE_UA, count: 2, failed: true },
+    { name: 'start-history-link', viewport: DESKTOP, count: 3, start: true },
+    { name: 'start-history-link-mobile', viewport: MOBILE, userAgent: MOBILE_UA, count: 3, start: true },
+  ].map((options) => ({
+    ...options,
+    async run(page) {
+      if (options.count) await historyFixture(page, options)
+      if (options.start) {
+        await page.waitForSelector('.resume__all', { visible: true })
+        const link = await page.$eval('.resume__all', (el) => el.textContent)
+        if (link !== `All recent maps · ${options.count}`) throw new Error(`unexpected link "${link}"`)
+        return `Start screen resume card with "${link}"`
+      }
+      if (options.failed) {
+        await page.setRequestInterception(true)
+        page.on('request', (request) => request.url().includes('/api/history')
+          ? request.respond({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'store error', provider: 'upstash' }) })
+          : request.continue())
+        await page.click('.start-header .account-button')
+        await page.waitForSelector('#account-menu .account-menu__mock', { visible: true })
+        await page.click('#account-menu .account-menu__mock')
+        await page.waitForFunction(() => document.querySelector('.start-header .account-button')?.textContent === 'Mock')
+      }
+      await openHistoryTab(page)
+      if (options.failed) await page.waitForSelector('#history-list .history-status', { visible: true })
+      const rows = await page.$$eval('#history-list li', (items) => items.length)
+      if (rows !== options.count) throw new Error(`expected ${options.count} history rows, got ${rows}`)
+      if (options.bad) {
+        const disabled = await page.$eval('#history-list li:nth-child(2) .btn', (el) => el.disabled)
+        if (!disabled) throw new Error('a damaged map must disable Resume')
+      }
+      return `History tab, ${rows} row(s)${options.failed ? ', load failed' : ''}${options.bad ? ', one bad payload' : ''}`
     },
   })),
   // #75: optional sign-in. Mock mode shows "Sign in (mock)" in place of the Google button.

@@ -12,6 +12,7 @@ from app.api.routes.tracks import router as tracks_router
 from app.api.routes.taste import router as taste_router
 from app.api.routes.spotify_auth import router as spotify_auth_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.history import router as history_router
 from app.api.routes.user import router as user_router
 from app.cache.cache import cache
 from app.config import get_settings
@@ -47,7 +48,7 @@ app = FastAPI(title="TuneGraph API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origin_list,
-    allow_methods=["GET", "POST", "PUT"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 app.include_router(artists_router)
@@ -55,6 +56,7 @@ app.include_router(tracks_router)
 app.include_router(taste_router)
 app.include_router(spotify_auth_router)
 app.include_router(auth_router)
+app.include_router(history_router)
 app.include_router(user_router)
 
 

@@ -964,6 +964,8 @@ a:hover { color: var(--cyan-hover); }
 .resume__actions { flex: none; display: flex; flex-direction: column; gap: 6px; }
 .resume__go { min-height: 40px; padding: 0 24px; font-size: 15px; letter-spacing: 0.12em; }
 .resume__discard { min-height: 32px; padding: 0 12px; }
+/* #77: opens Library on History when 2 or more maps are saved. */
+.resume__all { align-self: center; font-size: 13px; white-space: nowrap; }
 .resume__damaged { flex: 1; margin: 0; color: var(--muted); }
 
 /* ---------- library drawer (start screen and map) ---------- */
@@ -976,10 +978,12 @@ a:hover { color: var(--cyan-hover); }
 .library-drawer__head h2 { margin: 0; font: 700 13px var(--font-label); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 .library-drawer__close { width: 32px; height: 32px; border: 0; background: transparent; color: var(--muted); font: 500 16px var(--font-mono); }
 .library-drawer__close:hover { color: var(--text); background: var(--raised); }
-.library-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--hairline); }
+.library-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--hairline); }
 .library-tabs [role="tab"] {
-  height: 40px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted);
-  font: 600 13px var(--font-label); letter-spacing: 0.12em; text-transform: uppercase;
+  border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted);
+  font: 600 12px var(--font-label); letter-spacing: 0.06em; text-transform: uppercase;
+  /* Three tabs in 380px (#77): a long label wraps to a second line instead of hiding its count. */
+  min-height: 40px; min-width: 0; padding: 4px 6px; line-height: 1.25;
 }
 .library-tabs [role="tab"] + [role="tab"] { border-left: 1px solid var(--hairline); }
 .library-tabs [role="tab"][aria-selected="true"] { background: var(--cyan-soft); border-bottom-color: var(--cyan); color: var(--text); font-weight: 700; }

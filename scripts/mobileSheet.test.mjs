@@ -85,6 +85,7 @@ function harness({ result, narrow = false, graph: given } = {}) {
     },
     './api': { api: { trackSimilar: async () => result }, ApiError: class extends Error {} },
     './graph/mapSnapshot': { readMap: () => ({ status: 'none' }) },
+    './history': { readHistory: () => [], sessionMap: () => ({ status: 'none' }) },
     './graph/useMusicGraph': {
       useMusicGraph: () => ({ graph, nodes: [...graph.nodes.values()], edges: [], select: (id) => selects.push(id),
         expandStart() {}, expandSuccess() {}, expandFailure() {} }),

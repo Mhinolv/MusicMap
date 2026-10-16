@@ -26,8 +26,11 @@ const graph = (kind = 'artist', count = 2, stops = 2) => ({
   nodes: new Map(Array.from({ length: count }, (_, i) => [String(i), { id: String(i), name: i ? `Node ${i}` : 'Radiohead', kind }])),
   edges: new Map(), rootId: '0', journey: Array.from({ length: stops }, (_, i) => String(i)),
 })
-function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'saved', { bookmarks = [], exclusions = [] } = {}) {
-  const effects = [], updates = [], timers = [], restores = []
+// #77: the start screen shows history entry 0; `savedMap` is how that entry decodes.
+const entry = (id = 's1', seed = 'Radiohead') => ({ id, seed, mode: 'artist', stops: 1, updatedAt: 1, map: `{"map":"${id}"}` })
+function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'saved', { bookmarks = [], exclusions = [], history } = {}) {
+  const effects = [], updates = [], timers = [], restores = [], written = [], cleared = []
+  const sessions = history ?? (savedMap.status === 'none' ? [] : [entry()])
   const SearchBar = () => null, StartScreen = () => null, LibraryButton = () => null, LibraryDrawer = () => null, MapNavPane = () => null
   const mocks = {
     react: {
@@ -35,9 +38,18 @@ function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'sav
       useRef: (current) => ({ current }), useCallback: (fn) => fn, useMemo: (fn) => fn(),
       useEffect: (fn) => effects.push(fn),
     },
-    './graph/mapSnapshot': { readMap: () => savedMap, clearMap() {}, saveMap: () => saveResult },
+    './graph/mapSnapshot': { decodeMap: () => savedMap, clearMap: () => cleared.push('map'), saveMap: () => saveResult,
+      encodeMap: (value) => saveResult === 'too-large' ? 'too-large' : `{"nodes":${value.nodes.size}}` },
+    './history': {
+      readHistory: () => sessions, sessionMap: () => savedMap, newSessionId: () => 'new-id',
+      writeHistory: (next) => { written.push(next); return true },
+      sessionFromGraph: (id, value, map) => ({ id, seed: value.nodes.get(value.rootId)?.name, mode: 'artist', stops: value.journey.length, updatedAt: 2, map }),
+      upsertSession: (list, s) => [s, ...list.filter((x) => x.id !== s.id)].slice(0, 5),
+      restoreSessions: (list, removed) => [...list, ...removed.filter((r) => !list.some((x) => x.id === r.id))],
+    },
     './graph/useMusicGraph': { useMusicGraph: () => ({ graph: activeGraph, nodes: [...activeGraph.nodes.values()],
       edges: [], undo: () => restores.push('undo'), restore: (value) => restores.push(value),
+      resetArtist: (artist) => restores.push(['reset', artist.id]),
       select: (id) => restores.push(['select', id]), prune: (id, mode) => restores.push(['prune', id, mode]) }) },
     './components/SearchBar': { SearchBar },
     './components/StartScreen': { StartScreen },
@@ -65,7 +77,7 @@ function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'sav
     for (const child of [element.props?.children].flat(Infinity)) visit(child)
   }
   visit(tree)
-  return { elements, updates, timers, restores, effects, SearchBar, LibraryButton, LibraryDrawer, MapNavPane,
+  return { elements, updates, timers, restores, effects, written, cleared, SearchBar, LibraryButton, LibraryDrawer, MapNavPane,
     start: elements.find((el) => el.type === StartScreen) }
 }
 const content = (element) => [element.props?.children].flat(Infinity).map((child) =>
@@ -81,16 +93,70 @@ test('Resume restores the graph and announces Map restored. for four seconds', (
   assert.equal(app.timers.at(-1).ms, 4000)
 })
 
-test('start screen receives every snapshot state; DISCARD/START FRESH clears it to none', () => {
+test('start screen receives every snapshot state; DISCARD/START FRESH removes that session with Undo (#77)', () => {
   for (const saved of [{ status: 'none' }, { status: 'invalid' }, ready(graph('track', 500, 500))]) {
     const app = render(saved)
     assert.equal(app.start.props.savedMap, saved)
     assert.equal(app.elements.some((el) => el.props?.className === 'statusbar'), false)
     app.start.props.onStartFresh()
-    assert.equal(app.updates.at(-1).status, 'none')
+    if (saved.status === 'none') {
+      assert.deepEqual(app.written, [])
+      continue
+    }
+    assert.deepEqual(app.written.at(-1), [], 'Discard removes the session from history')
+    assert.deepEqual(app.cleared, ['map'], 'and the single-map copy, so it cannot come back')
+    const toast = app.updates.find((value) => value?.msg)
+    assert.equal(toast.msg, 'Removed “Radiohead” from history.')
+    toast.action.run()
+    assert.deepEqual(app.written.at(-1).map((s) => s.id), ['s1'], 'Undo puts it back')
   }
   // The map shell replaces the start screen once a graph exists.
   assert.equal(render({ status: 'none' }, graph()).start, undefined)
+})
+
+test('history count, account wording and the All recent maps link reach the start screen (#77)', () => {
+  for (const count of [0, 1, 2, 5]) {
+    const history = Array.from({ length: count }, (_, i) => entry(`s${i}`, `Seed ${i}`))
+    const app = render(count ? ready(graph()) : { status: 'none' }, undefined, 'saved', { history })
+    assert.equal(app.start.props.historyCount, count)
+    assert.equal(app.start.props.synced, false)
+  }
+  const app = render(ready(graph()))
+  app.start.props.onAllRecent()
+  assert.ok(app.updates.includes('history'), 'the link opens Library on History')
+  assert.ok(app.updates.includes(true), 'and opens the drawer')
+  app.start.props.onToggleLibrary()
+  assert.equal(app.updates.at(-2), 'saved', 'the header button opens Library on Saved')
+})
+
+test('a new search starts a new session; autosave records it once and skips an unchanged map (#77)', () => {
+  const active = graph('artist', 3, 1)
+  const app = render({ status: 'none' }, active, 'saved', { history: [entry('old')] })
+  app.elements.find((el) => el.type === app.SearchBar).props.onSelect({ id: '0', name: 'Radiohead' })
+  assert.deepEqual(app.restores.at(-1), ['reset', '0'])
+  assert.ok(app.updates.includes('new-id'), 'the open session id is the new one')
+  const saving = app.effects.find((fn) => String(fn).includes('saveMap'))
+  saving()
+  app.timers.at(-1).fn()
+  assert.equal(app.written.length, 1)
+  assert.deepEqual(app.written[0].map((s) => s.id), ['new-id', 'old'], 'history keeps the earlier session')
+  assert.equal(app.written[0][0].map, '{"nodes":3}')
+  assert.equal(app.written[0][0].seed, 'Radiohead')
+  // The same timer again, and a later render of the same map, do not save again.
+  app.timers.at(-1).fn()
+  saving()
+  app.timers.at(-1).fn()
+  assert.equal(app.written.length, 1)
+})
+
+test('Resume reuses the start-screen path for a history row and marks it the open session (#77)', () => {
+  const value = graph()
+  const app = render(ready(value), undefined, 'saved', { history: [entry('s1'), entry('s2', 'Björk')] })
+  app.start.props.onResume()
+  assert.equal(app.restores[0], value)
+  assert.ok(app.updates.includes('s1'), 'the resumed row becomes the open session')
+  assert.ok(app.updates.some((value) => value?.msg === 'Map restored.'))
+  assert.deepEqual(app.written, [], 'an unchanged resumed map does not save on resume')
 })
 
 // #24: the entry count covered bookmarks only ("Open saved discoveries (0)" with exclusions saved).

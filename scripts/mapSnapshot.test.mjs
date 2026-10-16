@@ -105,6 +105,28 @@ test('clear only affects map storage; disabled storage and quota failures are sa
   assert.doesNotThrow(m.clearMap)
 })
 
+// #77: history reuses one encode for the single-map save and the session.
+test('encodeMap returns the saved text, or why it cannot save, without touching storage', () => {
+  globalThis.localStorage = { getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value), removeItem: (key) => storage.delete(key) }
+  const graph = decode(fixture()).snapshot.graph
+  const raw = m.encodeMap(graph, true)
+  assert.equal(m.decodeMap(raw).status, 'ready')
+  assert.equal(m.decodeMap(raw).snapshot.followJourney, true)
+  // Encoding a decoded map again gives the same text, so an unchanged resumed map is not saved again.
+  assert.equal(m.encodeMap(m.decodeMap(raw).snapshot.graph, true), raw)
+  storage.delete(m.MAP_STORAGE_KEY)
+  assert.equal(m.saveMap(graph, true, raw), 'saved')
+  assert.equal(storage.get(m.MAP_STORAGE_KEY), raw)
+  assert.equal(m.encodeMap({ nodes: new Map(), edges: new Map(), journey: [] }, false), 'unavailable')
+  const big = decode(fixture()).snapshot.graph
+  big.nodes.get('a').name = '🎵'.repeat(m.MAP_BYTE_LIMIT / 4)
+  assert.equal(m.encodeMap(big, false), 'too-large')
+  assert.equal(storage.get(m.MAP_STORAGE_KEY), raw, 'encoding alone never clears the save')
+  assert.equal(m.saveMap(big, false, 'too-large'), 'too-large')
+  assert.equal(storage.has(m.MAP_STORAGE_KEY), false)
+})
+
 test('restored graph still collapses, removes, undoes and expands correctly in both modes', () => {
   globalThis.localStorage = { getItem: (key) => storage.get(key) ?? null,
     setItem: (key, value) => storage.set(key, value), removeItem: (key) => storage.delete(key) }
