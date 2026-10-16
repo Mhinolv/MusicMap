@@ -141,7 +141,10 @@ export const historySub = (session: MapSession, now = Date.now()) =>
 
 // Decoding a 1 MB map is not free, and history changes on every autosave: remember recent results.
 const decoded = new Map<string, SavedMap>()
-export function sessionMap(session: MapSession): SavedMap {
+// One shared object, so an empty history gives the start screen the same savedMap on every render.
+const NO_SESSION: SavedMap = { status: 'none' }
+export function sessionMap(session: MapSession | undefined): SavedMap {
+  if (!session) return NO_SESSION
   const key = `${session.id}@${session.updatedAt}@${session.map.length}`
   let saved = decoded.get(key)
   if (!saved) {

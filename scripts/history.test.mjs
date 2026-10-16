@@ -68,6 +68,9 @@ test('decode skips corrupt rows and duplicates, defaults optional fields, keeps 
   assert.equal(h.sessionMap(list[1]).status, 'invalid')
   assert.equal(h.sessionMap(list[0]).status, 'ready')
   assert.equal(h.sessionMap({ ...session('empty', 1), map: '' }).status, 'invalid')
+  // An empty history gives the same 'none' object every render, so the start screen props stay stable.
+  assert.equal(h.sessionMap(undefined).status, 'none')
+  assert.equal(h.sessionMap(undefined), h.sessionMap(undefined))
   assert.equal('pending' in list[0], false)
   assert.equal(h.decodeHistory(JSON.stringify({ version: 1, sessions: [{ ...session('p', 1), pending: true }] }))[0].pending, true)
 })

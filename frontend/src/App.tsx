@@ -273,7 +273,7 @@ export default function App() {
     setResetKey((k) => k + 1)
     showToast({ msg: 'Map restored.' }, 4000)
   }
-  const savedMap: SavedMap = history[0] ? sessionMap(history[0]) : { status: 'none' }
+  const savedMap: SavedMap = sessionMap(history[0])
   const resume = () => { if (history[0]) resumeSession(history[0]) }
   // Start-screen Discard removes that session from history, with Undo; "Start over" keeps history.
   const startFresh = () => { if (historyRef.current[0]) removeSessions([historyRef.current[0]]) }
