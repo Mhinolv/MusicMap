@@ -104,3 +104,20 @@ test('phones (640px and below) keep the top-anchored column (#53 owner decision)
     assert.equal(finalValue(selector, 'width', media), 'auto')
   }
 })
+
+test('phone toasts on the start screen and in the Library drawer span the width at the bottom (#85)', () => {
+  const media = '(max-width: 640px)'
+  assert.equal(finalValue('.toast', 'left', media), '12px', 'toast uses 12px insets, not a centred half width')
+  assert.equal(finalValue('.toast', 'right', media), '12px')
+  assert.equal(finalValue('.toast', 'transform', media), 'none', 'no translateX(-50%) shrink-to-fit')
+  assert.equal(finalValue('.toast', 'max-width', media), 'none')
+  assert.equal(finalValue('.toast', 'top', media), 'auto')
+  assert.equal(finalValue('.toast', 'bottom', media), 'calc(12px + env(safe-area-inset-bottom))', 'bottom, clear of the title and drawer tabs')
+  assert.equal(finalValue('.toast', 'justify-content', media), 'space-between', 'text left, Undo right')
+  assert.equal(finalValue('.app--empty .toast', 'top', media), undefined, 'the start-screen top pin is gone')
+  // Desktop placement stays centred at the bottom.
+  assert.equal(finalValue('.toast', 'left'), '50%')
+  assert.equal(finalValue('.toast', 'transform'), 'translateX(-50%)')
+  assert.equal(finalValue('.toast', 'bottom'), '20px')
+  assert.equal(finalValue('.toast', 'z-index'), '40')
+})

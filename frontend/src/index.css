@@ -581,8 +581,12 @@ a:hover { color: var(--cyan-hover); }
   /* Sheet rows: 44px targets; the stacked label layout comes from the base rules (#58). */
   .connections__row { min-height: 44px; }
 
-  .toast { max-width: calc(100% - 24px); white-space: normal; }
-  .app--empty .toast { bottom: auto; top: calc(56px + env(safe-area-inset-top)); }
+  /* Start screen and Library drawer (#85): full width at the bottom, clear of the title, tabs and close button.
+     The map rules below (#24) still lift it above the sheet. */
+  .toast {
+    left: 12px; right: 12px; top: auto; bottom: calc(12px + env(safe-area-inset-bottom));
+    transform: none; max-width: none; white-space: normal; justify-content: space-between;
+  }
 }
 
 /* Short viewports (landscape phones, tiny windows): keep search results on screen. */
