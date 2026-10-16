@@ -505,7 +505,7 @@ const scenarios = [
       return 'Start screen with the library drawer open on Saved'
     },
   })),
-  // #77: map session history in the Library drawer and the start-screen link.
+  // #77: map session history in the Library drawer. #82: Recent maps rows on the start screen.
   ...[
     { name: 'history-list', viewport: DESKTOP, count: 5 },
     { name: 'history-list-mobile', viewport: MOBILE, userAgent: MOBILE_UA, count: 5 },
@@ -515,17 +515,20 @@ const scenarios = [
     { name: 'history-bad-payload-mobile', viewport: MOBILE, userAgent: MOBILE_UA, count: 3, bad: true },
     { name: 'history-load-failed', viewport: DESKTOP, count: 2, failed: true },
     { name: 'history-load-failed-mobile', viewport: MOBILE, userAgent: MOBILE_UA, count: 2, failed: true },
-    { name: 'start-history-link', viewport: DESKTOP, count: 3, start: true },
-    { name: 'start-history-link-mobile', viewport: MOBILE, userAgent: MOBILE_UA, count: 3, start: true },
+    { name: 'start-recent-maps', viewport: DESKTOP, count: 5, start: true },
+    { name: 'start-recent-maps-mobile', viewport: MOBILE, userAgent: MOBILE_UA, count: 5, start: true },
+    { name: 'start-recent-maps-bad', viewport: DESKTOP, count: 3, bad: true, start: true },
   ].map((options) => ({
     ...options,
     async run(page) {
       if (options.count) await historyFixture(page, options)
       if (options.start) {
-        await page.waitForSelector('.resume__all', { visible: true })
-        const link = await page.$eval('.resume__all', (el) => el.textContent)
-        if (link !== `All recent maps · ${options.count}`) throw new Error(`unexpected link "${link}"`)
-        return `Start screen resume card with "${link}"`
+        await page.waitForSelector('.recent-maps .recent-row', { visible: true })
+        const rows = await page.$$eval('.recent-maps .recent-row', (items) => items.map((el) => el.disabled))
+        if (rows.length !== Math.min(options.count - 1, 4)) throw new Error(`expected ${Math.min(options.count - 1, 4)} recent rows, got ${rows.length}`)
+        if (options.bad && !rows[0]) throw new Error('the bad map row must be disabled')
+        if (await page.$('.resume__all')) throw new Error('the All recent maps link must be gone')
+        return `Start screen with ${rows.length} Recent maps rows${options.bad ? ', one bad' : ''}`
       }
       if (options.failed) {
         await page.setRequestInterception(true)

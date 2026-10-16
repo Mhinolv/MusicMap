@@ -964,8 +964,6 @@ a:hover { color: var(--cyan-hover); }
 .resume__actions { flex: none; display: flex; flex-direction: column; gap: 6px; }
 .resume__go { min-height: 40px; padding: 0 24px; font-size: 15px; letter-spacing: 0.12em; }
 .resume__discard { min-height: 32px; padding: 0 12px; }
-/* #77: opens Library on History when 2 or more maps are saved. */
-.resume__all { align-self: center; font-size: 13px; white-space: nowrap; }
 .resume__damaged { flex: 1; margin: 0; color: var(--muted); }
 
 /* ---------- library drawer (start screen and map) ---------- */
@@ -996,6 +994,17 @@ a:hover { color: var(--cyan-hover); }
 .saved-item__sub { color: var(--muted); }
 .saved-list .btn { flex: none; font-size: 12px; }
 .saved-list .icon-btn { flex: none; border: 0; font: 500 14px var(--font-mono); }
+/* #82: Recent maps on the start screen. Each row is one button with the Library History row text. */
+.recent-maps .saved-list li { padding: 0; }
+.recent-maps .saved-list li:last-child { border-bottom: 0; }
+.recent-row {
+  flex: 1; align-self: stretch; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 14px;
+  border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.recent-row:hover:not(:disabled), .recent-row:focus-visible { background: var(--hairline); }
+.recent-row:focus-visible { outline-offset: -2px; }
+.recent-row:disabled { cursor: default; }
+.recent-row:disabled .saved-list__dot { background: var(--muted); }
 .library-drawer .saved-empty { padding: 20px 14px; }
 .library-drawer__actions { display: flex; justify-content: flex-end; padding: 12px 14px 0; }
 .library-drawer__note { margin: 0; padding: 12px 14px 0; color: var(--muted); line-height: 1.6; }

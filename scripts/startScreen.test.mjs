@@ -150,17 +150,17 @@ const reactMock = (state = {}) => ({
   useRef: (current) => ({ current }), useMemo: (fn) => fn(), useEffect: () => {}, useCallback: (fn) => fn,
 })
 
-function renderStart(savedMap, { mode = 'artist', libraryCount = 0, libraryOpen = false, historyCount = 1, synced = false } = {}) {
+function renderStart(savedMap, { mode = 'artist', libraryCount = 0, libraryOpen = false, sessions = [], synced = false } = {}) {
   const SearchBar = () => null, LibraryButton = () => null, StartBackdrop = () => null
   const { StartScreen } = load('components/StartScreen.tsx', {
     react: reactMock(), '../startScreen': helpers, './StartBackdrop': { StartBackdrop },
-    './LibraryDrawer': { LibraryButton }, './SearchBar': { SearchBar },
+    './LibraryDrawer': { LibraryButton }, './SearchBar': { SearchBar }, '../history': history,
   })
   const calls = []
   const tree = StartScreen({ savedMap, search: { mode, onSelect() {}, onSelectTrack() {}, onModeChange() {} }, libraryCount, libraryOpen,
     onToggleLibrary: () => calls.push('library'), libraryButton: { current: null }, onTaste: () => calls.push('taste'),
     onResume: () => calls.push('resume'), onStartFresh: () => calls.push('fresh'),
-    historyCount, synced, onAllRecent: () => calls.push('history') })
+    history: sessions, synced, onResumeSession: (session) => calls.push(['session', session.id]) })
   const elements = visit(tree)
   const button = (label) => elements.find((el) => el.type === 'button' && text(el) === label)
   return { elements, calls, button, SearchBar, LibraryButton, StartBackdrop, sections: elements.filter((el) => el.type === 'section') }
@@ -418,19 +418,90 @@ test('three tabs keep their ids, and arrows, Home and End are handled on each', 
   }
 })
 
-test('start screen: account wording, and the All recent maps link for 2 or more maps', () => {
-  for (const [count, synced] of [[1, false], [2, false], [5, true]]) {
-    const app = renderStart(ready(graphOf()), { historyCount: count, synced })
+// #82: history entries 1-4 as Recent maps rows under the resume card.
+const DAY = 86_400_000
+const sessionMapOf = (seed, kind) => JSON.stringify({ version: 1, rootId: 'r', journey: ['r'], nodes: [{ id: 'r', name: seed, kind, ...(kind === 'track' ? { artist: { id: 'a', name: 'Artist' } } : {}) }], edges: [] })
+const sessionsOf = (count, { bad = [] } = {}) => Array.from({ length: count }, (_, i) => {
+  const mode = i % 2 ? 'track' : 'artist'
+  return { id: `s${i}`, seed: `Seed ${i}`, mode, stops: i, updatedAt: Date.now() - i * 2 * DAY,
+    map: bad.includes(i) ? '{broken' : sessionMapOf(`Seed ${i}`, mode) }
+})
+const recentSection = (app) => app.sections.find((el) => el.props.className === 'start-panel recent-maps')
+
+test('start screen: account wording; no All recent maps link', () => {
+  for (const synced of [false, true]) {
+    const app = renderStart(ready(graphOf()), { sessions: sessionsOf(5), synced })
     const aside = visit(app.sections[1]).find((el) => el.props?.className === 'start-panel__aside')
     assert.equal(text(aside), synced ? 'synced to your account' : 'autosaved on this device')
-    const link = app.elements.find((el) => el.type === 'button' && text(el).startsWith('All recent maps'))
-    assert.equal(!!link, count >= 2)
-    if (!link) continue
-    assert.equal(text(link), `All recent maps · ${count}`)
-    assert.equal(link.props.className, 'link-btn resume__all')
-    link.props.onClick()
-    assert.deepEqual(app.calls, ['history'])
   }
-  const invalid = renderStart({ status: 'invalid' }, { historyCount: 3 })
-  assert.ok(invalid.elements.some((el) => el.type === 'button' && text(el) === 'All recent maps · 3'))
+  for (const saved of [ready(graphOf()), { status: 'invalid' }]) {
+    const app = renderStart(saved, { sessions: sessionsOf(5) })
+    assert.ok(!app.elements.some((el) => el.type === 'button' && text(el).startsWith('All recent maps')))
+    assert.ok(!app.elements.some((el) => String(el.props?.className).includes('resume__all')))
+  }
+})
+
+test('Recent maps: hidden with 0 or 1 session, else up to 4 rows (not the newest), newest first', () => {
+  for (const count of [0, 1]) for (const saved of [{ status: 'none' }, ready(graphOf()), { status: 'invalid' }]) {
+    const app = renderStart(saved, { sessions: sessionsOf(count) })
+    assert.equal(recentSection(app), undefined, `${count} session(s)`)
+    assert.ok(!app.elements.some((el) => el.props?.className === 'recent-row'))
+  }
+  for (const count of [2, 3, 5, 6]) for (const saved of [ready(graphOf()), { status: 'invalid' }]) {
+    const sessions = sessionsOf(count)
+    const app = renderStart(saved, { sessions })
+    const section = recentSection(app)
+    assert.ok(section, `${count} sessions`)
+    assert.equal(app.sections.at(-1), section, 'the list sits under the resume card')
+    assert.equal(section.props['aria-labelledby'], 'recent-maps-title')
+    const nodes = visit(section)
+    assert.equal(text(nodes.find((el) => el.type === 'h2')), 'Recent maps')
+    assert.equal(nodes.find((el) => el.type === 'h2').props.id, 'recent-maps-title')
+    const shown = Math.min(count - 1, 4)
+    assert.equal(text(nodes.find((el) => el.props?.className === 'start-panel__aside')), `${shown} more`)
+    assert.equal(nodes.find((el) => el.type === 'ul').props.className, 'saved-list')
+    const rows = nodes.filter((el) => el.props?.className === 'recent-row')
+    assert.deepEqual(rows.map((row) => text(visit(row).find((el) => el.props?.className === 'saved-item__name'))),
+      sessions.slice(1, 5).map((s) => s.seed))
+  }
+})
+
+test('Recent maps rows: seed, Library sub text, Resume label, aria-label and one-click resume', () => {
+  const sessions = sessionsOf(5)
+  const app = renderStart(ready(graphOf()), { sessions })
+  const rows = visit(recentSection(app)).filter((el) => el.props?.className === 'recent-row')
+  rows.forEach((row, i) => {
+    const session = sessions[i + 1]
+    const sub = history.historySub(session)
+    assert.equal(row.type, 'button')
+    assert.equal(row.props.type, 'button')
+    assert.equal(row.props.disabled, false)
+    const nodes = visit(row)
+    assert.equal(nodes[1].props.className, 'saved-list__dot')
+    assert.equal(text(nodes.find((el) => el.props?.className === 'saved-item__sub')), sub)
+    assert.equal(text(nodes.find((el) => el.props?.className === 'btn')), 'Resume')
+    assert.equal(row.props['aria-label'], `Resume ${session.seed}, ${sub}`)
+    row.props.onClick()
+  })
+  assert.match(history.historySub(sessions[1]), /^Song · 1 stop · /)
+  assert.match(history.historySub(sessions[2]), /^Artist · 2 stops · /)
+  assert.deepEqual(app.calls, [['session', 's1'], ['session', 's2'], ['session', 's3'], ['session', 's4']])
+})
+
+test('Recent maps: a bad map row is disabled, says it could not restore, and has no Resume label', () => {
+  for (const bad of [1, 4]) {
+    const sessions = sessionsOf(5, { bad: [bad] })
+    const app = renderStart(ready(graphOf()), { sessions })
+    const rows = visit(recentSection(app)).filter((el) => el.props?.className === 'recent-row')
+    const row = rows[bad - 1]
+    assert.equal(row.props.disabled, true)
+    assert.equal(text(visit(row).find((el) => el.props?.className === 'saved-item__sub')), history.HISTORY_BAD_MAP)
+    assert.equal(visit(row).some((el) => el.props?.className === 'btn'), false)
+    assert.equal(row.props['aria-label'], `${sessions[bad].seed}, ${history.HISTORY_BAD_MAP}`)
+    assert.equal(rows.filter((r) => r.props.disabled).length, 1)
+  }
+  // A cloud row whose map failed to load has an empty map: also not restorable.
+  const sessions = sessionsOf(3).map((s, i) => i === 2 ? { ...s, map: '' } : s)
+  const row = visit(recentSection(renderStart({ status: 'invalid' }, { sessions }))).filter((el) => el.props?.className === 'recent-row')[1]
+  assert.equal(row.props.disabled, true)
 })

@@ -1,5 +1,6 @@
 import { useMemo, type ComponentProps, type ReactNode, type Ref } from 'react'
 import type { SavedMap } from '../graph/mapSnapshot'
+import { HISTORY_BAD_MAP, historySub, sessionMap, type MapSession } from '../history'
 import { miniMap, resumeSummary } from '../startScreen'
 import type { MusicGraph } from '../types'
 import { BrandMark } from './BrandMark'
@@ -19,10 +20,10 @@ type Props = {
   account?: ReactNode
   onResume: () => void
   onStartFresh: () => void
-  /** Map sessions in history (#77); 2 or more add the "All recent maps" link. */
-  historyCount: number
+  /** Map sessions in history, newest first (#77). Entries 1–4 show as Recent maps rows (#82). */
+  history: MapSession[]
   synced: boolean
-  onAllRecent: () => void
+  onResumeSession: (session: MapSession) => void
 }
 
 const TONE = { amber: 'var(--amber)', cyan: 'var(--cyan)', star: 'var(--star)' }
@@ -39,10 +40,8 @@ function MiniMapThumb({ graph }: { graph: MusicGraph }) {
 }
 
 export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onToggleLibrary, libraryButton, onTaste, account, onResume, onStartFresh,
-  historyCount, synced, onAllRecent }: Props) {
-  const allRecent = historyCount >= 2 && (
-    <button type="button" className="link-btn resume__all" onClick={onAllRecent}>All recent maps · {historyCount}</button>
-  )
+  history, synced, onResumeSession }: Props) {
+  const recent = history.slice(1, 5)
   const resumable = savedMap.status === 'ready'
   const summary = resumable ? resumeSummary(savedMap.snapshot.graph) : undefined
   return (
@@ -94,7 +93,6 @@ export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onTog
               <div className="resume__actions">
                 <button type="button" className="btn btn--primary resume__go" onClick={onResume}>Resume</button>
                 <button type="button" className="btn resume__discard" onClick={onStartFresh} aria-label="Discard saved map and start fresh">Discard</button>
-                {allRecent}
               </div>
             </div>
           </section>
@@ -107,8 +105,34 @@ export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onTog
             <div className="start-panel__body resume">
               <p className="resume__damaged">It was damaged or too large to load.</p>
               <button type="button" className="btn resume__discard" onClick={onStartFresh}>Start fresh</button>
-              {allRecent}
             </div>
+          </section>
+        )}
+        {recent.length > 0 && (
+          <section className="start-panel recent-maps" aria-labelledby="recent-maps-title">
+            <div className="start-panel__head">
+              <h2 id="recent-maps-title">Recent maps</h2>
+              <span className="start-panel__aside">{recent.length} more</span>
+            </div>
+            <ul className="saved-list">
+              {recent.map((session) => {
+                const ok = sessionMap(session).status === 'ready'
+                const sub = ok ? historySub(session) : HISTORY_BAD_MAP
+                return (
+                  <li key={session.id}>
+                    <button type="button" className="recent-row" disabled={!ok} onClick={() => onResumeSession(session)}
+                      aria-label={ok ? `Resume ${session.seed}, ${sub}` : `${session.seed}, ${sub}`}>
+                      <span className="saved-list__dot" aria-hidden="true" />
+                      <span className="saved-item">
+                        <span className="saved-item__name">{session.seed}</span>
+                        <span className="saved-item__sub">{sub}</span>
+                      </span>
+                      {ok && <span className="btn" aria-hidden="true">Resume</span>}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
           </section>
         )}
       </main>

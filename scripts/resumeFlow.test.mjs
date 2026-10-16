@@ -115,17 +115,21 @@ test('start screen receives every snapshot state; DISCARD/START FRESH removes th
   assert.equal(render({ status: 'none' }, graph()).start, undefined)
 })
 
-test('history count, account wording and the All recent maps link reach the start screen (#77)', () => {
+test('history, account wording and the session resume path reach the start screen (#77, #82)', () => {
   for (const count of [0, 1, 2, 5]) {
     const history = Array.from({ length: count }, (_, i) => entry(`s${i}`, `Seed ${i}`))
     const app = render(count ? ready(graph()) : { status: 'none' }, undefined, 'saved', { history })
-    assert.equal(app.start.props.historyCount, count)
+    assert.deepEqual(app.start.props.history.map((s) => s.id), history.map((s) => s.id))
     assert.equal(app.start.props.synced, false)
+    assert.equal('historyCount' in app.start.props || 'onAllRecent' in app.start.props, false)
   }
-  const app = render(ready(graph()))
-  app.start.props.onAllRecent()
-  assert.ok(app.updates.includes('history'), 'the link opens Library on History')
-  assert.ok(app.updates.includes(true), 'and opens the drawer')
+  const value = graph('track')
+  const app = render(ready(value), undefined, 'saved', { history: [entry('s0'), entry('s1', 'Creep')] })
+  app.start.props.onResumeSession(app.start.props.history[1])
+  assert.equal(app.restores[0], value, 'a Recent maps row resumes like Library Resume')
+  assert.ok(app.updates.includes('s1'), 'the open session id is the row session')
+  assert.ok(app.updates.some((v) => v?.msg === 'Map restored.'))
+  assert.equal(app.timers.at(-1).ms, 4000)
   app.start.props.onToggleLibrary()
   assert.equal(app.updates.at(-2), 'saved', 'the header button opens Library on Saved')
 })

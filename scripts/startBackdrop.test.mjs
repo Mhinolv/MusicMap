@@ -155,7 +155,8 @@ test('StartScreen renders StartBackdrop between the header and main', () => {
   })
   for (const savedMap of [{ status: 'none' }, { status: 'invalid' }]) {
     const tree = StartScreen({ savedMap, search: { mode: 'artist' }, libraryCount: 0, libraryOpen: false, onToggleLibrary() {},
-      libraryButton: { current: null }, onTaste() {}, onResume() {}, onStartFresh() {} })
+      libraryButton: { current: null }, onTaste() {}, onResume() {}, onStartFresh() {},
+      history: [], synced: false, onResumeSession() {} })
     const top = tree.props.children.filter(Boolean)
     assert.deepEqual(top.map((el) => el.type === StartBackdrop ? 'backdrop' : el.type), ['header', 'backdrop', 'main'])
   }

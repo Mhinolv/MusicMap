@@ -129,7 +129,6 @@ export default function App() {
   }, [])
   // The account popover and the Library drawer close each other (#75).
   const toggleSaved = () => { setAccountOpen(false); setLibraryTab('saved'); setSavedOpen((open) => !open) }
-  const openHistory = () => { setAccountOpen(false); setLibraryTab('history'); setSavedOpen(true) }
   const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null)
   const [user, setUser] = useState<AuthUser | null>(null)
   const userRef = useRef(user)
@@ -755,9 +754,9 @@ export default function App() {
           account={accountEntry({ className: 'start-header__account' })}
           onResume={resume}
           onStartFresh={startFresh}
-          historyCount={history.length}
+          history={history}
           synced={!!user}
-          onAllRecent={openHistory}
+          onResumeSession={resumeSession}
         />
       ) : (
         <>

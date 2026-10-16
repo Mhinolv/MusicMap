@@ -32,7 +32,7 @@ export type LibraryTab = 'saved' | 'excluded' | 'history'
 const TABS: LibraryTab[] = ['saved', 'excluded', 'history']
 
 type Props = {
-  /** Tab shown when the drawer opens; the start screen's "All recent maps" link opens History (#77). */
+  /** Tab shown when the drawer opens. */
   initialTab?: LibraryTab
   history: MapSession[]
   historyStatus: HistoryStatus
