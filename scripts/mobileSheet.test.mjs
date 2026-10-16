@@ -97,6 +97,7 @@ function harness({ result, narrow = false, graph: given } = {}) {
     './bookmarks': { readBookmarks: () => [], nodeBookmark: () => null },
     './exclusions': { readExclusions: () => [] },
     './useTasteSync': { useTasteSync: () => ({ status: 'synced', edited() {} }) },
+    './useLibrarySync': { useLibrarySync: () => ({ status: 'synced', edited() {} }) },
     './startScreen': startScreen,
     './sheet': sheet,
     './components/ForceGraph': { ForceGraph: 'ForceGraph' },

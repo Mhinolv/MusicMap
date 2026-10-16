@@ -20,9 +20,11 @@ import { JOURNEY_CAP, journeyContext } from './graph/journey'
 import { journeyStops, matchFact, onMapRows, stopNumber } from './graph/onMap'
 import type { ArtistRef, AuthConfig, AuthUser, MusicGraph, PruneMode, TasteProfile, TrackRankingContext, TrackRef } from './types'
 import { AccountButton, AccountMenu } from './components/AccountMenu'
-import { signedInToast } from './account'
-import { CLEARED_ALL_TOAST, mergeToast, SYNC_FAILED_TOAST, writeSyncMarker } from './tasteSync'
+import { SIGNED_OUT_TOAST, signedInToast } from './account'
+import { CLEARED_ALL_TOAST, mergeToast, SYNC_FAILED_TOAST, worstSync, writeSyncMarker } from './tasteSync'
 import { useTasteSync } from './useTasteSync'
+import { LIBRARY_SYNC_FAILED_TOAST, libraryMergeToast, writeLibraryMarker, type LibraryLists } from './librarySync'
+import { useLibrarySync } from './useLibrarySync'
 import { addExclusion, EXCLUSION_FULL_MESSAGE, readExclusions, restoreExclusions, writeExclusions, type ExcludedSong } from './exclusions'
 
 import { clearMap, decodeMap, encodeMap, saveMap, type SavedMap } from './graph/mapSnapshot'
@@ -147,6 +149,17 @@ export default function App() {
     setToast(t)
     toastTimer.current = window.setTimeout(() => setToast((cur) => (cur === t ? null : cur)), ms)
   }, [])
+  // The first sign-in can merge taste (#76) and the Library (#79): one toast with both lines.
+  const lastMergeToast = useRef<Toast | null>(null)
+  const toastShown = useRef(toast)
+  toastShown.current = toast
+  const showMergeToast = useCallback((part: { msg: string; lines?: string[] }) => {
+    const prev = lastMergeToast.current
+    const t: Toast = prev && toastShown.current === prev ? { msg: prev.msg, lines: [...(prev.lines ?? []), part.msg, ...(part.lines ?? [])] } : { ...part }
+    lastMergeToast.current = t
+    toastShown.current = t
+    showToast(t, 7000)
+  }, [showToast])
 
   // ---- map session history (#77): local always; signed in, the account is the source of truth ----
   const updateHistory = useCallback((next: MapSession[]) => {
@@ -280,6 +293,31 @@ export default function App() {
   // Start-screen Discard removes that session from history, with Undo; "Start over" keeps history.
   const startFresh = () => { if (historyRef.current[0]) removeSessions([historyRef.current[0]]) }
 
+  // ---- Library sync (#79): local storage is the cache, the account copy is the source of truth ----
+  const applyLibrary = useCallback((lists: LibraryLists) => {
+    writeBookmarks(lists.bookmarks)
+    writeExclusions(lists.exclusions)
+    bookmarksRef.current = lists.bookmarks
+    exclusionsRef.current = lists.exclusions
+    setBookmarks(lists.bookmarks)
+    setExclusions(lists.exclusions)
+  }, [])
+  const warnedLibrarySync = useRef(false)
+  const librarySync = useLibrarySync({
+    user, bookmarksRef, exclusionsRef, apply: applyLibrary,
+    onMerged: (result) => {
+      const merged = libraryMergeToast(result)
+      if (merged) showMergeToast(merged)
+    },
+    // One toast for each session when the Library cannot reach the account.
+    onWriteFailed: () => {
+      if (warnedLibrarySync.current) return
+      warnedLibrarySync.current = true
+      showToast({ msg: LIBRARY_SYNC_FAILED_TOAST }, 7000)
+    },
+  })
+  const libraryEdited = librarySync.edited
+
   const updateBookmarks = (next: Bookmark[]) => {
     if (!writeBookmarks(next)) {
       showToast({ source: 'bookmarks', msg: "Couldn't save: this browser is blocking local storage." }, 7000)
@@ -287,6 +325,7 @@ export default function App() {
     }
     bookmarksRef.current = next
     setBookmarks(next)
+    libraryEdited('bookmarks')
     return true
   }
   const removeBookmarks = (removed: Bookmark[]) => {
@@ -307,6 +346,7 @@ export default function App() {
     }
     exclusionsRef.current = next
     setExclusions(next)
+    libraryEdited('exclusions')
     return true
   }
   const restoreExcluded = (removed: ExcludedSong[]) => {
@@ -488,13 +528,15 @@ export default function App() {
     // Maps made while signed out merge into the account (#77).
     void syncHistory(true)
   }
-  // Owner decisions (#76, #77): sign-out clears the local taste cache and the local map history.
+  // Owner decisions (#76, #77, #79): sign-out clears the local taste cache, map history and Library.
   const signOut = () => {
     api.authSignOut().then(() => {
       userRef.current = null
       setUser(null)
       writeSyncMarker(null)
       applyTaste(null)
+      writeLibraryMarker(null)
+      applyLibrary({ bookmarks: [], exclusions: [] })
       window.clearTimeout(cloudTimer.current)
       updateHistory([])
       clearMap()
@@ -505,7 +547,7 @@ export default function App() {
         setOpenSessionId(sessionId.current)
       }
       closeAccount(true)
-      showToast({ msg: 'Signed out.' })
+      showToast({ msg: SIGNED_OUT_TOAST })
     }, () => showToast({ msg: "Couldn't sign out. Try again." }, 7000))
   }
   const accountEnabled = !!authConfig?.enabled
@@ -522,7 +564,7 @@ export default function App() {
     user, tasteRef, apply: applyTaste, holdRemote: tasteOpen,
     onMerged: (result) => {
       const merged = mergeToast(result)
-      if (merged) showToast(merged, 7000)
+      if (merged) showMergeToast(merged)
     },
     // One toast for each session when a panel toggle cannot reach the account.
     onPushFailed: () => {
@@ -835,10 +877,10 @@ export default function App() {
           )}
         </div>
       )}
-      {savedOpen && <LibraryDrawer initialTab={libraryTab} history={history} historyStatus={historyStatus} signedIn={!!user}
+      {savedOpen && <LibraryDrawer initialTab={libraryTab} history={history} historyStatus={historyStatus} signedIn={!!user} syncStatus={librarySync.status}
         openSessionId={hasGraph ? openSessionId : null} onResumeSession={resumeSession} onRemoveSession={(session) => removeSessions([session])}
         onClearHistory={() => removeSessions(historyRef.current, true)} exclusions={exclusions} onRemoveExclusion={(entry) => removeExclusions([entry])} onResetExclusions={() => removeExclusions(exclusionsRef.current)} entries={bookmarks} onOpen={openBookmark} onRemove={(entry) => removeBookmarks([entry])} onClear={() => removeBookmarks(bookmarksRef.current)} onClose={closeSaved} />}
-      {accountOpen && authConfig && <AccountMenu user={user} config={authConfig} syncStatus={tasteSync.status} anchor={accountButton} onSignIn={signIn} onSignOut={signOut} onClose={closeAccount} />}
+      {accountOpen && authConfig && <AccountMenu user={user} config={authConfig} syncStatus={worstSync(tasteSync.status, librarySync.status, historyStatus === 'failed' ? 'failed' : 'synced')} anchor={accountButton} onSignIn={signIn} onSignOut={signOut} onClose={closeAccount} />}
       {tasteOpen && <TastePreferences profile={taste ?? emptyTaste()} signedIn={!!user} syncStatus={tasteSync.status}
         onSignIn={accountEnabled ? openAccountFromTaste : undefined} onSave={saveTaste} onClear={clearTaste} onClose={() => setTasteOpen(false)} />}
     </div>

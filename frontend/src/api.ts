@@ -1,4 +1,7 @@
 import type { MapSession, SessionMeta } from './history'
+import type { Bookmark } from './bookmarks'
+import type { ExcludedSong } from './exclusions'
+import type { LibraryList } from './librarySync'
 import type { Artist, ArtistRef, AuthConfig, AuthUser, PreviewResult, SimilarArtist, SimilarTrack, TasteConnections, TasteEvaluation, TasteMerge, TasteProfile, TasteSteer, Track,TrackDetails, TrackRankingContext, TrackRef } from './types'
 
 export class ApiError extends Error {
@@ -131,4 +134,12 @@ export const api = {
     post<{ sessions: SessionMeta[] }>(`/api/history/${enc(session.id)}`, { seed: session.seed, mode: session.mode, stops: session.stops, updated_at: session.updatedAt, map: session.map }, undefined, 'PUT'),
   historyDelete: (id: string) => post<{ sessions: SessionMeta[] }>(`/api/history/${enc(id)}`, {}, undefined, 'DELETE'),
   historyClear: () => post<{ sessions: SessionMeta[] }>('/api/history', {}, undefined, 'DELETE'),
+
+  // ---- Library lists (#79): signed-in users only; the payloads match the local storage shape.
+  // Answers are raw: useLibrarySync decodes them with the tolerant local decoders.
+  userLibrary: () => get<unknown>('/api/user/library'),
+  putUserBookmarks: (items: Bookmark[]) => post<unknown>('/api/user/library/bookmarks', { version: 1, items }, undefined, 'PUT'),
+  putUserExclusions: (items: ExcludedSong[]) => post<unknown>('/api/user/library/exclusions', { version: 1, items }, undefined, 'PUT'),
+  mergeUserLibrary: (bookmarks: Bookmark[], exclusions: ExcludedSong[]) =>
+    post<{ added?: number; capped?: LibraryList[] }>('/api/user/library/merge', { bookmarks: { version: 1, items: bookmarks }, exclusions: { version: 1, items: exclusions } }),
 }

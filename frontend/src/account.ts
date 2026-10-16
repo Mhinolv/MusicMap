@@ -17,6 +17,8 @@ export function accountAriaLabel(user: AuthUser | null): string {
 }
 
 export const signedInToast = (user: AuthUser) => `Signed in as ${user.name.trim() || user.email}.`
+/** Sign-out clears this device's copies (#76, #77, #79); the account keeps them. */
+export const SIGNED_OUT_TOAST = 'Signed out. Your taste, maps and Library stay in your account.'
 
 // ---- Google Identity Services -----------------------------------------------------
 

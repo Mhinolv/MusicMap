@@ -159,6 +159,7 @@ function panelHarness(initial = null, writable = true) {
     './components/ArtistPanel': { ArtistPanel: 'ArtistPanel' },
     './components/TasteToggle': { TasteToggle: 'TasteToggle' },
     './useTasteSync': { useTasteSync: () => ({ status: 'synced', edited: () => syncs.push(writes.at(-1)) }) },
+    './useLibrarySync': { useLibrarySync: () => ({ status: 'synced', edited() {} }) },
   }
   const exports = {}
   runInNewContext(appSource, {
