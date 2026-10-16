@@ -157,3 +157,31 @@ class TasteSteerResponse(BaseModel):
         if (self.outcome == "proposed") != bool(self.tags):
             raise ValueError("tags are required for proposed outcomes and absent otherwise")
         return self
+
+
+TASTE_LISTS = ("liked_artists", "liked_tracks", "liked_genres", "disliked")
+
+
+class StoredTasteProfile(BaseModel):
+    """The account copy of a profile (#76). Unlike `TasteProfile`, dislikes alone or an
+    empty profile are valid: an empty profile clears the account copy."""
+
+    liked_artists: list[Preference] = Field(default_factory=list, max_length=50)
+    liked_tracks: list[Preference] = Field(default_factory=list, max_length=50)
+    liked_genres: list[Preference] = Field(default_factory=list, max_length=50)
+    disliked: list[Preference] = Field(default_factory=list, max_length=50)
+    notes: str = Field(default="", max_length=500)
+
+    def is_empty(self) -> bool:
+        return not (any(getattr(self, name) for name in TASTE_LISTS) or self.notes.strip())
+
+
+class StoredTasteResponse(BaseModel):
+    profile: StoredTasteProfile | None
+
+
+class TasteMergeResponse(StoredTasteResponse):
+    # Local entries (and adopted notes) that the merge added to the account copy.
+    added: int = 0
+    # Lists that hit the cap, so some local entries did not fit.
+    capped: list[str] = Field(default_factory=list)

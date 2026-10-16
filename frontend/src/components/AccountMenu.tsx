@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { ACCOUNT_MENU_ID, accountAriaLabel, accountLabel, GOOGLE_BUTTON, loadGoogleIdentity, SIGN_IN_ERROR } from '../account'
 import type { AuthConfig, AuthUser } from '../types'
+import type { SyncStatus } from '../tasteSync'
+import { SyncStatusLine } from './SyncStatusLine'
 
 type ButtonProps = {
   user: AuthUser | null
@@ -31,6 +33,8 @@ export function AccountButton({ user, open, onToggle, buttonRef, className = '',
 type Props = {
   user: AuthUser | null
   config: AuthConfig
+  /** Taste sync state, shown under the email while signed in (#76). */
+  syncStatus: SyncStatus
   anchor: RefObject<HTMLButtonElement | null>
   /** Resolves once signed in; rejects to show the error state. No credential means mock sign-in. */
   onSignIn: (credential?: string) => Promise<void>
@@ -40,7 +44,7 @@ type Props = {
 }
 
 /** Non-modal account popover under its header button. */
-export function AccountMenu({ user, config, anchor, onSignIn, onSignOut, onClose }: Props) {
+export function AccountMenu({ user, config, syncStatus, anchor, onSignIn, onSignOut, onClose }: Props) {
   const menu = useRef<HTMLElement>(null)
   const googleSlot = useRef<HTMLDivElement>(null)
   const [phase, setPhase] = useState<'idle' | 'pending' | 'error'>('idle')
@@ -110,6 +114,7 @@ export function AccountMenu({ user, config, anchor, onSignIn, onSignOut, onClose
           <div className="account-menu__who">
             <p className="account-menu__name">{user.name || user.email}</p>
             {user.email && <p className="account-menu__email">{user.email}</p>}
+            <SyncStatusLine status={syncStatus} />
           </div>
           <button type="button" className="btn account-menu__signout" onClick={onSignOut}>Sign out</button>
         </>
