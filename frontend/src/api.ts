@@ -1,4 +1,4 @@
-import type { Artist, ArtistRef, PreviewResult, SimilarArtist, SimilarTrack, TasteConnections, TasteEvaluation, TasteProfile, TasteSteer, Track,TrackDetails, TrackRankingContext, TrackRef } from './types'
+import type { Artist, ArtistRef, AuthConfig, AuthUser, PreviewResult, SimilarArtist, SimilarTrack, TasteConnections, TasteEvaluation, TasteProfile, TasteSteer, Track,TrackDetails, TrackRankingContext, TrackRef } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -109,4 +109,11 @@ export const api = {
     post<TasteSteer>('/api/taste/steer-tags', { item_id: itemId, text, tags }, signal),
 
   spotifyConfig: () => get<{ client_id: string }>('/api/spotify/config'),
+
+  // ---- account (#75): the HttpOnly session cookie rides along on same-origin requests ----
+  authConfig: () => get<AuthConfig>('/api/auth/config'),
+  authMe: (signal?: AbortSignal) => get<{ user: AuthUser }>('/api/auth/me', signal).then((r) => r.user),
+  authGoogle: (credential: string) => post<{ user: AuthUser }>('/api/auth/google', { credential }).then((r) => r.user),
+  authMock: () => post<{ user: AuthUser }>('/api/auth/mock', {}).then((r) => r.user),
+  authSignOut: () => post<{ ok: boolean }>('/api/auth/signout', {}),
 }

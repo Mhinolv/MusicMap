@@ -18,7 +18,9 @@ import { finishSpotifyImport } from './spotifyImport'
 import { artistNode, planPrune, trackNode, useMusicGraph, type ExpandedChild } from './graph/useMusicGraph'
 import { JOURNEY_CAP, journeyContext } from './graph/journey'
 import { journeyStops, matchFact, onMapRows, stopNumber } from './graph/onMap'
-import type { ArtistRef, PruneMode, TasteProfile, TrackRankingContext, TrackRef } from './types'
+import type { ArtistRef, AuthConfig, AuthUser, PruneMode, TasteProfile, TrackRankingContext, TrackRef } from './types'
+import { AccountButton, AccountMenu } from './components/AccountMenu'
+import { signedInToast } from './account'
 import { addExclusion, EXCLUSION_FULL_MESSAGE, readExclusions, restoreExclusions, writeExclusions, type ExcludedSong } from './exclusions'
 
 import { clearMap, readMap, saveMap } from './graph/mapSnapshot'
@@ -107,7 +109,22 @@ export default function App() {
     setSavedOpen(false)
     libraryButton.current?.focus()
   }, [])
-  const toggleSaved = () => setSavedOpen((open) => !open)
+  // The account popover and the Library drawer close each other (#75).
+  const toggleSaved = () => { setAccountOpen(false); setSavedOpen((open) => !open) }
+  const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [accountOpen, setAccountOpen] = useState(false)
+  const accountButton = useRef<HTMLButtonElement>(null)
+  const closeAccount = useCallback((refocus: boolean) => {
+    setAccountOpen(false)
+    if (refocus) accountButton.current?.focus()
+  }, [])
+  const toggleAccount = () => { setSavedOpen(false); setAccountOpen((open) => !open) }
+  // Sign-in is optional: a failed config or session check leaves the signed-out app as it was.
+  useEffect(() => {
+    api.authConfig().then(setAuthConfig, () => {})
+    api.authMe().then(setUser, () => {})
+  }, [])
   const inflight = useRef(new Set<string>())
   const toastTimer = useRef<number>(0)
 
@@ -326,10 +343,10 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (tasteOpen || savedOpen) return
+      if (tasteOpen || savedOpen || accountOpen) return
       const el = document.activeElement as HTMLElement | null
       const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
-      const factor = zoomShortcut(e.key, typing, tasteOpen || savedOpen, e.metaKey || e.ctrlKey || e.altKey)
+      const factor = zoomShortcut(e.key, typing, tasteOpen || savedOpen || accountOpen, e.metaKey || e.ctrlKey || e.altKey)
       if (factor !== undefined) {
         e.preventDefault()
         zoomControl.current(factor)
@@ -346,7 +363,23 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [g, selected, prune, tasteOpen, savedOpen, select, undoPrune])
+  }, [g, selected, prune, tasteOpen, savedOpen, accountOpen, select, undoPrune])
+
+  const signIn = async (credential?: string) => {
+    const signedIn = credential ? await api.authGoogle(credential) : await api.authMock()
+    setUser(signedIn)
+    closeAccount(true)
+    showToast({ msg: signedInToast(signedIn) })
+  }
+  // Local taste and maps stay until #76/#77 add the cloud copy (see the PR for the owner decision).
+  const signOut = () => {
+    api.authSignOut().then(() => {
+      setUser(null)
+      closeAccount(true)
+      showToast({ msg: 'Signed out.' })
+    }, () => showToast({ msg: "Couldn't sign out. Try again." }, 7000))
+  }
+  const accountEnabled = !!authConfig?.enabled
 
   const updateTaste = (next: TasteProfile | null) => {
     const profile = next && !isEmptyTaste(next) ? next : null
@@ -409,6 +442,10 @@ export default function App() {
     select(id)
     setCenterRequest({ id, nonce: Date.now() })
   }
+
+  const accountEntry = (props: { className?: string; icon?: boolean }) => accountEnabled && (
+    <AccountButton user={user} open={accountOpen} onToggle={toggleAccount} buttonRef={accountButton} {...props} />
+  )
 
   const openBookmark = (entry: Bookmark) => {
     setSavedOpen(false)
@@ -511,6 +548,7 @@ export default function App() {
           onToggleLibrary={toggleSaved}
           libraryButton={libraryButton}
           onTaste={() => setTasteOpen(true)}
+          account={accountEntry({ className: 'start-header__account' })}
           onResume={resume}
           onStartFresh={startFresh}
         />
@@ -533,6 +571,7 @@ export default function App() {
                   <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
                 </button>
                 <LibraryButton icon className="topbar__icon saved-entry" count={libraryCount} open={savedOpen} onToggle={toggleSaved} buttonRef={libraryButton} />
+                {accountEntry({ icon: true, className: 'topbar__icon' })}
                 {searchOpen && <div className="topbar__search"><SearchBar {...searchProps} compact autoFocus /></div>}
               </>
             ) : (
@@ -541,6 +580,7 @@ export default function App() {
                 <LibraryButton className="taste-entry--topbar saved-entry" count={libraryCount} open={savedOpen} onToggle={toggleSaved} buttonRef={libraryButton} />
                 <button className="taste-entry taste-entry--topbar header-taste" onClick={() => setTasteOpen(true)}>Taste</button>
                 <button className="taste-entry taste-entry--topbar header-undo" aria-disabled={!g.graph.undo} onClick={() => { if (g.graph.undo) undoPrune() }}>Undo</button>
+                {accountEntry({ className: 'taste-entry--topbar' })}
               </>
             )}
           </header>
@@ -631,6 +671,7 @@ export default function App() {
         </div>
       )}
       {savedOpen && <LibraryDrawer exclusions={exclusions} onRemoveExclusion={(entry) => removeExclusions([entry])} onResetExclusions={() => removeExclusions(exclusionsRef.current)} entries={bookmarks} onOpen={openBookmark} onRemove={(entry) => removeBookmarks([entry])} onClear={() => removeBookmarks(bookmarksRef.current)} onClose={closeSaved} />}
+      {accountOpen && authConfig && <AccountMenu user={user} config={authConfig} anchor={accountButton} onSignIn={signIn} onSignOut={signOut} onClose={closeAccount} />}
       {tasteOpen && <TastePreferences profile={taste ?? emptyTaste()} onSave={saveTaste} onClear={clearTaste} onClose={() => setTasteOpen(false)} />}
     </div>
   )

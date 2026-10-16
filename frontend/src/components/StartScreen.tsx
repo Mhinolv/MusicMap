@@ -1,4 +1,4 @@
-import { useMemo, type ComponentProps, type Ref } from 'react'
+import { useMemo, type ComponentProps, type ReactNode, type Ref } from 'react'
 import type { SavedMap } from '../graph/mapSnapshot'
 import { miniMap, resumeSummary } from '../startScreen'
 import type { MusicGraph } from '../types'
@@ -15,6 +15,8 @@ type Props = {
   onToggleLibrary: () => void
   libraryButton: Ref<HTMLButtonElement>
   onTaste: () => void
+  /** Optional Sign in / account button after Taste (#75). */
+  account?: ReactNode
   onResume: () => void
   onStartFresh: () => void
 }
@@ -32,7 +34,7 @@ function MiniMapThumb({ graph }: { graph: MusicGraph }) {
   )
 }
 
-export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onToggleLibrary, libraryButton, onTaste, onResume, onStartFresh }: Props) {
+export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onToggleLibrary, libraryButton, onTaste, account, onResume, onStartFresh }: Props) {
   const resumable = savedMap.status === 'ready'
   const summary = resumable ? resumeSummary(savedMap.snapshot.graph) : undefined
   return (
@@ -43,6 +45,7 @@ export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onTog
         <span className="start-header__spacer" />
         <LibraryButton count={libraryCount} open={libraryOpen} onToggle={onToggleLibrary} buttonRef={libraryButton} />
         <button type="button" className="taste-entry start-header__taste" onClick={onTaste}>Taste</button>
+        {account}
       </header>
       <StartBackdrop />
       <main className={`start ${libraryOpen ? 'start--library' : ''}`}>
