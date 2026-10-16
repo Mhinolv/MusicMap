@@ -21,6 +21,8 @@ import { journeyStops, matchFact, onMapRows, stopNumber } from './graph/onMap'
 import type { ArtistRef, AuthConfig, AuthUser, MusicGraph, PruneMode, TasteProfile, TrackRankingContext, TrackRef } from './types'
 import { AccountButton, AccountMenu } from './components/AccountMenu'
 import { signedInToast } from './account'
+import { CLEARED_ALL_TOAST, mergeToast, SYNC_FAILED_TOAST, writeSyncMarker } from './tasteSync'
+import { useTasteSync } from './useTasteSync'
 import { addExclusion, EXCLUSION_FULL_MESSAGE, readExclusions, restoreExclusions, writeExclusions, type ExcludedSong } from './exclusions'
 
 import { clearMap, decodeMap, encodeMap, saveMap, type SavedMap } from './graph/mapSnapshot'
@@ -486,11 +488,13 @@ export default function App() {
     // Maps made while signed out merge into the account (#77).
     void syncHistory(true)
   }
-  // Local taste stays until #76 adds the cloud copy. Local map history clears on sign-out (#77 owner decision).
+  // Owner decisions (#76, #77): sign-out clears the local taste cache and the local map history.
   const signOut = () => {
     api.authSignOut().then(() => {
       userRef.current = null
       setUser(null)
+      writeSyncMarker(null)
+      applyTaste(null)
       window.clearTimeout(cloudTimer.current)
       updateHistory([])
       clearMap()
@@ -506,7 +510,34 @@ export default function App() {
   }
   const accountEnabled = !!authConfig?.enabled
 
-  const updateTaste = (next: TasteProfile | null) => {
+  // ---- taste sync (#76): local storage is the cache, the account copy is the source of truth ----
+  const applyTaste = useCallback((profile: TasteProfile | null) => {
+    writeTaste(profile)
+    tasteRef.current = profile
+    setTaste(profile)
+  }, [])
+  const toggleEdit = useRef(false)
+  const warnedSync = useRef(false)
+  const tasteSync = useTasteSync({
+    user, tasteRef, apply: applyTaste, holdRemote: tasteOpen,
+    onMerged: (result) => {
+      const merged = mergeToast(result)
+      if (merged) showToast(merged, 7000)
+    },
+    // One toast for each session when a panel toggle cannot reach the account.
+    onPushFailed: () => {
+      if (!toggleEdit.current || warnedSync.current) return
+      warnedSync.current = true
+      showToast({ msg: SYNC_FAILED_TOAST }, 7000)
+    },
+  })
+  const openAccountFromTaste = () => {
+    setTasteOpen(false)
+    setSavedOpen(false)
+    setAccountOpen(true)
+  }
+
+  const updateTaste = (next: TasteProfile | null, fromToggle = false) => {
     const profile = next && !isEmptyTaste(next) ? next : null
     if (!writeTaste(profile)) {
       showToast({ source: 'taste', msg: "Couldn't save: this browser is blocking local storage." }, 7000)
@@ -514,6 +545,8 @@ export default function App() {
     }
     tasteRef.current = profile
     setTaste(profile)
+    toggleEdit.current = fromToggle
+    tasteSync.edited()
     // An editor change supersedes the previous panel undo.
     setToast((current) => current?.source === 'taste' ? null : current)
     return true
@@ -522,7 +555,9 @@ export default function App() {
     if (updateTaste(next)) setTasteOpen(false)
   }
   const clearTaste = () => {
-    if (updateTaste(null)) setTasteOpen(false)
+    if (!updateTaste(null)) return
+    setTasteOpen(false)
+    if (user) showToast({ msg: CLEARED_ALL_TOAST })
   }
   const togglePanelTaste = (list: TasteList, entry: string) => {
     const previous = tasteRef.current
@@ -532,7 +567,7 @@ export default function App() {
         action: { label: 'Edit taste', run: () => setTasteOpen(true) } }, 7000)
       return
     }
-    if (!updateTaste(next)) return
+    if (!updateTaste(next, true)) return
     const added = storedTasteEntry(next, list, entry) !== undefined
     const opposite: TasteList[] = list === 'disliked' ? ['liked_artists', 'liked_tracks'] : ['disliked']
     const sources = added ? opposite.filter((other) => storedTasteEntry(previous, other, entry) !== undefined) : []
@@ -541,10 +576,11 @@ export default function App() {
       : `${added ? 'Added' : 'Removed'} “${entry}” ${added ? 'to' : 'from'} ${TASTE_LIST_LABELS[list]}.`
     showToast({ source: 'taste', msg,
       action: { label: 'Undo', run: () => {
-        if (tasteRef.current === next) updateTaste(previous)
+        if (tasteRef.current === next) updateTaste(previous, true)
       } } }, 7000)
   }
 
+  const editedTaste = tasteSync.edited
   useEffect(() => {
     void finishSpotifyImport(readTaste())
       .then((imported) => {
@@ -555,11 +591,12 @@ export default function App() {
         }
         tasteRef.current = imported
         setTaste(imported)
+        editedTaste()
         setTasteOpen(true)
         showToast({ msg: 'Spotify music imported. Review and save your preferences.' }, 7000)
       })
       .catch((err) => showToast({ msg: err instanceof Error ? err.message : 'Spotify import failed.' }, 7000))
-  }, [showToast])
+  }, [showToast, editedTaste])
 
   const jumpTo = (id: string) => {
     // A list row opens INSPECTOR even when its node is already selected.
@@ -801,8 +838,9 @@ export default function App() {
       {savedOpen && <LibraryDrawer initialTab={libraryTab} history={history} historyStatus={historyStatus} signedIn={!!user}
         openSessionId={hasGraph ? openSessionId : null} onResumeSession={resumeSession} onRemoveSession={(session) => removeSessions([session])}
         onClearHistory={() => removeSessions(historyRef.current, true)} exclusions={exclusions} onRemoveExclusion={(entry) => removeExclusions([entry])} onResetExclusions={() => removeExclusions(exclusionsRef.current)} entries={bookmarks} onOpen={openBookmark} onRemove={(entry) => removeBookmarks([entry])} onClear={() => removeBookmarks(bookmarksRef.current)} onClose={closeSaved} />}
-      {accountOpen && authConfig && <AccountMenu user={user} config={authConfig} anchor={accountButton} onSignIn={signIn} onSignOut={signOut} onClose={closeAccount} />}
-      {tasteOpen && <TastePreferences profile={taste ?? emptyTaste()} onSave={saveTaste} onClear={clearTaste} onClose={() => setTasteOpen(false)} />}
+      {accountOpen && authConfig && <AccountMenu user={user} config={authConfig} syncStatus={tasteSync.status} anchor={accountButton} onSignIn={signIn} onSignOut={signOut} onClose={closeAccount} />}
+      {tasteOpen && <TastePreferences profile={taste ?? emptyTaste()} signedIn={!!user} syncStatus={tasteSync.status}
+        onSignIn={accountEnabled ? openAccountFromTaste : undefined} onSave={saveTaste} onClear={clearTaste} onClose={() => setTasteOpen(false)} />}
     </div>
   )
 }

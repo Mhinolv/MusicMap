@@ -1,5 +1,5 @@
 import type { MapSession, SessionMeta } from './history'
-import type { Artist,ArtistRef, AuthConfig, AuthUser, PreviewResult, SimilarArtist, SimilarTrack, TasteConnections, TasteEvaluation, TasteProfile, TasteSteer, Track,TrackDetails, TrackRankingContext, TrackRef } from './types'
+import type { Artist, ArtistRef, AuthConfig, AuthUser, PreviewResult, SimilarArtist, SimilarTrack, TasteConnections, TasteEvaluation, TasteMerge, TasteProfile, TasteSteer, Track,TrackDetails, TrackRankingContext, TrackRef } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -117,6 +117,12 @@ export const api = {
   authGoogle: (credential: string) => post<{ user: AuthUser }>('/api/auth/google', { credential }).then((r) => r.user),
   authMock: () => post<{ user: AuthUser }>('/api/auth/mock', {}).then((r) => r.user),
   authSignOut: () => post<{ ok: boolean }>('/api/auth/signout', {}),
+
+  // ---- account copy of the taste profile (#76); null means no profile ----
+  userTaste: (signal?: AbortSignal) => get<{ profile: TasteProfile | null }>('/api/user/taste', signal).then((r) => r.profile),
+  putUserTaste: (profile: TasteProfile | null) =>
+    post<{ profile: TasteProfile | null }>('/api/user/taste', profile ?? {}, undefined, 'PUT').then((r) => r.profile),
+  mergeUserTaste: (profile: TasteProfile | null) => post<TasteMerge>('/api/user/taste/merge', profile ?? {}),
 
   // ---- map session history (#77): signed-in users only; signed-out history stays in the browser ----
   historyList: (signal?: AbortSignal) => get<{ sessions: SessionMeta[] }>('/api/history', signal).then((r) => r.sessions),

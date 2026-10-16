@@ -13,6 +13,7 @@ from app.api.routes.taste import router as taste_router
 from app.api.routes.spotify_auth import router as spotify_auth_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.history import router as history_router
+from app.api.routes.user import router as user_router
 from app.cache.cache import cache
 from app.config import get_settings
 from app.services.errors import ProviderError, RateLimited
@@ -56,6 +57,7 @@ app.include_router(taste_router)
 app.include_router(spotify_auth_router)
 app.include_router(auth_router)
 app.include_router(history_router)
+app.include_router(user_router)
 
 
 @app.exception_handler(ProviderError)

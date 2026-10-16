@@ -199,6 +199,9 @@ export type AuthUser = { id: string; email: string; name: string }
 
 export type AuthConfig = { enabled: boolean; google_client_id: string; mock: boolean }
 
+/** `POST /api/user/taste/merge` (#76): the account copy after the first sign-in on a device. */
+export type TasteMerge = { profile: TasteProfile | null; added: number; capped: string[] }
+
 export function edgeId(a: string, b: string): string {
   return a < b ? `${a}::${b}` : `${b}::${a}`
 }

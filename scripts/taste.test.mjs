@@ -138,7 +138,7 @@ new Function('exports', ts.transpileModule(readFileSync(new URL('../frontend/src
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText)(sheet)
 function panelHarness(initial = null, writable = true) {
-  const writes = [], timers = [], updates = []
+  const writes = [], timers = [], updates = [], syncs = []
   const node = { id: 'a', kind: 'artist', name: 'Radiohead' }
   const graph = { nodes: new Map([['a', node]]), edges: new Map(), rootId: 'a', selectedNodeId: 'a', journey: [] }
   const mocks = {
@@ -158,6 +158,7 @@ function panelHarness(initial = null, writable = true) {
     './sheet': sheet,
     './components/ArtistPanel': { ArtistPanel: 'ArtistPanel' },
     './components/TasteToggle': { TasteToggle: 'TasteToggle' },
+    './useTasteSync': { useTasteSync: () => ({ status: 'synced', edited: () => syncs.push(writes.at(-1)) }) },
   }
   const exports = {}
   runInNewContext(appSource, {
@@ -172,7 +173,7 @@ function panelHarness(initial = null, writable = true) {
   }
   visit(exports.default())
   const toggle = elements.find(el => el.type === 'ArtistPanel').props.tasteActions.props.onToggle
-  return { toggle, writes, timers, updates, toast: () => updates.findLast(update => update?.msg) }
+  return { toggle, writes, timers, updates, syncs, toast: () => updates.findLast(update => update?.msg) }
 }
 
 test('panel changes persist, announce seven-second Undo, and rapid toggles use the latest profile', () => {
@@ -207,6 +208,21 @@ test('full list offers Edit taste without writes; blocked storage never announce
   assert.equal(blocked.writes.length, 0)
   assert.match(blocked.toast().msg, /blocking local storage/)
   assert.equal(blocked.toast().action, undefined)
+})
+
+test('every saved panel change and Undo starts a sync; a blocked write or full list does not (#76)', () => {
+  const app = panelHarness()
+  app.toggle('liked_artists', 'Radiohead')
+  app.toggle('disliked', 'Radiohead')
+  app.toast().action.run()
+  assert.deepEqual(app.syncs, app.writes, 'each local write is followed by one sync of that profile')
+  assert.equal(app.syncs.length, 3)
+  const full = panelHarness({ ...t.emptyTaste(), liked_artists: Array.from({ length: 50 }, (_, i) => `Artist ${i}`) })
+  full.toggle('liked_artists', 'Radiohead')
+  assert.equal(full.syncs.length, 0)
+  const blocked = panelHarness(null, false)
+  blocked.toggle('liked_artists', 'Radiohead')
+  assert.equal(blocked.syncs.length, 0)
 })
 
 function componentTree(file, exportName, props) {
@@ -332,6 +348,29 @@ test('Edit taste saves up to 50 entries in all four lists, including full-length
       assert.deepEqual(Array.from(saved[list]), entries.slice(0, 50))
     }
   }
+})
+
+test('dialog head text and Sign in link follow the account state (#76)', () => {
+  const profile = t.emptyTaste()
+  const head = elements => text(elements.find(el => el.type === 'p'))
+  const signIn = elements => elements.find(el => el.type === 'button' && text(el) === 'Sign in')
+  const clear = elements => elements.find(el => el.type === 'button' && text(el) === 'Clear profile')
+  let opened = 0, cleared = 0
+  const out = componentTree('TastePreferences', 'TastePreferences', { profile, signedIn: false, onSignIn: () => { opened++ }, onClear: () => { cleared++ } })
+  assert.equal(head(out), 'One entry per line. Saved in this browser; sent to JEV only when you check a song or artist.')
+  assert.match(text(out.find(el => el.props?.className === 'taste-dialog__account')), /^Sign in to use this profile on your other devices\. $/)
+  signIn(out).props.onClick()
+  assert.equal(opened, 1)
+  clear(out).props.onClick()
+  assert.equal(cleared, 1, 'signed out, Clear profile clears at once')
+  // Sign-in turned off: no hint and no link.
+  const off = componentTree('TastePreferences', 'TastePreferences', { profile, signedIn: false })
+  assert.equal(signIn(off), undefined)
+  const on = componentTree('TastePreferences', 'TastePreferences', { profile, signedIn: true, syncStatus: 'synced', onSignIn: () => {}, onClear: () => { cleared++ } })
+  assert.equal(head(on), 'One entry per line. Synced to your account; sent to JEV only when you check a song or artist.')
+  assert.equal(signIn(on), undefined)
+  clear(on).props.onClick()
+  assert.equal(cleared, 1, 'signed in, Clear profile asks first and does not clear')
 })
 
 

@@ -60,6 +60,7 @@ function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'sav
     './components/MapNavPane': { MapNavPane },
     './bookmarks': { readBookmarks: () => bookmarks },
     './exclusions': { readExclusions: () => exclusions },
+    './useTasteSync': { useTasteSync: () => ({ status: 'synced', edited() {} }) },
   }
   const exports = {}
   runInNewContext(source, {
