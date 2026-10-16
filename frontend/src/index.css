@@ -346,6 +346,14 @@ a:hover { color: var(--cyan-hover); }
 .taste-form textarea:focus-visible { border-color: var(--cyan); }
 .taste-form textarea::placeholder { color: var(--muted); }
 .taste-form__actions { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 3px; }
+/* #76: the sign-in hint, the sync status and the signed-in clear confirm. */
+.taste-dialog p.taste-dialog__account { color: var(--muted); font-size: 12px; }
+.taste-dialog__account .link-btn { font: inherit; }
+.taste-form__buttons { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.taste-form__confirm { align-items: center; }
+.taste-dialog .taste-form__confirm p { margin: 0; color: var(--text); font-size: 12px; }
+.taste-dialog p.taste-sync, .account-menu p.taste-sync { margin: 0; color: var(--muted); font-size: 12px; }
+.taste-dialog p.taste-sync--warn, .account-menu p.taste-sync--warn { color: var(--amber); }
 
 .icon-btn {
   background: transparent; border: 1px solid var(--border); font-size: 22px; line-height: 1;

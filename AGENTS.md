@@ -25,6 +25,7 @@ TuneGraph is an interactive map for discovering music. A listener searches an ar
 | Taste profile UI and taste check | `frontend/src/components/TastePreferences.tsx`, `frontend/src/components/TasteCheck.tsx` |
 | Batch taste check for a song expansion's children (#37) | `frontend/src/components/ConnectionsCheck.tsx`, `frontend/src/connections.ts`; backend `POST /api/taste/connections/evaluate` |
 | Spotify PKCE import | `frontend/src/spotifyImport.ts` |
+| Taste sync while signed in (#76) | `frontend/src/tasteSync.ts` (rules, `tunegraph:taste-sync:v1` marker), `frontend/src/useTasteSync.ts`; backend `GET`/`PUT /api/user/taste`, `POST /api/user/taste/merge` in `backend/app/api/routes/user.py`, `backend/app/services/taste_sync.py` |
 | HTTP routes | `backend/app/api/routes/{artists,tracks,taste,spotify_auth}.py` |
 | Response models | `backend/app/models/{artist,graph,track,taste}.py` |
 | Providers | `backend/app/services/{lastfm,musicbrainz,apple_music,spotify,jev,links,preview}.py` |

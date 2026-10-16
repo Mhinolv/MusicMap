@@ -1,4 +1,4 @@
-import type { Artist, ArtistRef, AuthConfig, AuthUser, PreviewResult, SimilarArtist, SimilarTrack, TasteConnections, TasteEvaluation, TasteProfile, TasteSteer, Track,TrackDetails, TrackRankingContext, TrackRef } from './types'
+import type { Artist, ArtistRef, AuthConfig, AuthUser, PreviewResult, SimilarArtist, SimilarTrack, TasteConnections, TasteEvaluation, TasteMerge, TasteProfile, TasteSteer, Track,TrackDetails, TrackRankingContext, TrackRef } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -33,11 +33,11 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await res.json()) as T
 }
 
-async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+async function post<T>(path: string, body: unknown, signal?: AbortSignal, method: 'POST' | 'PUT' = 'POST'): Promise<T> {
   let res: Response
   try {
     res = await fetch(path, {
-      method: 'POST',
+      method,
       signal,
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -116,4 +116,10 @@ export const api = {
   authGoogle: (credential: string) => post<{ user: AuthUser }>('/api/auth/google', { credential }).then((r) => r.user),
   authMock: () => post<{ user: AuthUser }>('/api/auth/mock', {}).then((r) => r.user),
   authSignOut: () => post<{ ok: boolean }>('/api/auth/signout', {}),
+
+  // ---- account copy of the taste profile (#76); null means no profile ----
+  userTaste: (signal?: AbortSignal) => get<{ profile: TasteProfile | null }>('/api/user/taste', signal).then((r) => r.profile),
+  putUserTaste: (profile: TasteProfile | null) =>
+    post<{ profile: TasteProfile | null }>('/api/user/taste', profile ?? {}, undefined, 'PUT').then((r) => r.profile),
+  mergeUserTaste: (profile: TasteProfile | null) => post<TasteMerge>('/api/user/taste/merge', profile ?? {}),
 }

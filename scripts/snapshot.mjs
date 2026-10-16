@@ -520,6 +520,54 @@ const scenarios = [
       return 'Account popover, signed in: name, email and Sign out'
     },
   })),
+  // #76: taste sync. The mock store is shared by every scenario, so each one first empties
+  // the mock account's taste and signs out, then starts from a known local profile.
+  ...[
+    { name: 'taste-sync-signed-out', viewport: DESKTOP },
+    { name: 'taste-sync-synced', viewport: DESKTOP, signIn: true },
+    { name: 'taste-sync-failed', viewport: DESKTOP, signIn: true, respond: 502 },
+    { name: 'taste-sync-merge-toast', viewport: DESKTOP, signIn: true, toast: true },
+  ].map((options) => ({
+    ...options,
+    async run(page) {
+      await page.evaluate(async () => {
+        await fetch('/api/auth/mock', { method: 'POST' })
+        await fetch('/api/user/taste', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+        await fetch('/api/auth/signout', { method: 'POST' })
+        localStorage.removeItem('tunegraph:taste-sync:v1')
+        localStorage.setItem('tunegraph:taste:v1', JSON.stringify({
+          liked_artists: ['Radiohead', 'Portishead'], liked_tracks: ['Glory Box — Portishead'], liked_genres: ['Trip hop'], disliked: [], notes: '',
+        }))
+      })
+      await page.reload({ waitUntil: 'networkidle0' })
+      if (options.respond) {
+        await page.setRequestInterception(true)
+        page.on('request', (request) => request.url().includes('/api/user/taste')
+          ? request.respond({ status: options.respond, contentType: 'application/json', body: JSON.stringify({ error: 'store error', provider: 'upstash' }) })
+          : request.continue())
+      }
+      if (options.signIn) {
+        await page.waitForSelector('.start-header .account-button', { visible: true })
+        await page.click('.start-header .account-button')
+        await page.waitForSelector('#account-menu .account-menu__mock', { visible: true })
+        await page.click('#account-menu .account-menu__mock')
+        await page.waitForFunction(() => document.querySelector('.start-header .account-button')?.textContent === 'Mock')
+      }
+      if (options.toast) {
+        await page.waitForFunction(() => document.querySelector('.toast')?.textContent?.includes('Added your taste from this device to your account.'))
+        return 'Merge toast after the first sign-in on this device'
+      }
+      await page.click('.start-header__taste')
+      await page.waitForSelector('.taste-dialog', { visible: true })
+      if (!options.signIn) {
+        await page.waitForSelector('.taste-dialog__account .link-btn', { visible: true })
+        return 'Taste dialog, signed out: Sign in hint and link'
+      }
+      const expect = options.respond ? "Couldn't sync. Saved on this device." : 'Synced'
+      await page.waitForFunction((text) => document.querySelector('.taste-dialog .taste-sync')?.textContent === text, {}, expect)
+      return `Taste dialog, signed in: ${expect}`
+    },
+  })),
   // #46: the static Contour backdrop behind each start-screen state.
   ...[
     { name: 'start-desktop', viewport: DESKTOP },

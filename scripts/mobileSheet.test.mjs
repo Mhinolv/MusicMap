@@ -95,6 +95,7 @@ function harness({ result, narrow = false, graph: given } = {}) {
     './graph/onMap': onMap,
     './bookmarks': { readBookmarks: () => [], nodeBookmark: () => null },
     './exclusions': { readExclusions: () => [] },
+    './useTasteSync': { useTasteSync: () => ({ status: 'synced', edited() {} }) },
     './startScreen': startScreen,
     './sheet': sheet,
     './components/ForceGraph': { ForceGraph: 'ForceGraph' },
