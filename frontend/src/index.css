@@ -1009,6 +1009,8 @@ a:hover { color: var(--cyan-hover); }
 .library-drawer__actions { display: flex; justify-content: flex-end; padding: 12px 14px 0; }
 .library-drawer__note { margin: 0; padding: 12px 14px 0; color: var(--muted); line-height: 1.6; }
 .library-drawer__note:last-child { padding-bottom: 12px; }
+/* #79: the signed-in Library sync line above the notes. */
+.library-drawer__note.taste-sync--warn { color: var(--amber); }
 
 /* ---------- account popover (#75): non-modal, under its header button ---------- */
 .account-button { display: inline-flex; align-items: center; white-space: nowrap; }

@@ -36,6 +36,8 @@ test('aria-label and toast name the whole account', () => {
   assert.equal(a.accountAriaLabel(user('Ada Lovelace')), 'Account, signed in as Ada Lovelace')
   assert.equal(a.accountAriaLabel(user('', 'ada@example.com')), 'Account, signed in as ada@example.com')
   assert.equal(a.signedInToast(user('Ada Lovelace')), 'Signed in as Ada Lovelace.')
+  // #79 Orchestrator decision: the final sign-out toast.
+  assert.equal(a.SIGNED_OUT_TOAST, 'Signed out. Your taste, maps and Library stay in your account.')
 })
 
 test('the Google button uses the design-note options', () => {

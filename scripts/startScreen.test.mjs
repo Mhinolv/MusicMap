@@ -252,16 +252,20 @@ test('invalid snapshot: grey panel, recoverable copy, only START FRESH, MAP IT p
   assert.deepEqual(app.calls, ['fresh'])
 })
 
-function renderDrawer({ tab = 'saved', entries = [], exclusions = [], sessions = [], historyStatus = 'local', signedIn = false, openSessionId = null } = {}) {
+const bookmarks = load('bookmarks.ts')
+const librarySync = load('librarySync.ts', { './bookmarks': bookmarks, './exclusions': load('exclusions.ts', { './bookmarks': bookmarks }) })
+const { SyncStatusLine } = load('components/SyncStatusLine.tsx', { '../tasteSync': load('tasteSync.ts') })
+function renderDrawer({ tab = 'saved', entries = [], exclusions = [], sessions = [], historyStatus = 'local', signedIn = false, syncStatus, openSessionId = null } = {}) {
   const { LibraryDrawer, LibraryButton } = load('components/LibraryDrawer.tsx', {
     react: reactMock({ value: tab }), '../startScreen': helpers, '../history': history,
     '../bookmarks': { bookmarkKey: (entry) => `${entry.kind}:${entry.item.id}` },
+    '../librarySync': librarySync, './SyncStatusLine': { SyncStatusLine },
   })
   const calls = []
   const record = (name) => (entry) => calls.push([name, entry?.item?.id ?? entry?.id])
   const tree = LibraryDrawer({ entries, exclusions, onOpen: record('open'), onRemove: record('remove'), onClear: record('clear'),
     onRemoveExclusion: record('restore'), onResetExclusions: record('reset'), onClose: record('close'),
-    history: sessions, historyStatus, signedIn, openSessionId,
+    history: sessions, historyStatus, signedIn, syncStatus, openSessionId,
     onResumeSession: record('resume'), onRemoveSession: record('forget'), onClearHistory: record('clear-history') })
   return { elements: visit(tree), calls, tree, LibraryButton }
 }
@@ -307,6 +311,34 @@ test('saved rows: sub line with age, MAP IT opens, × removes; not-suggested row
   const notes = drawer.elements.filter((el) => el.props?.className === 'library-drawer__note').map(text)
   assert.deepEqual(notes, ['Kept on this device. Songs marked "Don\'t suggest again" move to Not suggested, where you can restore them.',
     "Saving doesn't change your taste profile."])
+})
+
+// ---- #79: Library sync while signed in -----------------------------------------------
+
+test('signed in: Saved and Not suggested show the sync line above the account note; History does not', () => {
+  const line = (drawer) => {
+    const el = drawer.elements.find((e) => e.type === SyncStatusLine)
+    return el && SyncStatusLine(el.props)
+  }
+  const notes = (drawer) => drawer.elements.filter((el) => el.type === 'p' && el.props.className === 'library-drawer__note').map(text)
+  assert.equal(line(renderDrawer()), undefined)
+  for (const tab of ['saved', 'excluded']) {
+    const synced = renderDrawer({ tab, signedIn: true })
+    const p = line(synced)
+    assert.deepEqual([p.props.className, p.props.role, text(p)], ['library-drawer__note taste-sync', 'status', 'Synced'])
+    assert.deepEqual(notes(synced), ['Synced to your account. Songs marked "Don\'t suggest again" move to Not suggested, where you can restore them.',
+      "Saving doesn't change your taste profile."])
+    // The line comes before the notes in the drawer body.
+    const order = synced.elements.filter((el) => el.type === SyncStatusLine || el.props?.className === 'library-drawer__note')
+    assert.equal(order[0].type, SyncStatusLine)
+  }
+  const states = { saving: ['Saving…', false], offline: ['Offline. Saved on this device.', true], failed: ["Couldn't sync. Saved on this device.", true] }
+  for (const [status, [copy, warn]] of Object.entries(states)) {
+    const p = line(renderDrawer({ signedIn: true, syncStatus: status }))
+    assert.equal(text(p), copy)
+    assert.equal(p.props.className.includes('taste-sync--warn'), warn)
+  }
+  assert.equal(line(renderDrawer({ tab: 'history', signedIn: true, syncStatus: 'failed' })), undefined)
 })
 
 test('empty lists keep today\'s copy and disable CLEAR ALL / RESET ALL', () => {
