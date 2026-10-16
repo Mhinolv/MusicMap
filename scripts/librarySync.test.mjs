@@ -65,7 +65,8 @@ test('copy matches the design notes and the list caps', () => {
   assert.equal(s.LIBRARY_MERGE_CAPPED, "Some items didn't fit. Saved keeps 200 and Not suggested keeps 100.")
   assert.equal(s.LIBRARY_SYNC_FAILED_TOAST, "Couldn't sync your Library. It's saved on this device.")
   assert.equal(s.libraryNote(false), 'Kept on this device. Songs marked "Don\'t suggest again" move to Not suggested, where you can restore them.')
-  assert.equal(s.libraryNote(true), 'Synced to your account. Songs marked "Don\'t suggest again" move to Not suggested, where you can restore them.')
+  // #86: signed in, SyncStatusLine is the only sync statement; the note does not claim a sync.
+  assert.equal(s.libraryNote(true), 'Songs marked "Don\'t suggest again" move to Not suggested, where you can restore them.')
 })
 
 test('the account popover shows the worst state of taste, history and Library', async () => {

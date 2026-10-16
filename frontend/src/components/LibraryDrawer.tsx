@@ -162,7 +162,7 @@ export function LibraryDrawer({ initialTab = 'saved', history, historyStatus, si
             <button type="button" className="btn btn--danger" onClick={onClearHistory} disabled={!history.length || historyStatus === 'loading'}>Clear history</button>
           </div>
         </div>
-        {tab === 'history' ? <p className="library-drawer__note">{historyNote(signedIn)}</p> : <>
+        {tab === 'history' ? <p className="library-drawer__note">{historyNote(historyStatus)}</p> : <>
           {signedIn && <SyncStatusLine status={syncStatus} className="library-drawer__note" />}
           <p className="library-drawer__note">{libraryNote(signedIn)}</p>
           <p className="library-drawer__note">Saving doesn't change your taste profile.</p>

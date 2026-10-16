@@ -16,8 +16,11 @@ export const HISTORY_LOADING = 'Loading history…'
 export const HISTORY_FAILED = "Couldn't load history. Showing maps from this device."
 export const HISTORY_BAD_MAP = "Couldn't restore this map."
 const LEGACY_SEED = 'Last map'
-export const historyNote = (signedIn: boolean) =>
-  `${signedIn ? 'Synced to your account.' : 'Kept on this device.'} The last 5 maps save on their own.`
+/** The note follows the real sync state (#86): signed out is always `local`, and `loading` makes no claim. */
+const HISTORY_NOTE_LEAD: Record<HistoryStatus, string> = {
+  synced: 'Synced to your account. ', failed: 'Kept on this device. ', local: 'Kept on this device. ', loading: '',
+}
+export const historyNote = (status: HistoryStatus) => `${HISTORY_NOTE_LEAD[status]}The last 5 maps save on their own.`
 
 const SESSION_ID = /^[A-Za-z0-9_-]{1,64}$/
 

@@ -755,7 +755,7 @@ export default function App() {
           onResume={resume}
           onStartFresh={startFresh}
           history={history}
-          synced={!!user}
+          synced={!!user && historyStatus === 'synced'}
           onResumeSession={resumeSession}
         />
       ) : (

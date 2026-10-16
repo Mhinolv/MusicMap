@@ -28,13 +28,20 @@ const graph = (kind = 'artist', count = 2, stops = 2) => ({
 })
 // #77: the start screen shows history entry 0; `savedMap` is how that entry decodes.
 const entry = (id = 's1', seed = 'Radiohead') => ({ id, seed, mode: 'artist', stops: 1, updatedAt: 1, map: `{"map":"${id}"}` })
-function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'saved', { bookmarks = [], exclusions = [], history } = {}) {
+// App's useState names in call order, so a test can set one state (for example `user`) by name.
+const stateNames = [...readFileSync(new URL('../frontend/src/App.tsx', import.meta.url), 'utf8')
+  .split('export default function App()')[1].matchAll(/const \[(\w+), set\w+\] = useState\b/g)].map((match) => match[1])
+function render(savedMap, activeGraph = graph('artist', 0, 0), saveResult = 'saved', { bookmarks = [], exclusions = [], history, state = {} } = {}) {
   const effects = [], updates = [], timers = [], restores = [], written = [], cleared = []
+  let stateIndex = 0
   const sessions = history ?? (savedMap.status === 'none' ? [] : [entry()])
   const SearchBar = () => null, StartScreen = () => null, LibraryButton = () => null, LibraryDrawer = () => null, MapNavPane = () => null
   const mocks = {
     react: {
-      useState: (initial) => [typeof initial === 'function' ? initial() : initial, (value) => updates.push(value)],
+      useState: (initial) => {
+        const name = stateNames[stateIndex++]
+        return [name in state ? state[name] : typeof initial === 'function' ? initial() : initial, (value) => updates.push(value)]
+      },
       useRef: (current) => ({ current }), useCallback: (fn) => fn, useMemo: (fn) => fn(),
       useEffect: (fn) => effects.push(fn),
     },
@@ -132,6 +139,14 @@ test('history, account wording and the session resume path reach the start scree
   assert.equal(app.timers.at(-1).ms, 4000)
   app.start.props.onToggleLibrary()
   assert.equal(app.updates.at(-2), 'saved', 'the header button opens Library on Saved')
+})
+
+test('the start-screen aside says synced only after a history sync succeeds (#86)', () => {
+  const user = { id: 'u1', name: 'Mock' }
+  for (const [historyStatus, synced] of [['local', false], ['loading', false], ['failed', false], ['synced', true]]) {
+    const app = render(ready(graph()), undefined, 'saved', { history: [entry()], state: { user, historyStatus } })
+    assert.equal(app.start.props.synced, synced, `signed in, history ${historyStatus}`)
+  }
 })
 
 test('a new search starts a new session; autosave records it once and skips an unchanged map (#77)', () => {
