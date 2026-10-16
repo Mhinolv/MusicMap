@@ -194,6 +194,11 @@ export type MusicGraph = {
   undo?: { graph: MusicGraph; summary: string; seq: number }
 }
 
+/** Signed-in account from `/api/auth/*` (#75). `id` is the stable Google subject. */
+export type AuthUser = { id: string; email: string; name: string }
+
+export type AuthConfig = { enabled: boolean; google_client_id: string; mock: boolean }
+
 export function edgeId(a: string, b: string): string {
   return a < b ? `${a}::${b}` : `${b}::${a}`
 }

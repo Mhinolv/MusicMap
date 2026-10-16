@@ -480,6 +480,46 @@ const scenarios = [
       return 'Start screen with the library drawer open on Saved'
     },
   })),
+  // #75: optional sign-in. Mock mode shows "Sign in (mock)" in place of the Google button.
+  ...[
+    { name: 'account-start', viewport: DESKTOP },
+    { name: 'account-start-mobile', viewport: MOBILE, userAgent: MOBILE_UA },
+    { name: 'account-signed-out', viewport: DESKTOP, open: true },
+    { name: 'account-signed-out-mobile', viewport: MOBILE, userAgent: MOBILE_UA, open: true },
+    { name: 'account-signed-in', viewport: DESKTOP, signIn: true },
+    { name: 'account-error', viewport: DESKTOP, signIn: true, respond: 502 },
+    { name: 'account-map-mobile', viewport: MOBILE, userAgent: MOBILE_UA, map: true,
+      extraMedia: [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }] },
+  ].map((options) => ({
+    ...options,
+    async run(page) {
+      if (options.respond) {
+        await page.setRequestInterception(true)
+        page.on('request', (request) => request.url().includes('/api/auth/mock')
+          ? request.respond({ status: options.respond, contentType: 'application/json', body: JSON.stringify({ error: 'store error', provider: 'upstash' }) })
+          : request.continue())
+      }
+      if (options.map) {
+        await artistGraph(page)
+        await page.waitForSelector('.topbar .account-button--icon[aria-label="Sign in"]', { visible: true })
+        return 'Phone map header: person icon after the Library icon'
+      }
+      await page.waitForSelector('.start-header .account-button', { visible: true })
+      if (!options.open && !options.signIn) return 'Start header: Sign in after Taste'
+      await page.click('.start-header .account-button')
+      await page.waitForSelector('#account-menu .account-menu__mock', { visible: true })
+      if (!options.signIn) return 'Account popover, signed out (mock)'
+      await page.click('#account-menu .account-menu__mock')
+      if (options.respond) {
+        await page.waitForSelector('#account-menu [role="alert"]', { visible: true })
+        return "Account popover: Couldn't sign in. Try again."
+      }
+      await page.waitForFunction(() => document.querySelector('.start-header .account-button')?.textContent === 'Mock')
+      await page.click('.start-header .account-button')
+      await page.waitForSelector('#account-menu .account-menu__signout', { visible: true })
+      return 'Account popover, signed in: name, email and Sign out'
+    },
+  })),
   // #46: the static Contour backdrop behind each start-screen state.
   ...[
     { name: 'start-desktop', viewport: DESKTOP },
