@@ -596,17 +596,20 @@ const scenarios = [
       await page.click('.start-header .account-button')
       await page.waitForSelector('#account-menu .account-menu__mock', { visible: true })
       if (!options.signIn && options.viewport === MOBILE) {
-        // #87: the desktop 280px popover under its button; the intro title starts clear of it.
+        // #87: the desktop 280px popover under its button; the intro title shows in full below it.
+        await sleep(100)
         const box = await page.evaluate(() => {
           const menu = document.querySelector('#account-menu').getBoundingClientRect()
           const title = document.querySelector('.start-intro__title').getBoundingClientRect()
           const name = document.querySelector('.start-header__name')?.getBoundingClientRect()
-          return { width: Math.round(menu.width), left: Math.round(menu.left), titleLeft: Math.round(title.left), name: name ? name.width : 0 }
+          const overlap = menu.left < title.right && title.left < menu.right && menu.top < title.bottom && title.top < menu.bottom
+          return { width: Math.round(menu.width), left: Math.round(menu.left), bottom: Math.round(menu.bottom), titleTop: Math.round(title.top),
+            overlap, name: name ? name.width : 0 }
         })
         if (box.width > 280) throw new Error(`account popover is ${box.width}px wide; the cap is 280px`)
-        if (!(box.left > box.titleLeft + 40)) throw new Error(`account popover (left ${box.left}px) covers the intro title (left ${box.titleLeft}px)`)
+        if (box.overlap) throw new Error(`account popover (bottom ${box.bottom}px) covers the intro title (top ${box.titleTop}px)`)
         if (!(box.name > 0)) throw new Error('the TUNEGRAPH word mark must show on the phone start header')
-        return `Account popover, signed out (mock): ${box.width}px wide at left ${box.left}px; intro title starts at ${box.titleLeft}px`
+        return `Account popover, signed out (mock): ${box.width}px wide at left ${box.left}px, bottom ${box.bottom}px; intro title top ${box.titleTop}px`
       }
       if (!options.signIn) return 'Account popover, signed out (mock)'
       await page.click('#account-menu .account-menu__mock')

@@ -302,14 +302,16 @@ test('phone start scenarios take a full-page capture and check the fold (#87)', 
 
 test('phone account popover keeps the 280px shape clear of the intro title (#87)', async () => {
   const open = scenarios.find((s) => s.name === 'account-signed-out-mobile')
-  const base = { '.start-intro__title': { left: 16 }, '.start-header__name': { width: 120 } }
-  assert.equal(await open.run(phonePage({ ...base, '#account-menu': { width: 280, left: 98 } })),
-    'Account popover, signed out (mock): 280px wide at left 98px; intro title starts at 16px')
+  const base = { '.start-intro__title': { left: 16, right: 374, top: 266, bottom: 318 }, '.start-header__name': { width: 120 } }
+  const menu = { width: 280, left: 98, right: 378, top: 50, bottom: 246 }
+  assert.equal(await open.run(phonePage({ ...base, '#account-menu': menu })),
+    'Account popover, signed out (mock): 280px wide at left 98px, bottom 246px; intro title top 266px')
   // The pre-fix phone sheet: full width from the left edge, over the intro.
-  await assert.rejects(open.run(phonePage({ ...base, '#account-menu': { width: 390, left: 0 } })),
+  await assert.rejects(open.run(phonePage({ ...base, '#account-menu': { ...menu, width: 390, left: 0, right: 390 } })),
     { message: 'account popover is 390px wide; the cap is 280px' })
-  await assert.rejects(open.run(phonePage({ ...base, '#account-menu': { width: 280, left: 0 } })),
-    { message: 'account popover (left 0px) covers the intro title (left 16px)' })
+  // QA attempt 1: the 280px popover over the right half of a title that starts at 72px.
+  await assert.rejects(open.run(phonePage({ ...base, '.start-intro__title': { left: 16, right: 374, top: 72, bottom: 124 }, '#account-menu': menu })),
+    { message: 'account popover (bottom 246px) covers the intro title (top 72px)' })
   await assert.rejects(scenarios.find((s) => s.name === 'account-start-mobile').run(phonePage(base, { icon: false })),
     { message: 'phone start header must use the person icon' })
 })

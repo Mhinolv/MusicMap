@@ -1049,6 +1049,8 @@ a:hover { color: var(--cyan-hover); }
   .start, .start--library { width: auto; margin: 0 16px; padding: 24px 0 32px; }
   /* #87: 16px gaps so the first Recent maps row fits above an 844px fold. */
   .start { gap: 16px; }
+  /* #87: with the account popover open, the column moves below it, so the intro title shows in full. */
+  .app--empty:has(> #account-menu) .start { padding-top: calc(var(--account-menu-h, 0px) + 20px); }
   .start-panel__aside { display: none; }
   .start-intro { gap: 8px; margin-bottom: -8px; }
   .start-intro__title { font-size: 24px; }

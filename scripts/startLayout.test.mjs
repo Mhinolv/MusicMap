@@ -130,6 +130,12 @@ test('phone start screen keeps the word mark, a 280px account popover and a dens
   }
   assert.equal(finalValue('.account-menu', 'width'), '280px')
   assert.equal(finalValue('.account-menu', 'max-width'), 'calc(100vw - 24px)', 'never wider than the phone')
+  // With the popover open, the start column moves below it, so the intro title shows in full (QA attempt 1).
+  assert.equal(finalValue('.app--empty:has(> #account-menu) .start', 'padding-top', media), 'calc(var(--account-menu-h, 0px) + 20px)')
+  assert.equal(finalValue('.app--empty:has(> #account-menu) .start', 'padding-top'), undefined, 'desktop keeps its layout')
+  const menu = readFileSync(new URL('../frontend/src/components/AccountMenu.tsx', import.meta.url), 'utf8')
+  assert.match(menu, /host\.style\.setProperty\('--account-menu-h'/, 'the popover publishes its height on its host')
+  assert.match(menu, /host\.style\.removeProperty\('--account-menu-h'\)/, 'the height clears when the popover closes')
   // Header: icon Library and account buttons, so the word mark always shows.
   assert.ok(!all.some((r) => r.media === media && r.selectors.some((s) => s.includes('.start-header__name')) && r.decls.display === 'none'),
     'the word mark never hides on phones')
