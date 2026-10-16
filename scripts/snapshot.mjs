@@ -516,7 +516,8 @@ const scenarios = [
     { name: 'history-load-failed', viewport: DESKTOP, count: 2, failed: true },
     { name: 'history-load-failed-mobile', viewport: MOBILE, userAgent: MOBILE_UA, count: 2, failed: true },
     { name: 'start-recent-maps', viewport: DESKTOP, count: 5, start: true },
-    { name: 'start-recent-maps-mobile', viewport: MOBILE, userAgent: MOBILE_UA, count: 5, start: true },
+    // #87: full-page capture so the PNG shows every Recent maps row below the fold.
+    { name: 'start-recent-maps-mobile', viewport: MOBILE, userAgent: MOBILE_UA, count: 5, start: true, fullPage: true },
     { name: 'start-recent-maps-bad', viewport: DESKTOP, count: 3, bad: true, start: true },
   ].map((options) => ({
     ...options,
@@ -528,6 +529,17 @@ const scenarios = [
         if (rows.length !== Math.min(options.count - 1, 4)) throw new Error(`expected ${Math.min(options.count - 1, 4)} recent rows, got ${rows.length}`)
         if (options.bad && !rows[0]) throw new Error('the bad map row must be disabled')
         if (await page.$('.resume__all')) throw new Error('the All recent maps link must be gone')
+        if (options.viewport === MOBILE) {
+          // #87: brand, resume card and the first Recent maps row all show without a scroll.
+          const fold = await page.evaluate(() => {
+            const name = document.querySelector('.start-header__name')?.getBoundingClientRect()
+            const row = document.querySelector('.recent-maps .recent-row')?.getBoundingClientRect()
+            return { name: name ? name.width : 0, row: row ? Math.round(row.top) : Infinity, fold: innerHeight }
+          })
+          if (!(fold.name > 0)) throw new Error('the TUNEGRAPH word mark must show on the phone start header')
+          if (!(fold.row < fold.fold)) throw new Error(`first Recent maps row top ${fold.row}px must be above the ${fold.fold}px fold`)
+          return `Start screen with ${rows.length} Recent maps rows; first row top ${fold.row}px, above the ${fold.fold}px fold`
+        }
         return `Start screen with ${rows.length} Recent maps rows${options.bad ? ', one bad' : ''}`
       }
       if (options.failed) {
@@ -538,7 +550,7 @@ const scenarios = [
         await page.click('.start-header .account-button')
         await page.waitForSelector('#account-menu .account-menu__mock', { visible: true })
         await page.click('#account-menu .account-menu__mock')
-        await page.waitForFunction(() => document.querySelector('.start-header .account-button')?.textContent === 'Mock')
+        await page.waitForFunction(() => document.querySelector('.start-header .account-button')?.getAttribute('aria-label')?.startsWith('Account, signed in'))
       }
       await openHistoryTab(page)
       if (options.failed) await page.waitForSelector('#history-list .history-status', { visible: true })
@@ -576,16 +588,36 @@ const scenarios = [
         return 'Phone map header: person icon after the Library icon'
       }
       await page.waitForSelector('.start-header .account-button', { visible: true })
+      // #87: phones show the Library and person icons, so the word mark keeps its place.
+      if (options.viewport === MOBILE && !await page.$('.start-header .account-button--icon[aria-label="Sign in"]')) {
+        throw new Error('phone start header must use the person icon')
+      }
       if (!options.open && !options.signIn) return 'Start header: Sign in after Taste'
       await page.click('.start-header .account-button')
       await page.waitForSelector('#account-menu .account-menu__mock', { visible: true })
+      if (!options.signIn && options.viewport === MOBILE) {
+        // #87: the desktop 280px popover under its button; the intro title shows in full below it.
+        await sleep(100)
+        const box = await page.evaluate(() => {
+          const menu = document.querySelector('#account-menu').getBoundingClientRect()
+          const title = document.querySelector('.start-intro__title').getBoundingClientRect()
+          const name = document.querySelector('.start-header__name')?.getBoundingClientRect()
+          const overlap = menu.left < title.right && title.left < menu.right && menu.top < title.bottom && title.top < menu.bottom
+          return { width: Math.round(menu.width), left: Math.round(menu.left), bottom: Math.round(menu.bottom), titleTop: Math.round(title.top),
+            overlap, name: name ? name.width : 0 }
+        })
+        if (box.width > 280) throw new Error(`account popover is ${box.width}px wide; the cap is 280px`)
+        if (box.overlap) throw new Error(`account popover (bottom ${box.bottom}px) covers the intro title (top ${box.titleTop}px)`)
+        if (!(box.name > 0)) throw new Error('the TUNEGRAPH word mark must show on the phone start header')
+        return `Account popover, signed out (mock): ${box.width}px wide at left ${box.left}px, bottom ${box.bottom}px; intro title top ${box.titleTop}px`
+      }
       if (!options.signIn) return 'Account popover, signed out (mock)'
       await page.click('#account-menu .account-menu__mock')
       if (options.respond) {
         await page.waitForSelector('#account-menu [role="alert"]', { visible: true })
         return "Account popover: Couldn't sign in. Try again."
       }
-      await page.waitForFunction(() => document.querySelector('.start-header .account-button')?.textContent === 'Mock')
+      await page.waitForFunction(() => document.querySelector('.start-header .account-button')?.getAttribute('aria-label')?.startsWith('Account, signed in'))
       await page.click('.start-header .account-button')
       await page.waitForSelector('#account-menu .account-menu__signout', { visible: true })
       return 'Account popover, signed in: name, email and Sign out'
@@ -622,7 +654,7 @@ const scenarios = [
         await page.click('.start-header .account-button')
         await page.waitForSelector('#account-menu .account-menu__mock', { visible: true })
         await page.click('#account-menu .account-menu__mock')
-        await page.waitForFunction(() => document.querySelector('.start-header .account-button')?.textContent === 'Mock')
+        await page.waitForFunction(() => document.querySelector('.start-header .account-button')?.getAttribute('aria-label')?.startsWith('Account, signed in'))
       }
       if (options.toast) {
         await page.waitForFunction(() => document.querySelector('.toast')?.textContent?.includes('Added your taste from this device to your account.'))
@@ -677,7 +709,7 @@ const scenarios = [
         await page.click(account)
         await page.waitForSelector('#account-menu .account-menu__mock', { visible: true })
         await page.click('#account-menu .account-menu__mock')
-        await page.waitForFunction(() => document.querySelector('.start-header .account-button')?.textContent === 'Mock')
+        await page.waitForFunction(() => document.querySelector('.start-header .account-button')?.getAttribute('aria-label')?.startsWith('Account, signed in'))
       }
       if (options.cloud) {
         await page.waitForFunction(() => document.querySelector('.toast')?.textContent?.includes("Some items didn't fit. Saved keeps 200 and Not suggested keeps 100."))
@@ -699,7 +731,7 @@ const scenarios = [
     { name: 'start-desktop', viewport: DESKTOP },
     { name: 'start-resume', viewport: DESKTOP, fixture: 'resume' },
     { name: 'start-library', viewport: DESKTOP, fixture: 'library' },
-    { name: 'start-mobile', viewport: MOBILE, userAgent: MOBILE_UA },
+    { name: 'start-mobile', viewport: MOBILE, userAgent: MOBILE_UA, fullPage: true },
     { name: 'start-short', viewport: { width: 1440, height: 600, deviceScaleFactor: 1 } },
   ].map((options) => ({
     ...options,
@@ -1378,11 +1410,17 @@ async function runScenario(browser, sc) {
       // A blinking text caret would make otherwise identical captures differ.
       await page.addStyleTag({ content: '* { caret-color: transparent !important; }' })
       const note = (await sc.run(page)) || ''
+      if (sc.fullPage) {
+        // #87: the start screen scrolls inside .app, so `fullPage` alone stops at the fold.
+        // Grow the viewport to the content height; phones keep the top-anchored column.
+        const height = await page.evaluate(() => Math.max(innerHeight, ...[...document.querySelectorAll('.app')].map((el) => el.scrollHeight)))
+        await page.setViewport({ ...sc.viewport, height: Math.ceil(height) })
+      }
       for (const scheme of ['light', 'dark']) {
         await setScheme(ctx, scheme)
         await sleep(250)
         const file = `${sc.name}-${scheme}.png`
-        await page.screenshot({ path: join(outDir, file) })
+        await page.screenshot({ path: join(outDir, file), fullPage: !!sc.fullPage })
         entry[scheme] = file
       }
       entry.note = [note, errors.length ? `page errors: ${errors.join(' | ')}` : ''].filter(Boolean).join('; ')

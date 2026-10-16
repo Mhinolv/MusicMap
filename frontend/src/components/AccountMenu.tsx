@@ -69,6 +69,21 @@ export function AccountMenu({ user, config, syncStatus, anchor, onSignIn, onSign
     return () => window.removeEventListener('resize', measure)
   }, [anchor])
 
+  // #87: publish the popover height so the phone start column can move below it.
+  useLayoutEffect(() => {
+    const el = menu.current
+    const host = el?.parentElement
+    if (!el || !host) return
+    const publish = () => host.style.setProperty('--account-menu-h',`${Math.ceil(el.offsetHeight)}px`)
+    publish()
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(publish)
+    observer?.observe(el)
+    return () => {
+      observer?.disconnect()
+      host.style.removeProperty('--account-menu-h')
+    }
+  }, [])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || document.querySelector('[aria-modal="true"]')) return
