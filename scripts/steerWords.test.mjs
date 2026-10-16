@@ -72,9 +72,9 @@ test('every outcome explains what was and was not applied', () => {
 
 test('errors: 503 has its own copy, busy/timeout/unreadable reuse #36', () => {
   assert.equal(s.steerErrorMessage(new ApiError('no key', 503)), 'Plain-word steering is not configured on this server.')
-  assert.equal(s.steerErrorMessage(new ApiError('rate', 429)), 'JEV is busy. Try again shortly.')
-  assert.equal(s.steerErrorMessage(new ApiError('timed out', 504)), 'JEV took too long to answer. Try again.')
-  assert.equal(s.steerErrorMessage(new ApiError('invalid response', 502)), "JEV sent an answer we couldn't read. Try again.")
+  assert.equal(s.steerErrorMessage(new ApiError('rate', 429)), 'The taste check is busy. Try again shortly.')
+  assert.equal(s.steerErrorMessage(new ApiError('timed out', 504)), 'The taste check took too long to answer. Try again.')
+  assert.equal(s.steerErrorMessage(new ApiError('invalid response', 502)), "The taste check sent an answer we couldn't read. Try again.")
   for (const err of [new ApiError('bad', 422), new ApiError('Network error', 0), new Error('x')]) {
     assert.equal(s.steerErrorMessage(err), "Couldn't interpret that right now. Please retry.")
   }

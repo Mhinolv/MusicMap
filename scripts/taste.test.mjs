@@ -358,7 +358,7 @@ test('dialog head text and Sign in link follow the account state (#76)', () => {
   const clear = elements => elements.find(el => el.type === 'button' && text(el) === 'Clear profile')
   let opened = 0, cleared = 0
   const out = componentTree('TastePreferences', 'TastePreferences', { profile, signedIn: false, onSignIn: () => { opened++ }, onClear: () => { cleared++ } })
-  assert.equal(head(out), 'One entry per line. Saved in this browser; sent to JEV only when you check a song or artist.')
+  assert.equal(head(out), 'One entry per line. Saved in this browser; used only when you check a song or artist.')
   assert.match(text(out.find(el => el.props?.className === 'taste-dialog__account')), /^Sign in to use this profile on your other devices\. $/)
   signIn(out).props.onClick()
   assert.equal(opened, 1)
@@ -368,7 +368,7 @@ test('dialog head text and Sign in link follow the account state (#76)', () => {
   const off = componentTree('TastePreferences', 'TastePreferences', { profile, signedIn: false })
   assert.equal(signIn(off), undefined)
   const on = componentTree('TastePreferences', 'TastePreferences', { profile, signedIn: true, syncStatus: 'synced', onSignIn: () => {}, onClear: () => { cleared++ } })
-  assert.equal(head(on), 'One entry per line. Synced to your account; sent to JEV only when you check a song or artist.')
+  assert.equal(head(on), 'One entry per line. Synced to your account; used only when you check a song or artist.')
   assert.equal(signIn(on), undefined)
   clear(on).props.onClick()
   assert.equal(cleared, 1, 'signed in, Clear profile asks first and does not clear')

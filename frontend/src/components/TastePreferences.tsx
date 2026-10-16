@@ -70,8 +70,8 @@ export function TastePreferences({ profile, signedIn, syncStatus, onSignIn, onSa
           <div>
             <h2 id="taste-title">Your music taste</h2>
             <p>{signedIn
-              ? 'One entry per line. Synced to your account; sent to JEV only when you check a song or artist.'
-              : 'One entry per line. Saved in this browser; sent to JEV only when you check a song or artist.'}</p>
+              ? 'One entry per line. Synced to your account; used only when you check a song or artist.'
+              : 'One entry per line. Saved in this browser; used only when you check a song or artist.'}</p>
             {!signedIn && onSignIn && (
               <p className="taste-dialog__account">
                 Sign in to use this profile on your other devices.{' '}

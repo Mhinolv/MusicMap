@@ -416,7 +416,7 @@ const scenarios = [
     { name: 'steer-words-proposed', text: 'more rock and grunge', expect: 'Interpreted as:' },
     { name: 'steer-words-avoid', text: 'grunge but less rock', expect: "Steering away from a sound isn't supported yet, so that part was left out." },
     { name: 'steer-words-no-match', text: 'with bagpipes', expect: "None of this song's tags matched. Try words closer to the tags below, or pick them yourself." },
-    { name: 'steer-words-error', text: 'darker', respond: 504, expect: 'JEV took too long to answer. Try again.' },
+    { name: 'steer-words-error', text: 'darker', respond: 504, expect: 'The taste check took too long to answer. Try again.' },
     { name: 'steer-words-expanded', expanded: true },
     { name: 'steer-words-mobile', text: 'more rock and grunge', expect: 'Interpreted as:', viewport: MOBILE, userAgent: MOBILE_UA,
       extraMedia: [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }] },
@@ -1237,8 +1237,8 @@ const scenarios = [
     { name: 'taste-check-song-uncertain-fallback', kind: 'song', profile: { liked_genres: ['grunge'] }, reply: { outcome: 'uncertain', level: null, score: null, confidence: 0.1 }, expect: 'Uncertain estimate' },
     { name: 'taste-check-mobile-tentative-mixed', kind: 'song', viewport: MOBILE, userAgent: MOBILE_UA, profile: { liked_genres: ['grunge'], disliked: ['90s'] }, expect: "The model's answer was split, so this is a tentative lean, not a firm fit." },
     { name: 'taste-check-artist-strong', kind: 'artist', profile: { liked_artists: ['Radiohead'], liked_genres: ['art rock'] }, expect: 'Strong fit' },
-    { name: 'taste-check-timeout', kind: 'song', profile: { liked_genres: ['grunge'] }, respond: 504, expect: 'JEV took too long to answer. Try again.' },
-    { name: 'taste-check-loading', kind: 'song', profile: { liked_genres: ['grunge'] }, hang: true, expect: 'JEV is checking (up to 5 seconds).' },
+    { name: 'taste-check-timeout', kind: 'song', profile: { liked_genres: ['grunge'] }, respond: 504, expect: 'The taste check took too long to answer. Try again.' },
+    { name: 'taste-check-loading', kind: 'song', profile: { liked_genres: ['grunge'] }, hang: true, expect: 'Checking your taste (up to 5 seconds).' },
     { name: 'taste-check-mobile-conflict', kind: 'song', viewport: MOBILE, userAgent: MOBILE_UA, profile: { liked_genres: ['jazz'], disliked: ['grunge'] }, expect: 'Conflicts with your dislikes' },
     { name: 'taste-check-mobile-insufficient', kind: 'song', viewport: MOBILE, userAgent: MOBILE_UA, profile: { liked_genres: ['jazz'] }, expect: 'Not enough information' },
   ].map(({ viewport = DESKTOP, ...settings }) => ({
@@ -1284,7 +1284,7 @@ const scenarios = [
     { name: 'connections-no-profile', profile: null, expect: 'Add preferences' },
     { name: 'connections-pending', click: true, hang: true, expect: 'Checking…' },
     { name: 'connections-mixed-simulated', click: true, expect: "Couldn't check" },
-    { name: 'connections-error', click: true, respond: 504, expect: 'JEV took too long to answer. Try again.' },
+    { name: 'connections-error', click: true, respond: 504, expect: 'The taste check took too long to answer. Try again.' },
     // #51: the second row is a tentative Likely (ring pips, "Leaning:"), counted on its own.
     { name: 'connections-tentative', click: true, replyTentative: true, expect: 'Leaning:' },
     // Its own notes give it fresh cache keys: the backend still holds the desktop scenario's

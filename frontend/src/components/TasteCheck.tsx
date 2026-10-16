@@ -82,7 +82,7 @@ function TasteEvaluationCheck({ kind, itemId, profile, onEdit }: Props) {
               {loading ? 'Checking…' : result || error ? 'Check again' : 'Check my taste'}
             </button>
           </div>
-          {loading && <p className="panel__hint" role="status">JEV is checking (up to 5 seconds).</p>}
+          {loading && <p className="panel__hint" role="status">Checking your taste (up to 5 seconds).</p>}
           {error && <p className="panel__error" role="alert">{error}</p>}
           {result && band && <div className={`taste-check__result fit--${band.key} fit-tone--${band.tone}${band.tentative ? ' is-tentative' : ''}`} role="status">
             <div className="fit-band">
@@ -98,7 +98,7 @@ function TasteEvaluationCheck({ kind, itemId, profile, onEdit }: Props) {
             </div>
             {hint && <p className="panel__hint">{hint}</p>}
             {shared.length > 0 && <small>Shared tags: {shared.join(', ')}</small>}
-            <small>Experimental judgment based on the preferences you entered.{result.model ? ` · ${result.model}` : ''}</small>
+            <small>Experimental judgment based on the preferences you entered.</small>
           </div>}
         </>
       )}
