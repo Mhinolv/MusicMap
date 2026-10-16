@@ -14,6 +14,8 @@ type Props = {
   libraryCount: number
   libraryOpen: boolean
   onToggleLibrary: () => void
+  /** Phone width (#87): Library and account show as icons, as in the map header. */
+  narrow: boolean
   libraryButton: Ref<HTMLButtonElement>
   onTaste: () => void
   /** Optional Sign in / account button after Taste (#75). */
@@ -39,7 +41,7 @@ function MiniMapThumb({ graph }: { graph: MusicGraph }) {
   )
 }
 
-export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onToggleLibrary, libraryButton, onTaste, account, onResume, onStartFresh,
+export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onToggleLibrary, narrow, libraryButton, onTaste, account, onResume, onStartFresh,
   history, synced, onResumeSession }: Props) {
   const recent = history.slice(1, 5)
   const resumable = savedMap.status === 'ready'
@@ -50,7 +52,7 @@ export function StartScreen({ savedMap, search, libraryCount, libraryOpen, onTog
         <BrandMark />
         <span className="start-header__name" aria-hidden="true">TuneGraph</span>
         <span className="start-header__spacer" />
-        <LibraryButton count={libraryCount} open={libraryOpen} onToggle={onToggleLibrary} buttonRef={libraryButton} />
+        <LibraryButton icon={narrow} className={narrow ? 'start-header__icon' : ''} count={libraryCount} open={libraryOpen} onToggle={onToggleLibrary} buttonRef={libraryButton} />
         <button type="button" className="taste-entry start-header__taste" onClick={onTaste}>Taste</button>
         {account}
       </header>

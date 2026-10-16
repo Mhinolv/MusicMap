@@ -16,7 +16,7 @@ const scenarios = runInNewContext(
   `${source.slice(source.indexOf('const scenarios = ['), source.indexOf('// ---- runner'))}\nscenarios`,
   {
     DESKTOP: { width: 1440, height: 900, deviceScaleFactor: 1 }, MOBILE: {}, MOBILE_UA: '',
-    artistGraph: async () => {},
+    artistGraph: async () => {}, historyFixture: async () => {},
     search: async () => {}, waitForNodes: async () => {},
     waitForPanel: async () => {}, waitForSettle: async () => {}, sleep: async () => {},
     expandTopRow: async (page) => page.click('expandTopRow'),
@@ -271,4 +271,45 @@ test('start scenarios read intro and panel boxes as plain numbers', async () => 
     assert.equal(await scenarios.find((scenario) => scenario.name === name).run(page),
       'Contour backdrop below the header (top 48px), 0 KB of path data; intro above NEW MAP (top 300px)')
   }
+})
+
+// #87: phone start-screen captures show Recent maps, the word mark, and a 280px account popover.
+function phonePage(rects, { icon = true } = {}) {
+  const document = { querySelector: (sel) => rects[sel] && { getBoundingClientRect: () => rects[sel] } }
+  return {
+    async waitForSelector() {}, async click() {},
+    async $(sel) { return sel.includes('account-button--icon') ? icon : null },
+    async $$eval() { return [false, false, false, false] },
+    async evaluate(fn) { return JSON.parse(JSON.stringify(runInNewContext(`(${fn})()`, { document, innerHeight: 844 }))) },
+  }
+}
+
+test('phone start scenarios take a full-page capture and check the fold (#87)', async () => {
+  for (const name of ['start-recent-maps-mobile', 'start-mobile']) {
+    assert.equal(scenarios.find((s) => s.name === name).fullPage, true, name)
+  }
+  assert.match(source, /page\.setViewport\(\{ \.\.\.sc\.viewport, height: Math\.ceil\(height\) \}\)/, 'runner grows the viewport to the .app scroll height')
+  assert.match(source, /fullPage: !!sc\.fullPage/)
+  const recent = scenarios.find((s) => s.name === 'start-recent-maps-mobile')
+  const name = { width: 120 }
+  assert.equal(await recent.run(phonePage({ '.start-header__name': name, '.recent-maps .recent-row': { top: 700 } })),
+    'Start screen with 4 Recent maps rows; first row top 700px, above the 844px fold')
+  await assert.rejects(recent.run(phonePage({ '.start-header__name': name, '.recent-maps .recent-row': { top: 900 } })),
+    { message: 'first Recent maps row top 900px must be above the 844px fold' })
+  await assert.rejects(recent.run(phonePage({ '.start-header__name': { width: 0 }, '.recent-maps .recent-row': { top: 700 } })),
+    { message: 'the TUNEGRAPH word mark must show on the phone start header' })
+})
+
+test('phone account popover keeps the 280px shape clear of the intro title (#87)', async () => {
+  const open = scenarios.find((s) => s.name === 'account-signed-out-mobile')
+  const base = { '.start-intro__title': { left: 16 }, '.start-header__name': { width: 120 } }
+  assert.equal(await open.run(phonePage({ ...base, '#account-menu': { width: 280, left: 98 } })),
+    'Account popover, signed out (mock): 280px wide at left 98px; intro title starts at 16px')
+  // The pre-fix phone sheet: full width from the left edge, over the intro.
+  await assert.rejects(open.run(phonePage({ ...base, '#account-menu': { width: 390, left: 0 } })),
+    { message: 'account popover is 390px wide; the cap is 280px' })
+  await assert.rejects(open.run(phonePage({ ...base, '#account-menu': { width: 280, left: 0 } })),
+    { message: 'account popover (left 0px) covers the intro title (left 16px)' })
+  await assert.rejects(scenarios.find((s) => s.name === 'account-start-mobile').run(phonePage(base, { icon: false })),
+    { message: 'phone start header must use the person icon' })
 })

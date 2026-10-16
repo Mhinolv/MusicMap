@@ -121,3 +121,30 @@ test('phone toasts on the start screen and in the Library drawer span the width 
   assert.equal(finalValue('.toast', 'bottom'), '20px')
   assert.equal(finalValue('.toast', 'z-index'), '40')
 })
+
+test('phone start screen keeps the word mark, a 280px account popover and a denser column (#87)', () => {
+  const media = '(max-width: 640px)'
+  // Account popover: the desktop 280px shape under its button, not a full-width sheet over the intro.
+  for (const prop of ['left', 'right', 'width', 'border-width']) {
+    assert.equal(finalValue('.account-menu', prop, media), undefined, `no phone override of .account-menu ${prop}`)
+  }
+  assert.equal(finalValue('.account-menu', 'width'), '280px')
+  assert.equal(finalValue('.account-menu', 'max-width'), 'calc(100vw - 24px)', 'never wider than the phone')
+  // Header: icon Library and account buttons, so the word mark always shows.
+  assert.ok(!all.some((r) => r.media === media && r.selectors.some((s) => s.includes('.start-header__name')) && r.decls.display === 'none'),
+    'the word mark never hides on phones')
+  assert.equal(finalValue('.start-header .start-header__icon', 'width', media), '44px')
+  assert.equal(finalValue('.start-header .start-header__icon', 'height', media), '44px')
+  const screen = readFileSync(new URL('../frontend/src/components/StartScreen.tsx', import.meta.url), 'utf8')
+  assert.match(screen, /<LibraryButton icon=\{narrow\}/, 'phone start header uses the Library icon, as in the map header')
+  const app = readFileSync(new URL('../frontend/src/App.tsx', import.meta.url), 'utf8')
+  assert.match(app, /account=\{accountEntry\(narrow \? \{ icon: true/, 'phone start header uses the account icon')
+  // Denser column: 16px gaps and a 100x60 thumbnail beside the resume title.
+  assert.equal(finalValue('.start', 'gap', media), '16px')
+  assert.equal(finalValue('.resume', 'flex-direction', media), 'row')
+  assert.equal(finalValue('.resume', 'gap', media), '16px')
+  assert.equal(finalValue('.resume__map', 'width', media), '100px')
+  assert.equal(finalValue('.resume__map', 'height', media), '60px')
+  assert.equal(finalValue('.resume__actions', 'flex-basis', media), '100%', 'actions take their own row below')
+  assert.equal(finalValue('.resume__facts', 'grid-template-columns', media), 'repeat(2, minmax(0, 1fr))', 'facts fit beside the thumbnail')
+})

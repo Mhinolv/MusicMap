@@ -1020,7 +1020,7 @@ a:hover { color: var(--cyan-hover); }
 .account-button { display: inline-flex; align-items: center; white-space: nowrap; }
 .account-button[aria-expanded="true"] { border-color: var(--cyan); background: var(--cyan-soft); }
 .account-menu {
-  position: fixed; top: 48px; right: 12px; z-index: 22; width: 280px;
+  position: fixed; top: 48px; right: 12px; z-index: 22; width: 280px; max-width: calc(100vw - 24px);
   display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px;
   background: var(--pane); border: 1px solid var(--hairline); border-radius: 0;
 }
@@ -1047,6 +1047,8 @@ a:hover { color: var(--cyan-hover); }
   .start-backdrop { top: calc(48px + env(safe-area-inset-top)); }
   /* Phones stay top-anchored so the soft keyboard never covers the suggestions (#53). */
   .start, .start--library { width: auto; margin: 0 16px; padding: 24px 0 32px; }
+  /* #87: 16px gaps so the first Recent maps row fits above an 844px fold. */
+  .start { gap: 16px; }
   .start-panel__aside { display: none; }
   .start-intro { gap: 8px; margin-bottom: -8px; }
   .start-intro__title { font-size: 24px; }
@@ -1055,18 +1057,27 @@ a:hover { color: var(--cyan-hover); }
   .search--start .search__anchor { flex-basis: 100%; }
   .search--start .search__mode { flex: 1; }
   .search--start .search__mode button { flex: 1; }
-  .resume { flex-direction: column; align-items: stretch; gap: 16px; }
-  .resume__map { align-self: center; }
+  /* #87: a 100x60 thumbnail beside the title, actions on their own row below. */
+  .resume { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 16px; }
+  .resume__map { width: 100px; height: 60px; }
+  .resume__info { flex-basis: 0; gap: 8px; }
   .resume__title { font-size: 24px; }
-  .resume__actions { flex-direction: row; }
+  /* Beside the thumbnail, four columns are too narrow for "ARTISTS". */
+  .resume__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 8px; }
+  .resume__actions { flex-direction: row; flex-basis: 100%; }
   .resume__actions .btn { flex: 1; }
-  .resume__damaged { flex: none; }
+  .resume__damaged { flex: 1 1 100%; }
+  .resume-card--invalid .resume__discard { flex: 1; }
   .library-drawer { top: 0; width: 100%; border-left: 0; z-index: 25; padding-bottom: env(safe-area-inset-bottom); }
   .library-drawer__head { padding-top: calc(8px + env(safe-area-inset-top)); }
-  /* Library, Taste and Sign in fit a 390px row once the decorative word mark steps aside. */
-  .start-header:has(.start-header__account) { gap: 8px; }
-  .start-header:has(.start-header__account) .start-header__name { display: none; }
-  .account-menu { left: 0; right: 0 !important; width: auto; border-width: 0 0 1px; padding-left: calc(14px + env(safe-area-inset-left)); padding-right: calc(14px + env(safe-area-inset-right)); }
+  /* #87: Library and account are icons, as in the map header (#34), so the word mark always fits. */
+  .start-header { gap: 4px; padding-right: calc(2px + env(safe-area-inset-right)); }
+  .start-header__name { margin-left: 8px; }
+  .start-header .start-header__icon {
+    display: grid; place-items: center; flex: none; width: 44px; height: 44px; padding: 0;
+    border: 0; background: transparent; color: var(--text);
+  }
+  .start-header .start-header__icon[aria-expanded="true"] { background: var(--cyan-soft); color: var(--cyan); }
 }
 @media (pointer: coarse) {
   .library-tabs [role="tab"], .library-drawer__close { min-height: 44px; }

@@ -749,9 +749,10 @@ export default function App() {
           libraryCount={libraryCount}
           libraryOpen={savedOpen}
           onToggleLibrary={toggleSaved}
+          narrow={narrow}
           libraryButton={libraryButton}
           onTaste={() => setTasteOpen(true)}
-          account={accountEntry({ className: 'start-header__account' })}
+          account={accountEntry(narrow ? { icon: true, className: 'start-header__icon' } : {})}
           onResume={resume}
           onStartFresh={startFresh}
           history={history}
